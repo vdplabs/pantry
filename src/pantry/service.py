@@ -61,6 +61,13 @@ def generate_plist_xml(
         env_xml_parts.extend(["    <key>PANTRY_HOME</key>", f"    <string>{home.resolve()}</string>"])
     if data:
         env_xml_parts.extend(["    <key>PANTRY_DATA</key>", f"    <string>{data.resolve()}</string>"])
+    session_xml = ""
+    if menubar:
+        session_xml = """  <key>LimitLoadToSessionType</key>
+  <array>
+    <string>Aqua</string>
+  </array>
+"""
     env_xml = "\n".join(env_xml_parts)
 
     return f"""<?xml version="1.0" encoding="UTF-8"?>
@@ -69,7 +76,7 @@ def generate_plist_xml(
 <dict>
   <key>Label</key>
   <string>{LABEL}</string>
-  <key>ProgramArguments</key>
+{session_xml}  <key>ProgramArguments</key>
   <array>
 {args_xml}
   </array>
@@ -170,26 +177,67 @@ def start_service() -> dict[str, Any]:
             "label": LABEL,
             "error": "Service is not installed. Run 'pantry service install' first.",
         }
-    res = subprocess.run(
-        ["launchctl", "start", LABEL],
+    uid = os.getuid()
+    # Ensure plist is loaded into launchd
+    load_res = subprocess.run(
+        ["launchctl", "load", str(plist_path)],
         capture_output=True,
         text=True,
         check=False,
     )
-    return {
-        "ok": res.returncode == 0,
+    res = subprocess.run(
+        ["launchctl", "kickstart", "-k", f"gui/{uid}/{LABEL}"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if res.returncode != 0:
+        res = subprocess.run(
+            ["launchctl", "start", LABEL],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    err_log = default_logs_dir() / "pantry-serve.err.log"
+    err_snippet = None
+    if err_log.is_file():
+        try:
+            lines = err_log.read_text(encoding="utf-8").strip().splitlines()
+            if lines:
+                err_snippet = "\n".join(lines[-5:])
+        except Exception:  # noqa: BLE001, S110
+            pass
+
+    ok = res.returncode == 0
+    msg = "Service started successfully." if ok else (
+        f"Failed to start service: {res.stderr.strip() or load_res.stderr.strip() or 'launchctl error'}"
+    )
+    ret: dict[str, Any] = {
+        "ok": ok,
         "label": LABEL,
-        "message": "Service start triggered." if res.returncode == 0 else res.stderr.strip(),
+        "message": msg,
     }
+    if not ok and err_snippet:
+        ret["recent_error_log"] = err_snippet
+    return ret
 
 
 def stop_service() -> dict[str, Any]:
+    uid = os.getuid()
     res = subprocess.run(
-        ["launchctl", "stop", LABEL],
+        ["launchctl", "kill", "SIGTERM", f"gui/{uid}/{LABEL}"],
         capture_output=True,
         text=True,
         check=False,
     )
+    if res.returncode != 0:
+        res = subprocess.run(
+            ["launchctl", "stop", LABEL],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
     return {
         "ok": res.returncode == 0,
         "label": LABEL,

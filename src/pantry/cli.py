@@ -331,6 +331,21 @@ def serve(
         f"pantry serve http://{host}:{port}  home={store.root}  data={store.data_root}"
     )
 
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.settimeout(0.5)
+        if s.connect_ex((host, port)) == 0:
+            typer.secho(
+                f"Error: port {port} is already in use on {host}.\n"
+                "A background pantry service or another server may already be running.\n"
+                "Run 'pantry service status' to check, 'pantry service stop' to stop it, "
+                "or pass '--port <number>' to use a different port.",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
     want_menubar = bool(menubar) and not reload
     if want_menubar:
         from pantry.menubar import (

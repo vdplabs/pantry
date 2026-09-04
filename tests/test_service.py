@@ -23,6 +23,7 @@ def test_generate_plist_xml(tmp_path):
     assert "<string>--host</string>" in xml_headless
     assert "<string>127.0.0.1</string>" in xml_headless
     assert "<string>--no-menubar</string>" in xml_headless
+    assert "<string>Aqua</string>" not in xml_headless
     assert "<string>--worker-isolation</string>" in xml_headless
     assert f"<string>{home.resolve()}</string>" in xml_headless
     assert f"<string>{data.resolve()}</string>" in xml_headless
@@ -34,6 +35,7 @@ def test_generate_plist_xml(tmp_path):
         port=18787,
     )
     assert "<string>--no-menubar</string>" not in xml
+    assert "<string>Aqua</string>" in xml
 
     dest = tmp_path / "test.plist"
     written = write_plist(xml, dest)
