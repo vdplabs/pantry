@@ -22,8 +22,19 @@ def find_pantry_executable() -> str:
     venv_bin = Path(sys.prefix) / "bin" / "pantry"
     if venv_bin.is_file():
         return str(venv_bin)
+    # Check for Homebrew public wrapper binaries first
+    for pub in ("/opt/homebrew/bin/pantry", "/usr/local/bin/pantry"):
+        candidate = Path(pub)
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
     which = shutil.which("pantry")
     if which:
+        which_path = Path(which)
+        if "libexec" in which_path.parts:
+            for pub in ("/opt/homebrew/bin/pantry", "/usr/local/bin/pantry"):
+                candidate = Path(pub)
+                if candidate.is_file() and os.access(candidate, os.X_OK):
+                    return str(candidate)
         return which
     return sys.executable
 
@@ -57,6 +68,13 @@ def generate_plist_xml(
         "    <key>PATH</key>",
         f"    <string>{os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin')}</string>",
     ]
+    pythonpath = os.environ.get("PYTHONPATH")
+    if not pythonpath:
+        site_pkgs = [p for p in sys.path if "site-packages" in p]
+        if site_pkgs:
+            pythonpath = ":".join(site_pkgs)
+    if pythonpath:
+        env_xml_parts.extend(["    <key>PYTHONPATH</key>", f"    <string>{pythonpath}</string>"])
     if home:
         env_xml_parts.extend(["    <key>PANTRY_HOME</key>", f"    <string>{home.resolve()}</string>"])
     if data:

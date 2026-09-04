@@ -36,6 +36,7 @@ def test_generate_plist_xml(tmp_path):
     )
     assert "<string>--no-menubar</string>" not in xml
     assert "<string>Aqua</string>" in xml
+    assert "<key>PYTHONPATH</key>" in xml
 
     dest = tmp_path / "test.plist"
     written = write_plist(xml, dest)
