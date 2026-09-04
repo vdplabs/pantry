@@ -81,3 +81,28 @@ pantry serve --data "$PANTRY_DATA"
 ```
 
 See the README [Configuration](../README.md#configuration) section.
+
+## Troubleshooting
+
+### Apple Silicon `Namespace CODESIGNING, Code 2, Invalid Page`
+
+If macOS terminates `pantry` with `Namespace CODESIGNING, Code 2, Invalid Page` (often after Homebrew installation or copying environments across Macs), a compiled C-extension (`.so` / `.dylib`) has an invalid page hash.
+
+**1. Homebrew installation:**
+Update your tap and run `brew postinstall`:
+```bash
+brew update
+brew postinstall vdplabs/tap/pantry
+```
+Or manually re-sign native libraries with Apple's `codesign`:
+```bash
+find "$(brew --prefix pantry)/libexec" -type f \( -name "*.so" -o -name "*.dylib" \) -exec codesign --force --sign - {} +
+```
+
+**2. Virtual environment (pip / git clone):**
+Re-sign the `.so` files in your `.venv`:
+```bash
+find .venv -type f \( -name "*.so" -o -name "*.dylib" \) -exec codesign --force --sign - {} +
+```
+*(Never copy a `.venv` directory directly between different Mac computers; always create a fresh virtual environment natively).*
+
