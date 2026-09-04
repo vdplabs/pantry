@@ -14,7 +14,7 @@ Service name, version, and path hints (`chat`, `images`, `resolve`, …).
 {
   "ok": true,
   "name": "pantry",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "packages": 7,
   "loaded": [],
   "home": "/Users/…/VDPPantry",

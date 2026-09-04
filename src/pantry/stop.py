@@ -43,11 +43,33 @@ def strip_at_stop(text: str, stops: list[str] | None = None) -> str:
     return out
 
 
+def _heading_like(line: str) -> str | None:
+    """Normalize markdown / section titles used by tiny R1 CoT loops."""
+    s = line.strip()
+    if not s or len(s) < 8 or len(s) > 120:
+        return None
+    if s.startswith("#"):
+        key = s.lstrip("#").strip().lower()
+        return key if len(key) >= 6 else None
+    # "Practical Considerations", "Conclusion", "Final Answer:"
+    if s.endswith(":") and 8 <= len(s) <= 80:
+        return s.rstrip(":").strip().lower()
+    letters = sum(1 for c in s if c.isalpha())
+    if letters < 6:
+        return None
+    if s[0].isupper() and not s.startswith(("-", "*", "|", "<", "[")):
+        # Avoid counting every bullet sentence — prefer short Title-ish lines.
+        words = s.split()
+        if 1 <= len(words) <= 8 and sum(1 for w in words if w[:1].isupper()) >= max(1, len(words) // 2):
+            return s.lower()
+    return None
+
+
 def looks_like_repetition_loop(text: str) -> bool:
     """Cheap host-side guard when tiny models skip EOS and restate themselves."""
     lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
     if len(lines) >= 6:
-        for n in (3, 4, 5, 6, 8):
+        for n in (3, 4, 5, 6, 8, 10, 12, 16):
             if len(lines) >= n * 2 and lines[-n:] == lines[-2 * n : -n]:
                 return True
         if len(lines) >= 8:
@@ -57,9 +79,31 @@ def looks_like_repetition_loop(text: str) -> bool:
             if len(a) >= 4 and a == b:
                 return True
 
+    # Same section heading restated (DeepSeek-R1 1.5B CoT loops).
+    heading_counts: dict[str, int] = {}
+    for ln in text.splitlines():
+        key = _heading_like(ln)
+        if key is None:
+            continue
+        heading_counts[key] = heading_counts.get(key, 0) + 1
+        if heading_counts[key] >= 3:
+            return True
+
     if len(text) < 160:
         return False
-    window = text[-500:]
+
+    # Long pasted block appearing twice in the recent window.
+    window = text[-2_000:] if len(text) > 2_000 else text
+    for blen in (120, 180, 240, 320, 400):
+        if len(window) < blen * 2:
+            continue
+        block = window[-blen:]
+        if not block.strip():
+            continue
+        earlier = window[:-blen]
+        if block in earlier:
+            return True
+
     needle = window[-100:].strip()
     if len(needle) < 48:
         return False

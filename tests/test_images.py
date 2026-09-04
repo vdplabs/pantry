@@ -258,6 +258,90 @@ def test_mflux_retries_once_on_metal_cold_start(tmp_path, monkeypatch):
     assert base64.b64decode(res[0]["b64_json"]).startswith(b"\x89PNG")
 
 
+def test_mflux_model_intact_helper():
+    from pantry.image_runtime import _mflux_model_intact
+
+    class _M:
+        pass
+
+    m = _M()
+    m.text_encoder = object()
+    m.transformer = object()
+    m.vae = object()
+    assert _mflux_model_intact(m)
+    m.text_encoder = None
+    assert not _mflux_model_intact(m)
+
+
+def test_mflux_reloads_when_memory_saver_gutted_model(tmp_path, monkeypatch):
+    """Reproduce Sink 500: cold-start timeout after MemorySaver nulled text_encoder."""
+    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 0.0)
+    monkeypatch.setattr("pantry.image_runtime._host_ram_gb", lambda: 16.0)
+    monkeypatch.setattr("pantry.image_runtime._clear_mlx_after_timeout", lambda: None)
+    monkeypatch.setattr("pantry.image_runtime._enable_mflux_low_ram", lambda *_a, **_k: None)
+    monkeypatch.setattr("time.sleep", lambda _s: None)
+
+    store = PackageStore(tmp_path / "home")
+    store.ensure()
+    man = PackageManifest(
+        id="vdplabs.z-image-turbo.standard.v1",
+        family="z-image",
+        modalities=["image_gen"],
+        ram_gb_min=10.0,
+        bits_approx=4.0,
+        quant_method="mflux-4bit",
+        runtime={
+            "primary": "mflux",
+            "hf_repo": "filipstrand/Z-Image-Turbo-mflux-4bit",
+        },
+    )
+
+    loads = {"n": 0}
+
+    class _FakeZImage:
+        def __init__(self, **_kwargs):
+            loads["n"] += 1
+            self.text_encoder = object()
+            self.transformer = object()
+            self.vae = object()
+            self._calls = 0
+
+        def generate_image(self, **_kwargs):
+            self._calls += 1
+            if loads["n"] == 1 and self._calls == 1:
+                # Mirror mflux MemorySaver.call_before_loop
+                self.text_encoder = None
+                raise RuntimeError(
+                    "[METAL] Command buffer execution failed: Caused GPU Timeout Error "
+                    "(00000002:kIOGPUCommandBufferCallbackErrorTimeout)."
+                )
+            img = MagicMock()
+
+            def _save(p):
+                Path(p).write_bytes(b"\x89PNG\r\n\x1a\nfake-zimage-reload")
+
+            img.save.side_effect = _save
+            return img
+
+    mock_model_config = MagicMock()
+    mock_model_config.z_image_turbo.return_value = MagicMock()
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "mflux": MagicMock(),
+            "mflux.models.common.config.model_config": MagicMock(ModelConfig=mock_model_config),
+            "mflux.models.z_image.variants.z_image": MagicMock(ZImage=_FakeZImage),
+        },
+    ):
+        rt = MFluxImageRuntime(store)
+        res = rt.generate(man, prompt="cabin", size="512x512", n=1)
+
+    assert loads["n"] == 2  # initial + reload after gutting
+    assert len(res) == 1
+    assert base64.b64decode(res[0]["b64_json"]).startswith(b"\x89PNG")
+
+
 def test_mflux_refuses_when_swap_high(tmp_path, monkeypatch):
     store = PackageStore(tmp_path / "home")
     store.ensure()
@@ -273,11 +357,68 @@ def test_mflux_refuses_when_swap_high(tmp_path, monkeypatch):
             "hf_repo": "filipstrand/Z-Image-Turbo-mflux-4bit",
         },
     )
-    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 8.0)
+    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 9.0)
     monkeypatch.setattr("pantry.image_runtime._host_ram_gb", lambda: 16.0)
     rt = MFluxImageRuntime(store)
-    with pytest.raises(RuntimeError, match="swap"):
+    with pytest.raises(RuntimeError, match="cold image load|swap"):
         rt.generate(man, prompt="cabin", size="512x512")
+
+
+def test_mflux_allows_high_swap_when_model_warm(tmp_path, monkeypatch):
+    """Residual swap after first gen must not block a warm second Sink request."""
+    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 5.4)
+    monkeypatch.setattr("pantry.image_runtime._host_ram_gb", lambda: 16.0)
+    monkeypatch.setattr("pantry.image_runtime._enable_mflux_low_ram", lambda *_a, **_k: None)
+
+    store = PackageStore(tmp_path / "home")
+    store.ensure()
+    man = PackageManifest(
+        id="vdplabs.z-image-turbo.standard.v1",
+        family="z-image",
+        modalities=["image_gen"],
+        ram_gb_min=10.0,
+        bits_approx=4.0,
+        quant_method="mflux-4bit",
+        runtime={
+            "primary": "mflux",
+            "hf_repo": "filipstrand/Z-Image-Turbo-mflux-4bit",
+        },
+    )
+
+    class _FakeZImage:
+        def __init__(self, **_kwargs):
+            self.text_encoder = object()
+            self.transformer = object()
+            self.vae = object()
+
+        def generate_image(self, **_kwargs):
+            img = MagicMock()
+
+            def _save(p):
+                Path(p).write_bytes(b"\x89PNG\r\n\x1a\nwarm")
+
+            img.save.side_effect = _save
+            return img
+
+    mock_model_config = MagicMock()
+    mock_model_config.z_image_turbo.return_value = MagicMock()
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "mflux": MagicMock(),
+            "mflux.models.common.config.model_config": MagicMock(ModelConfig=mock_model_config),
+            "mflux.models.z_image.variants.z_image": MagicMock(ZImage=_FakeZImage),
+        },
+    ):
+        rt = MFluxImageRuntime(store)
+        # Seed warm cache as if the first generate already succeeded.
+        warm = _FakeZImage()
+        rt._models[man.id] = warm
+        res = rt.generate(man, prompt="cabin", size="512x512", n=1)
+
+    assert len(res) == 1
+    assert man.id in store.read_state().get("loaded", [])
 
 
 def test_cli_image_local(tmp_path):

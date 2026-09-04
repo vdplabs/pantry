@@ -81,7 +81,7 @@ class EchoRuntime(Runtime):
             f"You said: {last_user or '(empty)'}\n"
             f"Prompt chars: {len(prompt)}{draft}"
         )
-        max_toks = clamp_max_tokens(max_tokens)
+        max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
         body = body[: max_toks * 4]
         cleaned = strip_stop_tokens(body, manifest)
         if usage is not None:
@@ -195,7 +195,7 @@ class MLXRuntime(Runtime):
             draft_model, _draft_tok = self._models[draft_path]
 
         prompt = apply_chat_template(manifest, messages, tools=tools)
-        max_toks = clamp_max_tokens(max_tokens)
+        max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
         temp = 0.0 if temperature is None else float(temperature)
 
         prompt_tokens_count = 0
@@ -223,12 +223,15 @@ class MLXRuntime(Runtime):
                 )
 
                 sampler = make_sampler(temp=temp)
-                # Small instruct models often skip EOS under long prompts; a light
-                # repetition penalty + stream stopper below cuts restated answers.
+                # Small instruct / R1-distill models often skip EOS and restate CoT;
+                # stronger penalty on reasoning packs + StreamStopper cuts the rest.
+                role = (manifest.role or "").lower()
+                family = (manifest.family or "").lower()
+                is_reasoning = role == "reasoning" or "deepseek-r1" in family or "r1" in family
                 processors = make_logits_processors(
-                    repetition_penalty=1.15,
-                    repetition_context_size=64,
-                    frequency_penalty=0.2,
+                    repetition_penalty=1.25 if is_reasoning else 1.15,
+                    repetition_context_size=128 if is_reasoning else 64,
+                    frequency_penalty=0.35 if is_reasoning else 0.2,
                 )
                 kwargs: dict = {
                     "max_tokens": max_toks,
@@ -309,6 +312,7 @@ class RuntimeHub:
             self.mlx: Runtime = IsolatedMLXRuntime(store)
         else:
             self.mlx = MLXRuntime(store)
+        self._mflux_image: object | None = None
 
     def for_manifest(self, manifest: PackageManifest) -> Runtime:
         primary = (manifest.runtime.primary or "echo").lower()
@@ -316,9 +320,26 @@ class RuntimeHub:
             return self.mlx
         return self.echo
 
+    def image_runtime(self, manifest: PackageManifest) -> object:
+        """Shared mflux/echo image runtime so models stay warm across HTTP requests."""
+        from pantry.image_runtime import image_runtime_for
+
+        primary = (manifest.runtime.primary or "").lower()
+        if primary in {"mflux", "flux", "flux1"}:
+            if self._mflux_image is None:
+                self._mflux_image = image_runtime_for(manifest, self.store)
+            return self._mflux_image
+        return image_runtime_for(manifest, self.store)
+
     def unload(self, package_id: str | None = None) -> None:
         if hasattr(self.mlx, "unload"):
             self.mlx.unload(package_id)
+        if self._mflux_image is not None and hasattr(self._mflux_image, "unload"):
+            self._mflux_image.unload(package_id)
+            # Drop the hub handle when nothing remains cached (full unload or last pack).
+            models = getattr(self._mflux_image, "_models", None)
+            if package_id is None or not models:
+                self._mflux_image = None
 
 
 def runtime_for(manifest: PackageManifest, store: PackageStore | None = None) -> Runtime:

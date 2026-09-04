@@ -26,5 +26,5 @@
     "score": 0.72,
     "notes": "DeepSeek R1 distilled reasoning model in 1.5B size."
   },
-  "system_preamble": "You are a reasoning assistant running locally via pantry."
+  "system_preamble": "You are a reasoning assistant running locally via pantry. Keep <think> brief (a few short bullets). After </think>, give a clear final answer. Do not repeat sections or restate the same conclusion."
 }

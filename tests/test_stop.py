@@ -36,6 +36,18 @@ def test_looks_like_repetition_loop_short_ok():
     assert not looks_like_repetition_loop("Canada and Mexico border the US.")
 
 
+def test_looks_like_repetition_loop_section_headers():
+    """R1-1.5B often restates the same CoT section titles inside <think>."""
+    section = (
+        "### Practical Considerations\n"
+        "Risk and cost analysis matters for TSS vs SSS.\n"
+        "### Conclusion\n"
+        "Choose based on project requirements.\n"
+    )
+    text = section + section + section
+    assert looks_like_repetition_loop(text)
+
+
 def test_stream_stopper_halts_on_loop():
     s = StreamStopper()
     block = (

@@ -82,11 +82,25 @@ def _swap_used_gb() -> float | None:
     return value / 1024.0 if unit == "M" else value
 
 
+def _mflux_model_intact(model: Any) -> bool:
+    """False when mflux MemorySaver (or similar) has nulled generation modules."""
+    return (
+        getattr(model, "text_encoder", None) is not None
+        and getattr(model, "transformer", None) is not None
+        and getattr(model, "vae", None) is not None
+    )
+
+
 def _enable_mflux_low_ram(model: Any, *, cache_limit_bytes: int = 10**9) -> None:
-    """Mirror mflux ``--low-ram``: VAE tiling + MemorySaver + tight MLX cache cap."""
+    """Apply low-RAM *non-destructive* knobs: VAE tiling + tight MLX cache cap.
+
+    Do **not** register mflux ``MemorySaver``. That callback sets ``text_encoder`` /
+    ``transformer`` to ``None`` after the first encode/denoise pass. That is fine for a
+    one-shot CLI process, but breaks pantry serve (and our Metal cold-start retry) because
+    the next ``generate_image`` hits ``TypeError: 'NoneType' object is not callable``.
+    """
     try:
         import mlx.core as mx
-        from mflux.callbacks.instances.memory_saver import MemorySaver
         from mflux.models.common.vae.tiling_config import TilingConfig
     except ImportError:
         return
@@ -106,21 +120,6 @@ def _enable_mflux_low_ram(model: Any, *, cache_limit_bytes: int = 10**9) -> None
         mx.reset_peak_memory()
     except Exception:  # noqa: BLE001
         pass
-
-    callbacks = getattr(model, "callbacks", None)
-    if callbacks is None:
-        return
-    # Avoid double-registering across repeated generate() calls.
-    already = any(isinstance(cb, MemorySaver) for cb in getattr(callbacks, "before_loop", []) or [])
-    if already:
-        return
-    saver = MemorySaver(
-        model=model,
-        keep_transformer=False,
-        cache_limit_bytes=cache_limit_bytes,
-        num_seeds=1,
-    )
-    callbacks.register(saver)
 
 
 def _looks_prequantized(manifest: PackageManifest, source: str | None) -> bool:
@@ -260,7 +259,7 @@ class MFluxImageRuntime:
         os.environ["HF_HOME"] = str(self.store.data_root / "huggingface")
         os.environ["HF_HUB_CACHE"] = str(self.store.data_root / "huggingface" / "hub")
 
-    def _preflight(self, manifest: PackageManifest) -> None:
+    def _preflight(self, manifest: PackageManifest, *, model_warm: bool = False) -> None:
         host = _host_ram_gb()
         if host is not None and host + 0.25 < float(manifest.ram_gb_min or 0):
             raise RuntimeError(
@@ -270,17 +269,22 @@ class MFluxImageRuntime:
                 f"swap and trip Metal's GPU timeout watchdog."
             )
 
-        # Metal's command-buffer watchdog (~25s) fires when the kernel stalls in swap.
-        # With multi-GB image models this is effectively guaranteed above a few GB used.
+        # After a successful Z-Image run, macOS often leaves several GB of swap allocated
+        # even though the next request would reuse warm weights. Hard-refusing at 2 GB
+        # blocks that second Sink generate. Skip when the model is already resident;
+        # only refuse cold loads under extreme swap pressure.
+        if model_warm:
+            return
+
         swap = _swap_used_gb()
-        if swap is not None and swap >= 2.0:
+        if swap is not None and swap >= 8.0:
             raise RuntimeError(
-                f"refusing image generation: this Mac already has ~{swap:.1f} GB of swap in use. "
-                "Z-Image / FLUX cannot run reliably under that pressure — Metal will GPU-timeout "
-                "on the first denoise step. Free memory first: unload pantry chat models "
-                "(`pantry unload`), quit heavy apps (Sink local chat, browsers with many tabs), "
-                "wait for swap to drop (check `sysctl vm.swapusage`), then retry. "
-                "A reboot clears stuck swap fastest on 16 GB machines."
+                f"refusing cold image load: this Mac already has ~{swap:.1f} GB of swap in use. "
+                "Z-Image / FLUX cold-starts are unreliable under that pressure — Metal will "
+                "often GPU-timeout while compiling shaders. Free memory first: "
+                "`pantry unload`, quit heavy apps, wait for `sysctl vm.swapusage` to drop, "
+                "or reboot. Once an image pack is warm (menu bar → Loaded), retries are allowed "
+                "even with residual swap."
             )
 
     def generate(
@@ -297,7 +301,10 @@ class MFluxImageRuntime:
         import time
 
         self._ensure_cache_env()
-        self._preflight(manifest)
+        model_key = manifest.id
+        cached = self._models.get(model_key)
+        model_warm = cached is not None and _mflux_model_intact(cached)
+        self._preflight(manifest, model_warm=model_warm)
 
         width, height = _parse_size(size)
         host = _host_ram_gb()
@@ -308,7 +315,6 @@ class MFluxImageRuntime:
         n = max(1, min(int(n), 4))
         artifacts = self.store.artifacts_dir / manifest.id
         artifacts.mkdir(parents=True, exist_ok=True)
-        model_key = manifest.id
         source, quantize = mflux_source_and_quantize(manifest, self.store)
 
         is_zimage = (
@@ -326,14 +332,21 @@ class MFluxImageRuntime:
                         "Install it with: pip install mflux"
                     ) from exc
 
-                if model_key not in self._models:
+                def _load_zimage() -> Any:
                     kwargs: dict[str, Any] = {
                         "model_config": ModelConfig.z_image_turbo(),
                         "quantize": quantize,
                     }
                     if source:
                         kwargs["model_path"] = source
-                    self._models[model_key] = ZImage(**kwargs)
+                    return ZImage(**kwargs)
+
+                cached = self._models.get(model_key)
+                if cached is not None and not _mflux_model_intact(cached):
+                    del self._models[model_key]
+                    cached = None
+                if cached is None:
+                    self._models[model_key] = _load_zimage()
 
                 model = self._models[model_key]
                 _enable_mflux_low_ram(model)
@@ -379,6 +392,15 @@ class MFluxImageRuntime:
                     if seed is not None
                     else int(time.time() * 1000) % (2**31 - 1) + i
                 )
+                reload_fn = None
+                if is_zimage:
+
+                    def reload_fn() -> Any:
+                        fresh = _load_zimage()
+                        self._models[model_key] = fresh
+                        _enable_mflux_low_ram(fresh)
+                        return fresh
+
                 img = self._generate_image_with_cold_start_retry(
                     model,
                     seed=current_seed,
@@ -386,7 +408,10 @@ class MFluxImageRuntime:
                     steps=steps,
                     height=height,
                     width=width,
+                    reload_model=reload_fn,
                 )
+                # Cold-start retry may have replaced a gutted cached model.
+                model = self._models.get(model_key, model)
                 path = artifacts / f"mflux-{width}x{height}-{int(time.time())}-{i}.png"
                 img.save(str(path))
                 png_bytes = path.read_bytes()
@@ -401,12 +426,26 @@ class MFluxImageRuntime:
                 else:
                     item["url"] = path.as_uri()
                 out.append(item)
+            # Advertise residency to menu bar / `pantry status` / unload.
+            self.store.mark_loaded(manifest.id, pin=False)
             return out
         except Exception as exc:
             hint = _metal_timeout_hint(exc)
             if hint:
                 raise RuntimeError(hint) from exc
             raise
+
+    def unload(self, package_id: str | None = None) -> None:
+        """Drop cached mflux models so Metal RAM can be reclaimed."""
+        if package_id is None:
+            self._models.clear()
+        else:
+            self._models.pop(package_id, None)
+        _clear_mlx_after_timeout()
+
+    def has_warm(self, package_id: str) -> bool:
+        cached = self._models.get(package_id)
+        return cached is not None and _mflux_model_intact(cached)
 
     def _generate_image_with_cold_start_retry(
         self,
@@ -418,12 +457,16 @@ class MFluxImageRuntime:
         height: int,
         width: int,
         max_attempts: int = 2,
+        reload_model: Any | None = None,
     ) -> Any:
         """Run mflux generate_image, retrying once after a Metal cold-start timeout.
 
         On 16 GB Apple Silicon the first denoise step often compiles Metal pipelines in one
         long command buffer and trips the GPU watchdog (~5–10s). A second attempt in the
         same process (or next CLI invoke) usually succeeds because the shader cache is warm.
+
+        If a prior MemorySaver (or similar) gutted the model, reload before retrying so we
+        do not raise ``TypeError: 'NoneType' object is not callable`` on ``text_encoder``.
         """
         import sys
         import time
@@ -438,6 +481,14 @@ class MFluxImageRuntime:
                         "Metal cold-start timeout — retrying once with warm shader cache…",
                         file=sys.stderr,
                     )
+                    if reload_model is not None and not _mflux_model_intact(model):
+                        model = reload_model()
+                        print(
+                            "Reloaded image model after MemorySaver-style teardown…",
+                            file=sys.stderr,
+                        )
+                elif reload_model is not None and not _mflux_model_intact(model):
+                    model = reload_model()
                 return model.generate_image(
                     seed=seed,
                     prompt=prompt,

@@ -429,9 +429,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 status_code=409,
                 detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
             )
-        from pantry.image_runtime import image_runtime_for
-
-        runtime = image_runtime_for(pkg, store)
+        runtime = svc.runtimes.image_runtime(pkg)
 
         async def _gen() -> list[dict]:
             return await asyncio.to_thread(
@@ -443,7 +441,12 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 response_format=req.response_format,
             )
 
-        data = await svc.scheduler.run(req.priority, _gen)
+        try:
+            data = await svc.scheduler.run(req.priority, _gen)
+        except RuntimeError as e:
+            # Preflight / Metal hints — surface as 503 so Sink shows the message
+            # instead of a bare ASGI 500.
+            raise HTTPException(status_code=503, detail=str(e)) from e
         return {
             "created": int(time.time()),
             "model": req.model,
