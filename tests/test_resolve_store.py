@@ -195,22 +195,30 @@ def test_pull_echo_ready(tmp_path, catalog_dir):
     assert result["runtime"] == "echo"
 
 
-def test_pull_mlx_uses_snapshot(tmp_path, catalog_dir):
+def test_pull_mlx_uses_snapshot(tmp_path, catalog_dir, monkeypatch):
     store = PackageStore(tmp_path / "lib")
     store.ensure()
     store.seed_from_catalog(catalog_dir)
     pkg_id = "vdplabs.qwen25-0.5b.compact.v1"
+    hf_hub = tmp_path / "hf_hub"
+    monkeypatch.setenv("HF_HUB_CACHE", str(hf_hub))
 
     def fake_download(**kwargs):
-        dest = __import__("pathlib").Path(kwargs["local_dir"])
-        dest.mkdir(parents=True, exist_ok=True)
-        (dest / "config.json").write_text("{}", encoding="utf-8")
-        (dest / "model.safetensors").write_bytes(b"fake")
+        assert "local_dir" not in kwargs  # one copy: shared HF cache only
+        repo = kwargs["repo_id"]
+        snap = hf_hub / f"models--{repo.replace('/', '--')}" / "snapshots" / "abc"
+        snap.mkdir(parents=True, exist_ok=True)
+        (snap / "config.json").write_text("{}", encoding="utf-8")
+        (snap / "model.safetensors").write_bytes(b"fake")
+        return str(snap)
 
     with patch("huggingface_hub.snapshot_download", side_effect=fake_download):
         result = pull_package(store, pkg_id)
     assert result["status"] == "ready"
+    assert result["weights_path"].endswith("/snapshots/abc")
     assert store.weights_ready(store.load_manifest(pkg_id))
+    # Must not have duplicated into packages/<id>/weights
+    assert not store.weights_dir(pkg_id).exists()
 
 
 def test_pull_unknown_raises(tmp_path):

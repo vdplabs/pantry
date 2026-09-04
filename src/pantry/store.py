@@ -132,7 +132,8 @@ class PackageStore:
         1. ``HF_HUB_CACHE`` (when set — exclusive of the default ``~/.cache`` path)
         2. ``HF_HOME/hub`` (when set)
         3. ``~/.cache/huggingface/hub`` (only when neither HF env override is set)
-        4. ``PANTRY_DATA/huggingface/hub`` when data root differs from metadata home
+        4. Sibling ``…/huggingface/hub`` when ``PANTRY_DATA`` is ``…/huggingface/pantry``
+        5. ``PANTRY_DATA/huggingface/hub`` when data root differs from metadata home
         """
         import os
 
@@ -157,8 +158,16 @@ class PackageStore:
         # cache when tests / operators pin HF_HUB_CACHE or HF_HOME.
         if not hub_cache and not hf_home:
             _add(Path.home() / ".cache" / "huggingface" / "hub")
-        if self.data_root != self.root:
-            _add(self.data_root / "huggingface" / "hub")
+            # Common external-SSD layout: PANTRY_DATA=$SSD/huggingface/pantry
+            # with the shared hub at $SSD/huggingface/hub (sibling, not nested).
+            if self.data_root.name == "pantry":
+                sibling = self.data_root.parent / "hub"
+                _add(sibling)
+            if self.data_root != self.root:
+                _add(self.data_root / "huggingface" / "hub")
+        elif self.data_root != self.root and self.data_root.name == "pantry":
+            # Even with HF_* set, also see the sibling hub next to PANTRY_DATA.
+            _add(self.data_root.parent / "hub")
 
         folder_name = f"models--{repo_id.replace('/', '--')}"
         for root in cache_roots:
@@ -185,20 +194,36 @@ class PackageStore:
         primary = (manifest.runtime.primary or "echo").lower()
         if primary == "echo" or primary.startswith("echo_"):
             return True
+
+        # Root / nested config (mlx-lm, diffusers, classic HF).
         has_config = (
             (path / "config.json").is_file()
             or (path / "model_index.json").is_file()
             or (path / "transformer" / "config.json").is_file()
             or (path / "unet" / "config.json").is_file()
         )
-        has_weights = (
+        # Flat weight shards at repo root.
+        has_root_weights = (
             any(path.glob("*.safetensors"))
             or any(path.glob("*.npz"))
             or any(path.glob("*.bin"))
-            or (path / "transformer").is_dir()
-            or (path / "unet").is_dir()
         )
-        return has_config and has_weights
+        # Multi-component trees (mflux Z-Image / FLUX): shards live under
+        # transformer/ / text_encoder/ / vae/ and often have no root config.json.
+        component_dirs = ("transformer", "unet", "text_encoder", "vae")
+        has_component_weights = any(
+            (path / name).is_dir()
+            and (
+                any((path / name).glob("*.safetensors"))
+                or any((path / name).glob("*.npz"))
+                or any((path / name).glob("*.bin"))
+                or (path / name / "model.safetensors.index.json").is_file()
+            )
+            for name in component_dirs
+        )
+        if has_component_weights and ((path / "transformer").is_dir() or (path / "unet").is_dir()):
+            return True
+        return has_config and (has_root_weights or has_component_weights)
 
     def resolve_weights_path(self, manifest: PackageManifest) -> Path | None:
         primary = (manifest.runtime.primary or "echo").lower()

@@ -58,7 +58,11 @@ curl -s http://127.0.0.1:18787/v1/images/generations \
   -d '{"model":"flux-schnell","prompt":"a blue square on metal","size":"512x512"}'
 ```
 
-Pantry supports **`mflux`** (FLUX.1-schnell / FLUX.1-dev / SD-Turbo) for Metal GPU image generation with 8-bit/4-bit quantization, and **`echo_image`** for deterministic offline smoke tests.
+Pantry supports **`mflux`** for Metal GPU image generation:
+- **`image-standard`** → `filipstrand/Z-Image-Turbo-mflux-4bit` (pre-quantized ~6 GB; fits 16 GB Apple Silicon). Do **not** on-the-fly quantize bf16/fp16 trees — that spikes unified memory and trips Metal’s GPU timeout watchdog.
+- **`flux-schnell`** → FLUX.1-schnell (8-bit; needs ≥24 GB)
+- **`echo_image`** → deterministic offline smoke tests (`image-compact`)
+
 
 ## Music generations (scaffold)
 

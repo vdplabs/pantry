@@ -107,7 +107,47 @@ def test_image_runtime_for_routing(tmp_path):
         image_runtime_for(bad_man, store)
 
 
-def test_mflux_runtime_mocked(tmp_path):
+def test_mflux_source_and_quantize_prequant_zimage():
+    from pantry.image_runtime import mflux_source_and_quantize
+
+    man = PackageManifest(
+        id="vdplabs.z-image-turbo.standard.v1",
+        family="z-image",
+        modalities=["image_gen"],
+        bits_approx=4.0,
+        quant_method="mflux-4bit",
+        runtime={
+            "primary": "mflux",
+            "hf_repo": "filipstrand/Z-Image-Turbo-mflux-4bit",
+        },
+    )
+    source, quantize = mflux_source_and_quantize(man, store=None)
+    assert source == "filipstrand/Z-Image-Turbo-mflux-4bit"
+    assert quantize is None  # must not on-the-fly quantize a 4-bit mirror
+
+
+def test_mflux_source_and_quantize_full_precision_gets_q4():
+    from pantry.image_runtime import mflux_source_and_quantize
+
+    man = PackageManifest(
+        id="demo-full",
+        family="z-image",
+        modalities=["image_gen"],
+        bits_approx=16.0,
+        quant_method="mlx-bf16",
+        runtime={
+            "primary": "mflux",
+            "hf_repo": "mlx-community/Z-Image-Turbo-bf16",
+        },
+    )
+    source, quantize = mflux_source_and_quantize(man, store=None)
+    assert source.endswith("Z-Image-Turbo-bf16")
+    assert quantize == 4
+
+
+def test_mflux_runtime_mocked(tmp_path, monkeypatch):
+    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 0.0)
+    monkeypatch.setattr("pantry.image_runtime._host_ram_gb", lambda: 32.0)
     store = PackageStore(tmp_path / "home")
     store.ensure()
 
@@ -154,7 +194,30 @@ def test_mflux_runtime_mocked(tmp_path):
         mock_flux_instance.generate_image.assert_called_once()
 
 
-def test_cli_image_local(tmp_path):
+def test_mflux_refuses_when_swap_high(tmp_path, monkeypatch):
+    from pantry.image_runtime import MFluxImageRuntime
+    from pantry.schemas import PackageManifest
+    from pantry.store import PackageStore
+
+    store = PackageStore(tmp_path / "home")
+    store.ensure()
+    man = PackageManifest(
+        id="vdplabs.z-image-turbo.standard.v1",
+        family="z-image",
+        modalities=["image_gen"],
+        ram_gb_min=10.0,
+        bits_approx=4.0,
+        quant_method="mflux-4bit",
+        runtime={
+            "primary": "mflux",
+            "hf_repo": "filipstrand/Z-Image-Turbo-mflux-4bit",
+        },
+    )
+    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 8.0)
+    monkeypatch.setattr("pantry.image_runtime._host_ram_gb", lambda: 16.0)
+    rt = MFluxImageRuntime(store)
+    with pytest.raises(RuntimeError, match="swap"):
+        rt.generate(man, prompt="cabin", size="512x512")
     home = tmp_path / "pantry-home"
     store = PackageStore(home)
     store.ensure()

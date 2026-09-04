@@ -175,10 +175,17 @@ class MLXWhisperRuntime(AudioTranscriptionRuntime):
         self.store = store
 
     def _ensure_cache_env(self) -> None:
-        if "HF_HOME" not in os.environ and "HF_HUB_CACHE" not in os.environ:
-            if self.store and self.store.data_root != self.store.root:
-                os.environ["HF_HOME"] = str(self.store.data_root / "huggingface")
-                os.environ["HF_HUB_CACHE"] = str(self.store.data_root / "huggingface" / "hub")
+        if os.environ.get("HF_HOME") or os.environ.get("HF_HUB_CACHE"):
+            return
+        if not self.store or self.store.data_root == self.store.root:
+            return
+        if self.store.data_root.name == "pantry":
+            parent = self.store.data_root.parent
+            os.environ["HF_HOME"] = str(parent)
+            os.environ["HF_HUB_CACHE"] = str(parent / "hub")
+            return
+        os.environ["HF_HOME"] = str(self.store.data_root / "huggingface")
+        os.environ["HF_HUB_CACHE"] = str(self.store.data_root / "huggingface" / "hub")
 
     def transcribe(
         self,

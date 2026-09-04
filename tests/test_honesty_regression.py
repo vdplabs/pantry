@@ -72,6 +72,38 @@ def test_music_resolve_honesty(client: TestClient, catalog_packages) -> None:
     assert "magnet" not in (chosen.runtime.primary or "").lower()
     assert "magnet" not in chosen.family.lower()
     assert not any(p.family.lower() == "magnet" for p in catalog_packages)
+
+
+def test_mflux_component_tree_counts_as_ready(tmp_path: Path) -> None:
+    """mflux Z-Image trees have transformer/*.safetensors and no root config.json."""
+    from pantry.schemas import PackageManifest
+
+    store = PackageStore(tmp_path / "home", data_root=tmp_path / "huggingface" / "pantry")
+    store.ensure()
+    man = PackageManifest(
+        id="vdplabs.z-image-turbo.standard.v1",
+        family="z-image",
+        modalities=["image_gen"],
+        bits_approx=4.0,
+        quant_method="mflux-4bit",
+        runtime={
+            "primary": "mflux",
+            "hf_repo": "filipstrand/Z-Image-Turbo-mflux-4bit",
+        },
+    )
+    weights = store.weights_dir(man.id)
+    (weights / "transformer").mkdir(parents=True)
+    (weights / "text_encoder").mkdir(parents=True)
+    (weights / "vae").mkdir(parents=True)
+    (weights / "transformer" / "0.safetensors").write_bytes(b"x")
+    (weights / "text_encoder" / "0.safetensors").write_bytes(b"x")
+    (weights / "vae" / "0.safetensors").write_bytes(b"x")
+
+    assert store._is_dir_weights_complete(weights, man)
+    assert store.resolve_weights_path(man) == weights
+    assert store.weights_ready(man)
+
+
 def test_models_excludes_all_demos_by_default(client: TestClient) -> None:
     """Ensure /v1/models hides chat, image, music, embed, and STT demos unless demos=true is passed."""
     r = client.get("/v1/models")

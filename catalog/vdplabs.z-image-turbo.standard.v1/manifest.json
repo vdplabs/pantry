@@ -4,9 +4,9 @@
   "role": "image_gen",
   "params_b": 6.0,
   "quality_tier": "standard",
-  "quant_method": "mlx-bf16",
-  "bits_approx": 16.0,
-  "ram_gb_min": 8.0,
+  "quant_method": "mflux-4bit",
+  "bits_approx": 4.0,
+  "ram_gb_min": 10.0,
   "ram_gb_comfortable": 14.0,
   "modalities": [
     "image_gen"
@@ -25,13 +25,13 @@
   "listable": true,
   "runtime": {
     "primary": "mflux",
-    "hf_repo": "mlx-community/Z-Image-Turbo-bf16",
+    "hf_repo": "filipstrand/Z-Image-Turbo-mflux-4bit",
     "draft_package_id": null
   },
   "eval": {
     "suite_id": "coco-gen-2024",
     "score": 0.92,
-    "notes": "Z-Image-Turbo fast photorealistic text-to-image generator powered by mflux on Apple Silicon Metal."
+    "notes": "Z-Image-Turbo via mflux pre-quantized 4-bit mirror (~6 GB). Fits 16 GB Apple Silicon (~10.5 GB Metal working set). Do not on-the-fly quantize bf16/fp16 trees."
   },
   "system_preamble": ""
 }
