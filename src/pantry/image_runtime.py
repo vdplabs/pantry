@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import struct
 import zlib
+from typing import Any
 
 from pantry.schemas import PackageManifest
 from pantry.store import PackageStore
@@ -89,11 +90,85 @@ class EchoImageRuntime:
         return out
 
 
-def image_runtime_for(manifest: PackageManifest, store: PackageStore) -> EchoImageRuntime:
+class MFluxImageRuntime:
+    """Real Apple Silicon image generation backend using mflux (FLUX.1-schnell/dev)."""
+
+    def __init__(self, store: PackageStore) -> None:
+        self.store = store
+        self._models: dict[str, Any] = {}
+
+    def generate(
+        self,
+        manifest: PackageManifest,
+        *,
+        prompt: str,
+        size: str | None = None,
+        n: int = 1,
+        response_format: str = "b64_json",
+        seed: int | None = None,
+        num_inference_steps: int | None = None,
+    ) -> list[dict]:
+        import time
+
+        try:
+            from mflux import Flux1
+        except ImportError as exc:
+            raise RuntimeError(
+                "mflux is required for real image generation. "
+                "Install it with: pip install mflux"
+            ) from exc
+
+        width, height = _parse_size(size)
+        n = max(1, min(int(n), 4))
+        artifacts = self.store.artifacts_dir / manifest.id
+        artifacts.mkdir(parents=True, exist_ok=True)
+
+        model_key = manifest.id
+        if model_key not in self._models:
+            quantize = int(manifest.bits_approx) if manifest.bits_approx in (4, 8) else 8
+            alias = "dev" if "dev" in manifest.id.lower() else "schnell"
+            self._models[model_key] = Flux1.from_alias(alias=alias, quantize=quantize)
+
+        model = self._models[model_key]
+        steps = num_inference_steps or (2 if "schnell" in manifest.id.lower() else 4)
+
+        out: list[dict] = []
+        for i in range(n):
+            current_seed = (seed + i) if seed is not None else None
+            img = model.generate_image(
+                seed=current_seed,
+                prompt=prompt,
+                num_inference_steps=steps,
+                height=height,
+                width=width,
+            )
+            path = artifacts / f"mflux-{width}x{height}-{int(time.time())}-{i}.png"
+            img.save(str(path))
+            png_bytes = path.read_bytes()
+
+            item: dict = {
+                "revised_prompt": prompt.strip(),
+                "path": str(path),
+            }
+            fmt = (response_format or "b64_json").lower()
+            if fmt == "b64_json":
+                item["b64_json"] = base64.b64encode(png_bytes).decode("ascii")
+            else:
+                item["url"] = path.as_uri()
+            out.append(item)
+        return out
+
+
+def image_runtime_for(
+    manifest: PackageManifest, store: PackageStore
+) -> EchoImageRuntime | MFluxImageRuntime:
     primary = (manifest.runtime.primary or "").lower()
     if primary in {"echo_image", "echo-image", "echo"}:
         return EchoImageRuntime(store)
+    if primary in {"mflux", "flux", "flux1"}:
+        return MFluxImageRuntime(store)
     raise RuntimeError(
         f"image runtime {manifest.runtime.primary!r} is not implemented yet "
         f"(package {manifest.id})"
     )
+

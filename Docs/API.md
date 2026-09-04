@@ -14,7 +14,7 @@ Service name, version, and path hints (`chat`, `images`, `resolve`, …).
 {
   "ok": true,
   "name": "pantry",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "packages": 7,
   "loaded": [],
   "home": "/Users/…/VDPPantry",
@@ -145,16 +145,77 @@ Response:
 }
 ```
 
+### `POST /v1/audio/transcriptions`
+
+OpenAI-compatible speech-to-text endpoint (`multipart/form-data`) powered by **`mlx-whisper`** on Apple Silicon (or `echo_stt` offline demo).
+
+| Field | Type | Description |
+| --- | --- | --- |
+| `file` | File | Binary audio file upload (`.wav`, `.mp3`, `.m4a`, `.ogg`, etc.) |
+| `model` | String | Model ID or alias (e.g. `whisper-1`, `whisper-tiny`, `transcribe-compact`) |
+| `language` | String? | Optional BCP-47 / ISO language code (e.g. `en`, `es`, `fr`) |
+| `prompt` | String? | Optional guidance prompt for vocabulary or context |
+| `response_format` | String | Output format: `json` (default), `verbose_json`, `text`, `vtt`, `srt` |
+| `temperature` | Float? | Sampling temperature |
+| `timestamp_granularities[]` | List? | E.g. `["word"]` (with `verbose_json`) for word-level timestamps |
+
+#### Example (curl)
+
+```bash
+curl http://127.0.0.1:18787/v1/audio/transcriptions \
+  -F "file=@meeting.wav" \
+  -F "model=whisper-1" \
+  -F "response_format=verbose_json"
+```
+
+#### Response (`json`)
+
+```json
+{
+  "text": "Welcome to Pantry, local model host on Apple Silicon."
+}
+```
+
+#### Response (`verbose_json`)
+
+```json
+{
+  "task": "transcribe",
+  "language": "english",
+  "duration": 3.42,
+  "text": "Welcome to Pantry, local model host on Apple Silicon.",
+  "segments": [
+    {
+      "id": 0,
+      "seek": 0,
+      "start": 0.0,
+      "end": 3.42,
+      "text": "Welcome to Pantry, local model host on Apple Silicon.",
+      "tokens": [50364, 1234, 50464],
+      "temperature": 0.0,
+      "avg_logprob": -0.18,
+      "compression_ratio": 1.15,
+      "no_speech_prob": 0.005,
+      "words": [
+        { "word": "Welcome", "start": 0.0, "end": 0.4 },
+        { "word": "to", "start": 0.4, "end": 0.6 },
+        { "word": "Pantry", "start": 0.6, "end": 1.1 }
+      ]
+    }
+  ]
+}
+```
+
 ### `POST /v1/images/generations`
 
-OpenAI Images-style subset for `image_gen` packages.
+OpenAI Images-style endpoint for `image_gen` packages. Powered by **`mflux`** (FLUX.1-schnell / FLUX.1-dev / SD-Turbo) with Metal acceleration and 8-bit/4-bit quantization, or **`echo_image`** placeholder.
 
 | Field | Notes |
 | --- | --- |
-| `model` | e.g. `image-compact` |
+| `model` | e.g. `flux-schnell`, `image-standard`, `image-compact` |
 | `prompt` | Required text prompt |
 | `n` | 1–4 |
-| `size` | e.g. `256x256` (echo clamps to 16–1024) |
+| `size` | e.g. `512x512`, `1024x1024` |
 | `response_format` | `b64_json` (default) or `url` (file URI) |
 | `priority` | `interactive` \| `batch` |
 
@@ -162,20 +223,18 @@ Response:
 
 ```json
 {
-  "created": 0,
-  "model": "image-compact",
-  "package_id": "vdplabs.demo-image.compact.v1",
+  "created": 1788540000,
+  "model": "flux-schnell",
+  "package_id": "vdplabs.flux1-schnell.standard.v1",
   "data": [
     {
       "b64_json": "…",
-      "path": "/…/VDPPantry/artifacts/…/echo-….png",
-      "revised_prompt": "[pantry echo_image · …] …"
+      "path": "/…/VDPPantry/artifacts/vdplabs.flux1-schnell.standard.v1/mflux-512x512-….png",
+      "revised_prompt": "A serene mountain landscape at sunset"
     }
   ]
 }
 ```
-
-Today’s catalog pack uses the **`echo_image`** runtime (placeholder PNG). Real Diffusers / Z-Image engines are follow-on work.
 
 ### `POST /v1/audio/generations`
 
@@ -191,7 +250,7 @@ Music / audio generation for `music` packages.
 
 Response `data[]` entries include `b64_json` / `url`, `path`, `format: "wav"`, `sample_rate`, `duration_seconds`.
 
-Demo pack uses **`echo_music`** (deterministic sine WAV). Real MAGNeT is follow-on.
+Demo pack uses **`echo_music`** (deterministic sine WAV).
 
 ## CLI
 
@@ -205,6 +264,8 @@ Demo pack uses **`echo_music`** (deterministic sine WAV). Real MAGNeT is follow-
 | `pantry serve [--host] [--port] [--worker-isolation]` | HTTP server + menu bar (`--worker-isolation` for 100% Metal reclaim) |
 | `pantry service install` / `start` / `stop` / `status` | Manage macOS login LaunchAgent daemon |
 | `pantry catalog update` / `list` | Sync remote catalog manifests from registry / GitHub |
+| `pantry transcribe <file>` | Local speech-to-text audio transcription via Whisper |
+| `pantry image "<prompt>"` | Generate image on Apple Silicon Metal via mflux |
 | `pantry status` | JSON library snapshot + Metal memory |
 | `pantry health [--host] [--port]` | Hit `/v1/health` |
 

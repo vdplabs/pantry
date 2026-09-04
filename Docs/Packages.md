@@ -106,7 +106,10 @@ Seeded by `pantry init` from the `catalog/` directory:
 | `vdplabs.qwen25-coder-1.5b.compact.v1` | `text` | `code` | `compact` | 4 GB | `mlx` | Code specialization |
 | `vdplabs.deepseek-r1-distill-qwen-1.5b.compact.v1` | `text` | `reasoning` | `compact` | 4 GB | `mlx` | Distilled reasoning model |
 | `vdplabs.demo-embed.compact.v1` | `embed` | `embed` | `compact` | 0.5 GB | `echo_embed` | Deterministic embeddings scaffold |
+| `vdplabs.demo-transcribe.compact.v1` | `stt` | `transcribe` | `compact` | 0.5 GB | `echo_stt` | Offline audio transcription scaffold |
+| `vdplabs.whisper-tiny.compact.v1` | `stt` | `transcribe` | `compact` | 1 GB | `mlx_whisper` | Real-time speech-to-text on Apple Silicon |
 | `vdplabs.demo-image.compact.v1` | `image_gen` | `image_gen` | `compact` | 0.5 GB | `echo_image` | Image generation scaffold |
+| `vdplabs.flux1-schnell.standard.v1` | `image_gen` | `image_gen` | `standard` | 16 GB | `mflux` | FLUX.1-schnell Metal GPU image generation (8-bit) |
 | `vdplabs.demo-music.compact.v1` | `music` | `music` | `compact` | 0.5 GB | `echo_music` | Music generation scaffold |
 
 ## Remote catalog sync

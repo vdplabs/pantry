@@ -1,0 +1,30 @@
+{
+  "id": "vdplabs.flux1-schnell.standard.v1",
+  "family": "flux",
+  "role": "image_gen",
+  "params_b": 12.0,
+  "quality_tier": "standard",
+  "quant_method": "mflux-8bit",
+  "bits_approx": 8.0,
+  "ram_gb_min": 12.0,
+  "ram_gb_comfortable": 16.0,
+  "modalities": ["image_gen"],
+  "context_max": 512,
+  "license": "apache-2.0",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": ["flux-schnell", "image-standard", "flux"],
+  "listable": true,
+  "runtime": {
+    "primary": "mflux",
+    "hf_repo": "black-forest-labs/FLUX.1-schnell",
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "coco-gen-2024",
+    "score": 0.95,
+    "notes": "FLUX.1-schnell 8-bit quantized text-to-image generator powered by mflux on Apple Silicon Metal."
+  },
+  "system_preamble": ""
+}

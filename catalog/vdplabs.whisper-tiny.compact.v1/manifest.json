@@ -1,0 +1,30 @@
+{
+  "id": "vdplabs.whisper-tiny.compact.v1",
+  "family": "whisper",
+  "role": "transcribe",
+  "params_b": 0.039,
+  "quality_tier": "compact",
+  "quant_method": "mlx",
+  "bits_approx": 16.0,
+  "ram_gb_min": 0.5,
+  "ram_gb_comfortable": 1.0,
+  "modalities": ["stt"],
+  "context_max": 448,
+  "license": "apache-2.0",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": ["whisper-tiny", "whisper-compact", "whisper-1"],
+  "listable": true,
+  "runtime": {
+    "primary": "mlx_whisper",
+    "hf_repo": "mlx-community/whisper-tiny",
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "librispeech-clean",
+    "score": 0.92,
+    "notes": "OpenAI Whisper Tiny converted to Apple Silicon MLX format for real-time dictation."
+  },
+  "system_preamble": ""
+}

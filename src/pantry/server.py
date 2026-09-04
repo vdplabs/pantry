@@ -5,11 +5,12 @@ import json
 import time
 import uuid
 from collections.abc import AsyncIterator
+from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 
 from pantry import __version__
 from pantry.memory import apply_protection_limits, clear_metal_cache
@@ -58,7 +59,12 @@ def _is_image_package(pkg: PackageManifest) -> bool:
 
 def _is_music_package(pkg: PackageManifest) -> bool:
     mods = {m.lower() for m in pkg.modalities}
-    return "music" in mods or (pkg.role or "").lower() in {"music", "audio_gen", "audio"}
+    return "music" in mods or (pkg.role or "").lower() in {"music", "audio_gen"}
+
+
+def _is_stt_package(pkg: PackageManifest) -> bool:
+    mods = {m.lower() for m in pkg.modalities}
+    return bool(mods & {"stt", "transcribe", "transcription", "speech_to_text", "audio_transcription"}) or (pkg.role or "").lower() in {"transcribe", "stt"}
 
 
 def _is_embed_package(pkg: PackageManifest) -> bool:
@@ -481,6 +487,86 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "package_id": pkg.id,
             "data": data,
         }
+
+    @app.post("/v1/audio/transcriptions")
+    async def audio_transcriptions(
+        file: UploadFile = File(...),
+        model: str = Form(...),
+        language: str | None = Form(None),
+        prompt: str | None = Form(None),
+        response_format: str = Form("json"),
+        temperature: float | None = Form(None),
+        timestamp_granularities: list[str] | None = Form(None),
+    ) -> Any:
+        pkg = svc.resolve_model(model)
+        if not _is_stt_package(pkg):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"package {pkg.id} is not a speech-to-text model "
+                    f"(modalities={pkg.modalities})"
+                ),
+            )
+        if not store.weights_ready(pkg):
+            raise HTTPException(
+                status_code=409,
+                detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
+            )
+
+        from pantry.audio_runtime import (
+            audio_transcription_runtime_for,
+            format_srt,
+            format_vtt,
+        )
+
+        runtime = audio_transcription_runtime_for(pkg, store)
+
+        import shutil
+        import tempfile
+
+        suffix = Path(file.filename or "audio.wav").suffix or ".wav"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp_path = Path(tmp.name)
+            try:
+                shutil.copyfileobj(file.file, tmp)
+            finally:
+                file.file.close()
+
+        word_timestamps = bool(timestamp_granularities and "word" in timestamp_granularities)
+
+        async def _transcribe() -> dict[str, Any]:
+            try:
+                return await asyncio.to_thread(
+                    runtime.transcribe,
+                    pkg,
+                    audio_path=tmp_path,
+                    language=language,
+                    prompt=prompt,
+                    temperature=temperature,
+                    word_timestamps=word_timestamps,
+                    original_filename=file.filename,
+                )
+            finally:
+                tmp_path.unlink(missing_ok=True)
+
+        result = await svc.scheduler.run("interactive", _transcribe)
+
+        fmt = (response_format or "json").lower().strip()
+        if fmt == "text":
+            return PlainTextResponse(result.get("text", ""))
+        if fmt == "vtt":
+            return PlainTextResponse(
+                format_vtt(result.get("segments", [])),
+                media_type="text/vtt",
+            )
+        if fmt == "srt":
+            return PlainTextResponse(
+                format_srt(result.get("segments", [])),
+                media_type="text/plain",
+            )
+        if fmt == "verbose_json":
+            return result
+        return {"text": result.get("text", "")}
 
     @app.exception_handler(HTTPException)
     async def http_exc_handler(_req: Any, exc: HTTPException) -> JSONResponse:

@@ -8,28 +8,38 @@ pantry packages declare one or more **modalities**. Resolve and HTTP routes are 
 | --- | --- | --- | --- |
 | `text` (resolve also accepts `chat`) | `chat` | `POST /v1/chat/completions` | `echo`, `mlx` |
 | `embed` (also `embeddings`) | `embed` | `POST /v1/embeddings` | `echo_embed`, `mlx` |
-| `image_gen` (also `image`) | `image_gen` | `POST /v1/images/generations` | `echo_image` (scaffold) |
-| `music` (also `audio_gen` / `audio`) | `music` | `POST /v1/audio/generations` | `echo_music` (scaffold) |
+| `stt` (also `transcribe`) | `transcribe` | `POST /v1/audio/transcriptions` | `echo_stt`, `mlx_whisper` |
+| `image_gen` (also `image`) | `image_gen` | `POST /v1/images/generations` | `echo_image`, `mflux` |
+| `music` (also `audio_gen`) | `music` | `POST /v1/audio/generations` | `echo_music` (scaffold) |
 
 ## Planned (not implemented)
 
 | Modality | Likely API | Notes |
 | --- | --- | --- |
-| `stt` | `/v1/audio/transcriptions` | Speech → text (Whisper) |
-| Real `image_gen` / `music` engines | same routes | Z-Image / MAGNeT replacing echo_* |
+| Real `music` engines | `/v1/audio/generations` | MAGNeT replacing echo_music |
 
 ## Resolve rules
 
-1. Request `modality` is normalized (`chat` → `text`, `audio_gen` → `music`, `embeddings` → `embed`).
+1. Request `modality` is normalized (`chat` → `text`, `stt` / `transcribe` → `stt`, `embeddings` → `embed`).
 2. Only packages whose `modalities` list contains that key are candidates.
 3. There is **no** fallback to `role: chat` for non-text requests.
-4. Soft aliases are scoped: `chat-compact` → text; `embed-compact` → `embed`; `image-compact` → `image_gen`; `music-compact` → `music`.
+4. Soft aliases are scoped: `chat-compact` → text; `embed-compact` → `embed`; `whisper-1` / `whisper-compact` → `stt`; `image-standard` / `image-compact` → `image_gen`; `music-compact` → `music`.
 
 ```bash
 pantry resolve --modality chat --quality compact
 pantry resolve --modality embed --quality compact
+pantry resolve --modality stt --quality compact
 pantry resolve --modality image_gen
 pantry resolve --modality music
+```
+
+## Speech-to-Text (Whisper)
+
+```bash
+curl -s http://127.0.0.1:18787/v1/audio/transcriptions \
+  -F "file=@memo.wav" \
+  -F "model=whisper-1" \
+  -F "response_format=verbose_json"
 ```
 
 ## Embeddings
@@ -40,15 +50,15 @@ curl -s http://127.0.0.1:18787/v1/embeddings \
   -d '{"model":"embed-compact","input":"Hello unified memory"}'
 ```
 
-## Image generations (scaffold)
+## Image generations
 
 ```bash
 curl -s http://127.0.0.1:18787/v1/images/generations \
   -H 'content-type: application/json' \
-  -d '{"model":"image-compact","prompt":"a blue square","size":"64x64"}'
+  -d '{"model":"flux-schnell","prompt":"a blue square on metal","size":"512x512"}'
 ```
 
-Demo pack `vdplabs.demo-image.compact.v1` (`image-compact`) uses **`echo_image`**: a deterministic PNG under `$PANTRY_HOME/artifacts/`.
+Pantry supports **`mflux`** (FLUX.1-schnell / FLUX.1-dev / SD-Turbo) for Metal GPU image generation with 8-bit/4-bit quantization, and **`echo_image`** for deterministic offline smoke tests.
 
 ## Music generations (scaffold)
 

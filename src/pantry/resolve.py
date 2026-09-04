@@ -23,8 +23,10 @@ def _normalize_modality(modality: str) -> str:
     key = modality.strip().lower()
     if key in {"chat", "text"}:
         return "text"
-    if key in {"music", "audio_gen", "audio"}:
+    if key in {"music", "audio_gen"}:
         return "music"
+    if key in {"stt", "transcribe", "transcription", "speech_to_text", "audio_transcription", "audio"}:
+        return "stt"
     if key in {"image_gen", "image"}:
         return "image_gen"
     if key in {"embed", "embeddings", "embedding"}:
@@ -204,6 +206,11 @@ def find_by_model_string(
         "music-standard": (QualityTier.standard, "music"),
         "embed-compact": (QualityTier.compact, "embed"),
         "embed-standard": (QualityTier.standard, "embed"),
+        "whisper-1": (QualityTier.compact, "stt"),
+        "whisper-compact": (QualityTier.compact, "stt"),
+        "whisper-standard": (QualityTier.standard, "stt"),
+        "transcribe-compact": (QualityTier.compact, "stt"),
+        "transcribe-standard": (QualityTier.standard, "stt"),
     }
     if key in soft:
         tier, modality_key = soft[key]

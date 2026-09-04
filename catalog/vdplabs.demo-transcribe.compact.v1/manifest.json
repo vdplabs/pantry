@@ -1,0 +1,30 @@
+{
+  "id": "vdplabs.demo-transcribe.compact.v1",
+  "family": "whisper",
+  "role": "transcribe",
+  "params_b": 0.04,
+  "quality_tier": "compact",
+  "quant_method": "none",
+  "bits_approx": null,
+  "ram_gb_min": 0.2,
+  "ram_gb_comfortable": 0.5,
+  "modalities": ["stt"],
+  "context_max": 448,
+  "license": "mit",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": ["whisper-demo", "transcribe-compact"],
+  "listable": true,
+  "runtime": {
+    "primary": "echo_stt",
+    "hf_repo": null,
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-stt-smoke-2026.09",
+    "score": 0.99,
+    "notes": "Deterministic offline audio transcription generator for smoke testing."
+  },
+  "system_preamble": ""
+}

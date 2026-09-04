@@ -111,11 +111,10 @@ def test_resolve_image_gen_ignores_chat(catalog_packages):
 
 
 def test_resolve_image_gen_picks_image_pack(catalog_packages):
-    image = next((p for p in catalog_packages if "image_gen" in p.modalities), None)
-    assert image is not None, "demo image catalog pack required"
     result = resolve(CapabilityRequest(modality="image_gen"), catalog_packages)
-    assert result.package_id == image.id
-    assert "image_gen" in image.modalities
+    resolved = next((p for p in catalog_packages if p.id == result.package_id), None)
+    assert resolved is not None
+    assert "image_gen" in resolved.modalities
 
 
 def test_resolve_chat_never_picks_image(catalog_packages):

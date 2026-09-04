@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 
 import typer
@@ -525,4 +526,141 @@ def catalog_list_cmd(
 
 
 app.add_typer(catalog_app, name="catalog")
+
+
+@app.command("transcribe")
+def transcribe_cmd(
+    audio_file: Path = typer.Argument(..., help="Path to audio file (wav, mp3, m4a, etc.)"),
+    model: str = typer.Option("whisper-1", "--model", help="Model name, package id, or alias"),
+    language: str | None = typer.Option(None, "--language", help="Optional BCP-47 / ISO language code (e.g. en)"),
+    response_format: str = typer.Option("text", "--format", help="text|json|verbose_json|vtt|srt"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+) -> None:
+    """Transcribe an audio file to text using local speech-to-text (Whisper)."""
+    import httpx
+
+    file_path = Path(audio_file).expanduser().resolve()
+    if not file_path.is_file():
+        typer.secho(f"audio file not found: {file_path}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+
+    url = f"{_daemon_base(host, port)}/v1/audio/transcriptions"
+    daemon_ok = False
+    try:
+        with file_path.open("rb") as f:
+            files = {"file": (file_path.name, f, "audio/wav")}
+            data = {"model": model, "response_format": response_format}
+            if language:
+                data["language"] = language
+            resp = httpx.post(url, files=files, data=data, timeout=60.0)
+            if resp.status_code == 200:
+                daemon_ok = True
+                typer.echo(resp.text)
+                return
+    except Exception:  # noqa: BLE001
+        daemon_ok = False
+
+    if not daemon_ok:
+        # Fall back to in-process execution via local store
+        store = _store(home)
+        pkg = store.load_manifest(model)
+        if pkg is None:
+            from pantry.resolve import find_by_model_string
+
+            pkg = find_by_model_string(model, store.list_manifests())
+        if pkg is None:
+            typer.secho(f"unknown speech-to-text model: {model}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+
+        from pantry.audio_runtime import (
+            audio_transcription_runtime_for,
+            format_srt,
+            format_vtt,
+        )
+
+        runtime = audio_transcription_runtime_for(pkg, store)
+        try:
+            res = runtime.transcribe(pkg, audio_path=file_path, language=language)
+        except Exception as e:
+            typer.secho(f"transcription failed: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from e
+
+        fmt = response_format.lower().strip()
+        if fmt == "text":
+            typer.echo(res.get("text", ""))
+        elif fmt == "vtt":
+            typer.echo(format_vtt(res.get("segments", [])))
+        elif fmt == "srt":
+            typer.echo(format_srt(res.get("segments", [])))
+        elif fmt == "verbose_json":
+            typer.echo(json.dumps(res, indent=2))
+        else:
+            typer.echo(json.dumps({"text": res.get("text", "")}, indent=2))
+
+
+@app.command("image")
+def image_cmd(
+    prompt: str = typer.Argument(..., help="Text prompt describing the desired image"),
+    model: str = typer.Option("image-compact", "--model", help="Model name, package id, or alias"),
+    size: str = typer.Option("512x512", "--size", help="Image dimensions, e.g. 512x512 or 1024x1024"),
+    output: Path | None = typer.Option(None, "--output", "-o", help="File to save the generated image to"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+) -> None:
+    """Generate an image from a text prompt using local image generation."""
+    import base64
+
+    import httpx
+
+    url = f"{_daemon_base(host, port)}/v1/images/generations"
+    payload = {"model": model, "prompt": prompt, "size": size, "response_format": "b64_json"}
+    daemon_ok = False
+    try:
+        resp = httpx.post(url, json=payload, timeout=120.0)
+        if resp.status_code == 200:
+            daemon_ok = True
+            data = resp.json().get("data", [])
+            if data and "b64_json" in data[0]:
+                raw = base64.b64decode(data[0]["b64_json"])
+                out_path = Path(output) if output else Path(f"pantry-{int(time.time())}.png")
+                out_path.write_bytes(raw)
+                typer.echo(f"Image generated: {out_path.resolve()}")
+                return
+    except Exception:  # noqa: BLE001
+        daemon_ok = False
+
+    if not daemon_ok:
+        store = _store(home)
+        pkg = store.load_manifest(model)
+        if pkg is None:
+            from pantry.resolve import find_by_model_string
+
+            pkg = find_by_model_string(model, store.list_manifests())
+        if pkg is None:
+            typer.secho(f"unknown image model: {model}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+
+        from pantry.image_runtime import image_runtime_for
+
+        runtime = image_runtime_for(pkg, store)
+        try:
+            items = runtime.generate(pkg, prompt=prompt, size=size, response_format="b64_json")
+        except Exception as e:
+            typer.secho(f"image generation failed: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from e
+
+        if items and "b64_json" in items[0]:
+            raw = base64.b64decode(items[0]["b64_json"])
+            out_path = Path(output) if output else Path(f"pantry-{int(time.time())}.png")
+            out_path.write_bytes(raw)
+            typer.echo(f"Image generated: {out_path.resolve()}")
+
+
+if __name__ == "__main__":
+    app()
+
+
 

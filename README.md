@@ -220,6 +220,8 @@ curl -s http://127.0.0.1:18787/v1/resolve \
 | `pantry status` / `pantry health` | Library / HTTP health (includes memory) |
 | `pantry service install` / `start` / `stop` / `status` | Manage login LaunchAgent daemon (`com.vdplabs.pantry.serve`) |
 | `pantry catalog update` / `list` | Synchronize manifests from remote registry or inspect local catalog |
+| `pantry transcribe <file>` | Local speech-to-text audio transcription via Whisper |
+| `pantry image "<prompt>"` | Generate an image on Apple Silicon Metal via mflux (or demo) |
 
 ## HTTP API
 
@@ -231,7 +233,8 @@ curl -s http://127.0.0.1:18787/v1/resolve \
 | `GET` | `/v1/models` | Listable packages (one id each) with `role` / `modalities`. Chat demos omitted; `?demos=1` includes them; `?ready_only=1` hides unpulled |
 | `POST` | `/v1/chat/completions` | Live SSE streaming; exact token counts; tool/function calling support |
 | `POST` | `/v1/embeddings` | Vector embeddings (`modality=embed`); single or batched inputs |
-| `POST` | `/v1/images/generations` | Image packs (`echo_image` scaffold today) |
+| `POST` | `/v1/audio/transcriptions` | OpenAI Speech-to-Text format (`multipart/form-data`) powered by `mlx-whisper` (`json`, `verbose_json`, `text`, `vtt`, `srt`) |
+| `POST` | `/v1/images/generations` | OpenAI image generation format powered by `mflux` (FLUX.1-schnell/dev) or `echo_image` scaffold |
 | `POST` | `/v1/audio/generations` | Music packs (`echo_music` scaffold today) |
 | `POST` | `/v1/resolve` | Capability → package (strict modality) |
 | `POST` | `/v1/pull` | `{ "package_id": "…" }` |

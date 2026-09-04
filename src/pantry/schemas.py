@@ -192,3 +192,37 @@ class EmbeddingResponse(BaseModel):
     data: list[EmbeddingData]
     model: str
     usage: dict[str, int]
+
+
+class TranscriptionResponse(BaseModel):
+    text: str
+
+
+class TranscriptionWord(BaseModel):
+    word: str
+    start: float
+    end: float
+
+
+class TranscriptionSegment(BaseModel):
+    id: int = 0
+    seek: int = 0
+    start: float = 0.0
+    end: float = 0.0
+    text: str
+    tokens: list[int] = Field(default_factory=list)
+    temperature: float = 0.0
+    avg_logprob: float = 0.0
+    compression_ratio: float = 0.0
+    no_speech_prob: float = 0.0
+    words: list[TranscriptionWord] | None = None
+
+
+class TranscriptionVerboseResponse(BaseModel):
+    task: str = "transcribe"
+    language: str = "english"
+    duration: float = 0.0
+    text: str
+    words: list[TranscriptionWord] | None = None
+    segments: list[TranscriptionSegment] = Field(default_factory=list)
+

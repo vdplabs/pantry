@@ -259,6 +259,77 @@
       "listable": true
     },
     {
+      "id": "vdplabs.demo-transcribe.compact.v1",
+      "family": "whisper",
+      "role": "transcribe",
+      "params_b": 0.04,
+      "quality_tier": "compact",
+      "quant_method": "none",
+      "bits_approx": null,
+      "ram_gb_min": 0.2,
+      "ram_gb_comfortable": 0.5,
+      "modalities": [
+        "stt"
+      ],
+      "context_max": 448,
+      "license": "mit",
+      "chat_template_id": "none",
+      "template_family": "none",
+      "tool_protocol": null,
+      "aliases": [
+        "whisper-demo",
+        "transcribe-compact"
+      ],
+      "listable": true,
+      "runtime": {
+        "primary": "echo_stt",
+        "hf_repo": null,
+        "draft_package_id": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-stt-smoke-2026.09",
+        "score": 0.99,
+        "notes": "Deterministic offline audio transcription generator for smoke testing."
+      },
+      "system_preamble": ""
+    },
+    {
+      "id": "vdplabs.flux1-schnell.standard.v1",
+      "family": "flux",
+      "role": "image_gen",
+      "params_b": 12.0,
+      "quality_tier": "standard",
+      "quant_method": "mflux-8bit",
+      "bits_approx": 8.0,
+      "ram_gb_min": 12.0,
+      "ram_gb_comfortable": 16.0,
+      "modalities": [
+        "image_gen"
+      ],
+      "context_max": 512,
+      "license": "apache-2.0",
+      "chat_template_id": "none",
+      "template_family": "none",
+      "tool_protocol": null,
+      "aliases": [
+        "flux-schnell",
+        "image-standard",
+        "flux"
+      ],
+      "listable": true,
+      "runtime": {
+        "primary": "mflux",
+        "hf_repo": "black-forest-labs/FLUX.1-schnell",
+        "draft_package_id": null
+      },
+      "eval": {
+        "suite_id": "coco-gen-2024",
+        "score": 0.95,
+        "notes": "FLUX.1-schnell 8-bit quantized text-to-image generator powered by mflux on Apple Silicon Metal."
+      },
+      "system_preamble": ""
+    },
+    {
       "id": "vdplabs.llama32-1b.compact.v1",
       "family": "llama3.2",
       "role": "chat",
@@ -440,6 +511,42 @@
         "notes": "Code specialization model; lightweight code completion on base Macs."
       },
       "system_preamble": "You are a coding assistant running locally via pantry."
+    },
+    {
+      "id": "vdplabs.whisper-tiny.compact.v1",
+      "family": "whisper",
+      "role": "transcribe",
+      "params_b": 0.039,
+      "quality_tier": "compact",
+      "quant_method": "mlx",
+      "bits_approx": 16.0,
+      "ram_gb_min": 0.5,
+      "ram_gb_comfortable": 1.0,
+      "modalities": [
+        "stt"
+      ],
+      "context_max": 448,
+      "license": "apache-2.0",
+      "chat_template_id": "none",
+      "template_family": "none",
+      "tool_protocol": null,
+      "aliases": [
+        "whisper-tiny",
+        "whisper-compact",
+        "whisper-1"
+      ],
+      "listable": true,
+      "runtime": {
+        "primary": "mlx_whisper",
+        "hf_repo": "mlx-community/whisper-tiny",
+        "draft_package_id": null
+      },
+      "eval": {
+        "suite_id": "librispeech-clean",
+        "score": 0.92,
+        "notes": "OpenAI Whisper Tiny converted to Apple Silicon MLX format for real-time dictation."
+      },
+      "system_preamble": ""
     }
   ]
 }
