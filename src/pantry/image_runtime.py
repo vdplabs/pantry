@@ -162,21 +162,40 @@ def mflux_source_and_quantize(
     return source, 4
 
 
-def _metal_timeout_hint(exc: BaseException) -> str | None:
+def _is_metal_timeout(exc: BaseException) -> bool:
     text = str(exc)
-    if "GPU Timeout" in text or "kIOGPUCommandBuffer" in text or "Command buffer execution failed" in text:
-        swap = _swap_used_gb()
-        swap_note = f" Current swap used ≈ {swap:.1f} GB." if swap is not None else ""
-        return (
-            "Metal GPU timed out (command-buffer watchdog). On Apple Silicon this usually "
-            "means unified memory pressure / swap while loading or stepping a large image "
-            "model."
-            + swap_note
-            + " Unload chat models (`pantry unload`), free RAM until `sysctl vm.swapusage` "
-            "shows used near 0, use the pre-quantized 4-bit Z-Image pack, and retry at "
-            "512x512 or smaller. A reboot clears stuck swap fastest on 16 GB Macs."
-        )
-    return None
+    return (
+        "GPU Timeout" in text
+        or "kIOGPUCommandBuffer" in text
+        or "Command buffer execution failed" in text
+    )
+
+
+def _metal_timeout_hint(exc: BaseException) -> str | None:
+    if not _is_metal_timeout(exc):
+        return None
+    swap = _swap_used_gb()
+    swap_note = f" Current swap used ≈ {swap:.1f} GB." if swap is not None else ""
+    return (
+        "Metal GPU timed out (command-buffer watchdog). On Apple Silicon this is often a "
+        "cold-start Metal shader compile on the first denoise step (retry usually works), "
+        "or unified-memory / swap pressure."
+        + swap_note
+        + " Unload chat models (`pantry unload`), keep swap near 0, use the pre-quantized "
+        "4-bit Z-Image pack, and retry at 512x512 or smaller."
+    )
+
+
+def _clear_mlx_after_timeout() -> None:
+    try:
+        import gc
+
+        import mlx.core as mx
+
+        mx.clear_cache()
+        gc.collect()
+    except Exception:  # noqa: BLE001
+        pass
 
 
 class EchoImageRuntime:
@@ -360,10 +379,11 @@ class MFluxImageRuntime:
                     if seed is not None
                     else int(time.time() * 1000) % (2**31 - 1) + i
                 )
-                img = model.generate_image(
+                img = self._generate_image_with_cold_start_retry(
+                    model,
                     seed=current_seed,
                     prompt=prompt,
-                    num_inference_steps=steps,
+                    steps=steps,
                     height=height,
                     width=width,
                 )
@@ -387,6 +407,51 @@ class MFluxImageRuntime:
             if hint:
                 raise RuntimeError(hint) from exc
             raise
+
+    def _generate_image_with_cold_start_retry(
+        self,
+        model: Any,
+        *,
+        seed: int,
+        prompt: str,
+        steps: int,
+        height: int,
+        width: int,
+        max_attempts: int = 2,
+    ) -> Any:
+        """Run mflux generate_image, retrying once after a Metal cold-start timeout.
+
+        On 16 GB Apple Silicon the first denoise step often compiles Metal pipelines in one
+        long command buffer and trips the GPU watchdog (~5–10s). A second attempt in the
+        same process (or next CLI invoke) usually succeeds because the shader cache is warm.
+        """
+        import sys
+        import time
+
+        last_exc: BaseException | None = None
+        for attempt in range(1, max_attempts + 1):
+            try:
+                if attempt > 1:
+                    _clear_mlx_after_timeout()
+                    time.sleep(0.75)
+                    print(
+                        "Metal cold-start timeout — retrying once with warm shader cache…",
+                        file=sys.stderr,
+                    )
+                return model.generate_image(
+                    seed=seed,
+                    prompt=prompt,
+                    num_inference_steps=steps,
+                    height=height,
+                    width=width,
+                )
+            except Exception as exc:
+                last_exc = exc
+                if attempt < max_attempts and _is_metal_timeout(exc):
+                    continue
+                raise
+        assert last_exc is not None
+        raise last_exc
 
 
 def image_runtime_for(

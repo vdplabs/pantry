@@ -194,11 +194,71 @@ def test_mflux_runtime_mocked(tmp_path, monkeypatch):
         mock_flux_instance.generate_image.assert_called_once()
 
 
-def test_mflux_refuses_when_swap_high(tmp_path, monkeypatch):
-    from pantry.image_runtime import MFluxImageRuntime
-    from pantry.schemas import PackageManifest
-    from pantry.store import PackageStore
+def test_mflux_retries_once_on_metal_cold_start(tmp_path, monkeypatch):
+    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 0.0)
+    monkeypatch.setattr("pantry.image_runtime._host_ram_gb", lambda: 16.0)
+    monkeypatch.setattr("pantry.image_runtime._clear_mlx_after_timeout", lambda: None)
+    monkeypatch.setattr("pantry.image_runtime._enable_mflux_low_ram", lambda *_a, **_k: None)
+    monkeypatch.setattr("time.sleep", lambda _s: None)
 
+    store = PackageStore(tmp_path / "home")
+    store.ensure()
+    man = PackageManifest(
+        id="vdplabs.z-image-turbo.standard.v1",
+        family="z-image",
+        modalities=["image_gen"],
+        ram_gb_min=10.0,
+        bits_approx=4.0,
+        quant_method="mflux-4bit",
+        runtime={
+            "primary": "mflux",
+            "hf_repo": "filipstrand/Z-Image-Turbo-mflux-4bit",
+        },
+    )
+
+    mock_zimage_cls = MagicMock()
+    mock_model = MagicMock()
+    mock_zimage_cls.return_value = mock_model
+
+    mock_img = MagicMock()
+
+    def _save(p):
+        Path(p).write_bytes(b"\x89PNG\r\n\x1a\nfake-zimage")
+
+    mock_img.save.side_effect = _save
+    calls = {"n": 0}
+
+    def _generate_image(**_kwargs):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError(
+                "[METAL] Command buffer execution failed: Caused GPU Timeout Error "
+                "(00000002:kIOGPUCommandBufferCallbackErrorTimeout)."
+            )
+        return mock_img
+
+    mock_model.generate_image.side_effect = _generate_image
+
+    mock_model_config = MagicMock()
+    mock_model_config.z_image_turbo.return_value = MagicMock()
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "mflux": MagicMock(),
+            "mflux.models.common.config.model_config": MagicMock(ModelConfig=mock_model_config),
+            "mflux.models.z_image.variants.z_image": MagicMock(ZImage=mock_zimage_cls),
+        },
+    ):
+        rt = MFluxImageRuntime(store)
+        res = rt.generate(man, prompt="cabin", size="512x512", n=1)
+
+    assert calls["n"] == 2
+    assert len(res) == 1
+    assert base64.b64decode(res[0]["b64_json"]).startswith(b"\x89PNG")
+
+
+def test_mflux_refuses_when_swap_high(tmp_path, monkeypatch):
     store = PackageStore(tmp_path / "home")
     store.ensure()
     man = PackageManifest(
@@ -218,6 +278,9 @@ def test_mflux_refuses_when_swap_high(tmp_path, monkeypatch):
     rt = MFluxImageRuntime(store)
     with pytest.raises(RuntimeError, match="swap"):
         rt.generate(man, prompt="cabin", size="512x512")
+
+
+def test_cli_image_local(tmp_path):
     home = tmp_path / "pantry-home"
     store = PackageStore(home)
     store.ensure()
