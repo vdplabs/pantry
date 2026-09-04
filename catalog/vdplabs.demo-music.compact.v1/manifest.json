@@ -14,7 +14,7 @@
   "chat_template_id": "none",
   "template_family": "none",
   "tool_protocol": null,
-  "aliases": ["music-compact"],
+  "aliases": ["music-compact", "music"],
   "runtime": {
     "primary": "echo_music",
     "adapters": [],
@@ -31,5 +31,5 @@
   },
   "blobs": [],
   "system_preamble": "",
-  "listable": true
+  "listable": false
 }

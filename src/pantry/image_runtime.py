@@ -3,6 +3,8 @@ from __future__ import annotations
 """Image generation helpers (echo scaffold; real Diffusers/Z-Image later)."""
 
 import base64
+import os
+from pathlib import Path
 import struct
 import zlib
 from typing import Any
@@ -97,6 +99,12 @@ class MFluxImageRuntime:
         self.store = store
         self._models: dict[str, Any] = {}
 
+    def _ensure_cache_env(self) -> None:
+        if "HF_HOME" not in os.environ and "HF_HUB_CACHE" not in os.environ:
+            if self.store and self.store.data_root != self.store.root:
+                os.environ["HF_HOME"] = str(self.store.data_root / "huggingface")
+                os.environ["HF_HUB_CACHE"] = str(self.store.data_root / "huggingface" / "hub")
+
     def generate(
         self,
         manifest: PackageManifest,
@@ -110,31 +118,61 @@ class MFluxImageRuntime:
     ) -> list[dict]:
         import time
 
-        try:
-            from mflux import Flux1
-        except ImportError as exc:
-            raise RuntimeError(
-                "mflux is required for real image generation. "
-                "Install it with: pip install mflux"
-            ) from exc
+        self._ensure_cache_env()
 
         width, height = _parse_size(size)
         n = max(1, min(int(n), 4))
         artifacts = self.store.artifacts_dir / manifest.id
         artifacts.mkdir(parents=True, exist_ok=True)
-
         model_key = manifest.id
-        if model_key not in self._models:
-            quantize = int(manifest.bits_approx) if manifest.bits_approx in (4, 8) else 8
-            alias = "dev" if "dev" in manifest.id.lower() else "schnell"
-            self._models[model_key] = Flux1.from_alias(alias=alias, quantize=quantize)
 
-        model = self._models[model_key]
-        steps = num_inference_steps or (2 if "schnell" in manifest.id.lower() else 4)
+        is_zimage = manifest.family.lower() in ("z-image", "zimage") or "z-image" in manifest.id.lower()
+        if is_zimage:
+            try:
+                from mflux.models.z_image.variants.z_image import ZImage
+                from mflux.models.common.config.model_config import ModelConfig
+            except ImportError as exc:
+                raise RuntimeError(
+                    f"mflux ZImage is required for z-image ({exc}). Install it with: pip install mflux"
+                ) from exc
+
+            if model_key not in self._models:
+                quantize = int(manifest.bits_approx) if manifest.bits_approx in (4, 8) else 4
+                self._models[model_key] = ZImage(model_config=ModelConfig.z_image_turbo(), quantize=quantize)
+
+            model = self._models[model_key]
+            steps = num_inference_steps or 4
+        else:
+            try:
+                from mflux.models.flux.variants.txt2img.flux import Flux1
+            except ImportError:
+                try:
+                    from mflux import Flux1
+                except ImportError as exc:
+                    raise RuntimeError(
+                        f"mflux is required for real image generation ({exc}). "
+                        "Install it with: pip install mflux"
+                    ) from exc
+
+            if model_key not in self._models:
+                quantize = int(manifest.bits_approx) if manifest.bits_approx in (4, 8) else 8
+                alias = "dev" if "dev" in manifest.id.lower() else "schnell"
+                if hasattr(Flux1, "from_name"):
+                    self._models[model_key] = Flux1.from_name(model_name=alias, quantize=quantize)
+                elif hasattr(Flux1, "from_alias"):
+                    self._models[model_key] = Flux1.from_alias(alias=alias, quantize=quantize)
+                else:
+                    from mflux.models.common.config.model_config import ModelConfig
+
+                    cfg = ModelConfig.dev() if alias == "dev" else ModelConfig.schnell()
+                    self._models[model_key] = Flux1(model_config=cfg, quantize=quantize)
+
+            model = self._models[model_key]
+            steps = num_inference_steps or (2 if "schnell" in manifest.id.lower() else 4)
 
         out: list[dict] = []
         for i in range(n):
-            current_seed = (seed + i) if seed is not None else None
+            current_seed = (seed + i) if seed is not None else int(time.time() * 1000) % (2**31 - 1) + i
             img = model.generate_image(
                 seed=current_seed,
                 prompt=prompt,

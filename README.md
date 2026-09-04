@@ -12,12 +12,14 @@ Clients ask for *capabilities* — chat, fit in 8 GB RAM, prefer speed — and
 
 | | |
 | --- | --- |
-| **Version** | **v0.4.0** — usable alpha (MIT, brew + pip) |
-| **Ships today** | Capability resolve · **shared library** under `PANTRY_HOME`/`PANTRY_DATA` (one pull for many apps) · `pantry serve` OpenAI-compatible HTTP + SSE · MLX chat with **exact token usage** · **Embeddings** (`/v1/embeddings`) · **Worker subprocess isolation** for 100% Metal reclaim (`--worker-isolation`) · **Service management** CLI (`pantry service install/start/stop`) · **Remote catalog sync** (`pantry catalog update`) · **Tool/function calling** · host-owned ChatML/Llama templates + stop stripping · speculative draft hooks · expanded catalog (Llama 3.2 1B/3B, Qwen Coder, DeepSeek-R1) · Mac menu bar · Metal watchdog · Homebrew tap |
-| **Scaffold / not production** | Image + music HTTP endpoints (`echo_image` / `echo_music` demos only) · CAS blob layer for weight trees · PyPI publish |
-| **Roadmap (not shipped)** | Real Diffusers / Z-Image + MAGNeT engines · Unix domain sockets / Mach-style zero-copy IPC · multi-publisher catalog federation |
+| **Version** | **v0.5.1** — usable alpha (MIT, pip) |
+| **Ships today** | Capability resolve · **shared library** under `PANTRY_HOME`/`PANTRY_DATA` (transparent Hugging Face cache snapshot reuse; one copy on disk) · `pantry serve` OpenAI-compatible HTTP + SSE · MLX chat on Apple Silicon with **exact token usage** · **Host-owned templates** (ChatML/Llama) + stop-token stripping · **Curated speculative decoding** (`chat-fast`, draft/target pairs) · Expanded catalog (Qwen 2.5 0.5B/1.5B/Coder, Llama 3.2 1B/3B, DeepSeek-R1) · Unified-memory / Metal watchdog |
+| **Optional Real Engines** | Speech-to-text (`mlx-whisper` via `/v1/audio/transcriptions`) · Image generation (`mflux` via `/v1/images/generations`) |
+| **Scaffolds / Demos** | Music HTTP endpoint (`echo_music` sine scaffold for client wiring) · Embeddings (`echo_embed` scaffold default; MLX runtime available) |
+| **Secondary Features** | Worker subprocess isolation (`--worker-isolation`) · Login LaunchAgent daemon (`pantry service`) · Single-endpoint catalog sync (`pantry catalog update`) · Prompt-injected tool calling |
+| **Roadmap (not shipped)** | Real MAGNeT music engine on Apple Silicon · CAS blob layer for weight trees · Multi-publisher catalog federation · Unix domain sockets / Mach zero-copy IPC |
 
-Transparency over hype: clone it, run the tests, hit `/v1/chat/completions` with a pulled Qwen pack — that path is real. Ambitious diagrams that mention native IPC or production image/music are **vision**, not current code.
+Transparency over hype: clone it, run the tests, chat or generate images with local weights — those paths are real. Scaffolds like `echo_music` are honest placeholders for client integration while real engines are developed.
 
 ## Intent over tags
 
@@ -52,7 +54,7 @@ Ollama and llama.cpp are excellent. pantry is not a feature-for-feature clone �
 | **On-disk library** | Per-tool / per-app installs are common; sharing is manual | **One shared library** under `PANTRY_HOME` / `PANTRY_DATA` so apps reuse the same pulled weight trees (blob CAS helpers exist; HF pulls are package dirs today) |
 | **Transport** | Localhost HTTP (OpenAI-compatible) | **Same today** — OpenAI-compatible HTTP on `127.0.0.1`. UDS / Mach / zero-copy IPC is **roadmap**, not claimed as done |
 | **Apple Silicon focus** | Cross-platform; Metal via various backends | **MLX-first** chat + unified-memory / Metal cache watchdog |
-| **Multi-modal** | Varies by project | Chat is real MLX; image/music APIs exist as **echo scaffolds** until real engines land |
+| **Multi-modal** | Varies by project | Chat is real MLX; STT (`mlx-whisper`) and image (`mflux`) have real engines with demo fallbacks; music is an honest echo scaffold until real engines land |
 
 OpenAI HTTP is the **adapter** for adoption. Differentiation is resolve + shared store + Apple-aware planning — not another chat UI.
 
@@ -216,12 +218,13 @@ curl -s http://127.0.0.1:18787/v1/resolve \
 | `pantry resolve …` | Pick a package from capability constraints |
 | `pantry list` | Installed packages |
 | `pantry load` / `unload` | Mark warm / release; unload clears MLX cache (or shuts down isolated worker) |
-| `pantry serve` | HTTP server **+ Mac menu bar** (`--no-menubar` to disable; `--worker-isolation` for 100% Metal reclaim) |
+| `pantry serve` | HTTP server **+ Mac menu bar** (`--no-menubar` to disable; `--worker-isolation` for subprocess Metal reclaim on unload) |
 | `pantry status` / `pantry health` | Library / HTTP health (includes memory) |
 | `pantry service install` / `start` / `stop` / `status` | Manage login LaunchAgent daemon (`com.vdplabs.pantry.serve`) |
-| `pantry catalog update` / `list` | Synchronize manifests from remote registry or inspect local catalog |
+| `pantry chat "<prompt>"` | Interactive or one-shot local chat via MLX (supports `--speculative`) |
 | `pantry transcribe <file>` | Local speech-to-text audio transcription via Whisper |
 | `pantry image "<prompt>"` | Generate an image on Apple Silicon Metal via mflux (or demo) |
+| `pantry music "<prompt>"` | Synthesize music audio via echo scaffold |
 
 ## HTTP API
 
@@ -230,7 +233,7 @@ curl -s http://127.0.0.1:18787/v1/resolve \
 | `GET` | `/v1/health` | Process + library + Metal memory pressure |
 | `GET` | `/v1/memory` | Full unified-memory watchdog snapshot |
 | `POST` | `/v1/memory/clear` | Reclaim MLX Metal free cache |
-| `GET` | `/v1/models` | Listable packages (one id each) with `role` / `modalities`. Chat demos omitted; `?demos=1` includes them; `?ready_only=1` hides unpulled |
+| `GET` | `/v1/models` | Listable packages (one id each) with `role` / `modalities`. Echo/demo packs omitted by default; `?demos=1` includes them; `?ready_only=1` hides unpulled |
 | `POST` | `/v1/chat/completions` | Live SSE streaming; exact token counts; tool/function calling support |
 | `POST` | `/v1/embeddings` | Vector embeddings (`modality=embed`); single or batched inputs |
 | `POST` | `/v1/audio/transcriptions` | OpenAI Speech-to-Text format (`multipart/form-data`) powered by `mlx-whisper` (`json`, `verbose_json`, `text`, `vtt`, `srt`) |

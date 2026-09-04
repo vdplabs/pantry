@@ -108,6 +108,9 @@ def resolve_draft_path(
     draft_man = store.load_manifest(draft_id)
     if draft_man is None or not store.weights_ready(draft_man):
         return None, None
+    resolved = store.resolve_weights_path(draft_man)
+    if resolved is not None:
+        return str(resolved), draft_id
     return str(store.weights_dir(draft_id)), draft_id
 
 
@@ -278,6 +281,9 @@ class MLXRuntime(Runtime):
 
     def _resolve_weights_path(self, manifest: PackageManifest) -> str:
         if self.store is not None:
+            resolved = self.store.resolve_weights_path(manifest)
+            if resolved is not None:
+                return str(resolved)
             path = self.store.weights_dir(manifest.id)
             if self.store.weights_ready(manifest):
                 return str(path)

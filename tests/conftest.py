@@ -11,6 +11,14 @@ from pantry.server import create_app
 from pantry.store import PackageStore
 
 
+@pytest.fixture(autouse=True)
+def isolate_hf_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    test_hub = tmp_path / "test_hf_hub"
+    test_hub.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv("HF_HUB_CACHE", str(test_hub))
+    monkeypatch.setenv("HF_HOME", str(tmp_path / "test_hf_home"))
+
+
 @pytest.fixture
 def catalog_dir() -> Path:
     d = bundled_catalog_dir()

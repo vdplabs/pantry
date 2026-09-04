@@ -219,6 +219,15 @@ def find_by_model_string(
             for p in packages
             if p.quality_tier == tier and _matches_modality(p, modality_key)
         ]
+        # Honest music scaffold is compact-only until a real engine ships.
+        # music-standard soft-falls back to compact rather than failing closed.
+        if not tiered and modality_key == "music" and tier == QualityTier.standard:
+            tiered = [
+                p
+                for p in packages
+                if p.quality_tier == QualityTier.compact
+                and _matches_modality(p, modality_key)
+            ]
         if not tiered:
             return None
 

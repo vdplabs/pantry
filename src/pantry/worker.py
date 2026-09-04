@@ -2,8 +2,9 @@ from __future__ import annotations
 
 """Subprocess worker isolation for MLX inference.
 
-Spawning MLX in a separate process ensures 100% of Metal allocations and
-driver-level GPU cache memory are cleanly reclaimed by macOS when the worker exits.
+Spawning MLX in a child process lets macOS reclaim that worker's Metal driver
+allocations when the process exits. The host FastAPI daemon stays lightweight;
+this is best-effort OS reclaim, not a guarantee that system memory drops to zero.
 """
 
 import asyncio

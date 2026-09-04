@@ -33,17 +33,19 @@ def pull_package(store: PackageStore, package_id: str) -> dict:
             "bytes_on_disk": 0,
         }
 
-    dest = store.weights_dir(man.id)
-    dest.mkdir(parents=True, exist_ok=True)
     if store.weights_ready(man):
+        ready_path = store.resolve_weights_path(man) or store.weights_dir(man.id)
         return {
             "package_id": man.id,
             "status": "ready",
             "runtime": primary,
-            "weights_path": str(dest),
+            "weights_path": str(ready_path),
             "hf_repo": man.runtime.hf_repo,
-            "bytes_on_disk": _dir_size(dest),
+            "bytes_on_disk": _dir_size(ready_path),
         }
+
+    dest = store.weights_dir(man.id)
+    dest.mkdir(parents=True, exist_ok=True)
 
     try:
         from huggingface_hub import snapshot_download

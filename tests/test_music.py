@@ -9,7 +9,7 @@ from pantry.schemas import CapabilityRequest
 
 
 def test_models_includes_music_compact(client):
-    r = client.get("/v1/models")
+    r = client.get("/v1/models", params={"demos": "true"})
     assert r.status_code == 200
     rows = {m["id"]: m for m in r.json()["data"]}
     assert "music-compact" in rows

@@ -15,7 +15,8 @@ def test_models_lists_public_packages(client):
     assert r.status_code == 200
     rows = {m["id"]: m for m in r.json()["data"]}
     assert "chat-compact" in rows
-    assert "image-compact" in rows
+    assert "z-image-turbo" in rows or "flux-schnell" in rows
+    assert "image-compact" not in rows
     assert "modalities" in rows["chat-compact"]
     assert "text" in rows["chat-compact"]["modalities"]
     assert "demo-standard" not in rows

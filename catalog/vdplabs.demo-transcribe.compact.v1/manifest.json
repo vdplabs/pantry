@@ -15,7 +15,7 @@
   "template_family": "none",
   "tool_protocol": null,
   "aliases": ["whisper-demo", "transcribe-compact"],
-  "listable": true,
+  "listable": false,
   "runtime": {
     "primary": "echo_stt",
     "hf_repo": null,

@@ -49,7 +49,7 @@ If a client uses **capability resolve** (or soft aliases like `chat-compact`), t
 
 Pinned package ids may still be used for power users. The host will **not** silently swap template families.
 
-Preference order when several packages match: weights ready → non-demo/real runtime → lower comfortable RAM → higher eval score.
+Preference order when several packages match: non-demo/real runtime → weights ready → listable → lower comfortable RAM → higher eval score.
 
 ## Runtimes
 
@@ -61,13 +61,13 @@ Preference order when several packages match: weights ready → non-demo/real ru
 | `echo_music` | Deterministic WAV scaffold for `/v1/audio/generations` |
 | `mlx` | Apple Silicon chat & embeddings via `mlx-lm` after `pantry pull` |
 
-Planner hooks exist for speculative draft packages and future adapters; chat inference supports exact token usage telemetry, OpenAI-compatible tool/function calling, and optional worker process isolation for complete Metal memory reclaim.
+Planner hooks exist for speculative draft packages and future adapters; chat inference supports exact token usage telemetry, OpenAI-compatible tool/function calling, and optional worker process isolation so unload can reclaim that worker's Metal allocations.
 
 ## Process model & Worker Isolation
 
 - **Install**: Homebrew (`brew tap vdplabs/tap && brew install pantry`), or `pip` / `uv`.
 - **Daemon**: `pantry serve` binds `127.0.0.1` by default (port `18787`). Managed at login via `pantry service install`.
-- **Worker Isolation**: Pass `--worker-isolation` to isolate MLX graph evaluation inside a child worker process. Calling `pantry unload` terminates the worker process, guaranteeing 100% of GPU Metal driver allocations and OS unified memory pools are reclaimed immediately.
+- **Worker Isolation**: Pass `--worker-isolation` to run MLX graph evaluation in a child process. Unloading all packages terminates that worker so macOS can reclaim its Metal driver allocations; the host daemon stays up. This is best-effort OS reclaim, not a promise that system memory drops to zero.
 
 ## Scheduling (MVP)
 

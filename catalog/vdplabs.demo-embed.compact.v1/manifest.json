@@ -15,7 +15,7 @@
   "template_family": "none",
   "tool_protocol": null,
   "aliases": ["embed-compact", "embed-demo"],
-  "listable": true,
+  "listable": false,
   "runtime": {
     "primary": "echo_embed",
     "hf_repo": null,

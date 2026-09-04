@@ -88,8 +88,10 @@ pantry pull <package_id>
 ```
 
 1. Install / refresh the catalog manifest into `packages/<id>/manifest.json`.
-2. If `runtime.hf_repo` is set, `huggingface_hub.snapshot_download` into `packages/<id>/weights/`.
-3. Mark ready when `config.json` and at least one weight shard are present.
+2. If weights are already complete in the package dir **or** a shared Hugging Face cache snapshot (`HF_HUB_CACHE` / `HF_HOME` / default `~/.cache/huggingface/hub` / `PANTRY_DATA/.../hub`), return `status: ready` immediately — **no empty weights dir is created**.
+   Explicit `HF_HUB_CACHE` / `HF_HOME` isolate discovery away from the default user cache (same convention as `huggingface_hub`).
+3. Otherwise, if `runtime.hf_repo` is set, `huggingface_hub.snapshot_download` into `packages/<id>/weights/`.
+4. Mark ready when `config.json` (or equivalent) and at least one weight shard are present.
 
 Echo packages need no download.
 
@@ -109,7 +111,8 @@ Seeded by `pantry init` from the `catalog/` directory:
 | `vdplabs.demo-transcribe.compact.v1` | `stt` | `transcribe` | `compact` | 0.5 GB | `echo_stt` | Offline audio transcription scaffold |
 | `vdplabs.whisper-tiny.compact.v1` | `stt` | `transcribe` | `compact` | 1 GB | `mlx_whisper` | Real-time speech-to-text on Apple Silicon |
 | `vdplabs.demo-image.compact.v1` | `image_gen` | `image_gen` | `compact` | 0.5 GB | `echo_image` | Image generation scaffold |
-| `vdplabs.flux1-schnell.standard.v1` | `image_gen` | `image_gen` | `standard` | 16 GB | `mflux` | FLUX.1-schnell Metal GPU image generation (8-bit) |
+| `vdplabs.z-image-turbo.standard.v1` | `image_gen` | `image_gen` | `standard` | 14 GB | `mflux` | Z-Image-Turbo (aliases `image-standard`; min 8 GB) |
+| `vdplabs.flux1-schnell.standard.v1` | `image_gen` | `image_gen` | `standard` | 32 GB | `mflux` | FLUX.1-schnell Metal GPU image generation (8-bit, min 24 GB) |
 | `vdplabs.demo-music.compact.v1` | `music` | `music` | `compact` | 0.5 GB | `echo_music` | Music generation scaffold |
 
 ## Remote catalog sync

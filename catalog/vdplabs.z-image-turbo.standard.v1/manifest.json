@@ -1,0 +1,37 @@
+{
+  "id": "vdplabs.z-image-turbo.standard.v1",
+  "family": "z-image",
+  "role": "image_gen",
+  "params_b": 6.0,
+  "quality_tier": "standard",
+  "quant_method": "mlx-bf16",
+  "bits_approx": 16.0,
+  "ram_gb_min": 8.0,
+  "ram_gb_comfortable": 14.0,
+  "modalities": [
+    "image_gen"
+  ],
+  "context_max": 512,
+  "license": "apache-2.0",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": [
+    "z-image-turbo",
+    "z-image",
+    "image-standard",
+    "image"
+  ],
+  "listable": true,
+  "runtime": {
+    "primary": "mflux",
+    "hf_repo": "mlx-community/Z-Image-Turbo-bf16",
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "coco-gen-2024",
+    "score": 0.92,
+    "notes": "Z-Image-Turbo fast photorealistic text-to-image generator powered by mflux on Apple Silicon Metal."
+  },
+  "system_preamble": ""
+}

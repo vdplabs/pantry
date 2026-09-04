@@ -30,8 +30,13 @@ def test_models_includes_stt(client):
     r = client.get("/v1/models")
     assert r.status_code == 200
     rows = {m["id"]: m for m in r.json()["data"]}
-    assert "transcribe-compact" in rows or "whisper-demo" in rows
-    match = rows.get("transcribe-compact") or rows.get("whisper-demo")
+    assert "transcribe-compact" not in rows  # Demo hidden by default
+
+    r_demos = client.get("/v1/models", params={"demos": "true"})
+    assert r_demos.status_code == 200
+    rows_demos = {m["id"]: m for m in r_demos.json()["data"]}
+    assert "transcribe-compact" in rows_demos or "whisper-demo" in rows_demos
+    match = rows_demos.get("transcribe-compact") or rows_demos.get("whisper-demo")
     assert "stt" in match["modalities"]
 
 

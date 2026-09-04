@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pantry"
-version = "0.5.0"
+version = "0.5.1"
 description = "Local model host for Apple Silicon with capability resolve and an OpenAI-compatible API"
 readme = "README.md"
 license = "MIT"

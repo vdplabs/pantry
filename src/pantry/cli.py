@@ -315,7 +315,7 @@ def serve(
     worker_isolation: bool = typer.Option(
         False,
         "--worker-isolation",
-        help="Run MLX runtime in an isolated worker subprocess for 100% Metal memory reclaim",
+        help="Run MLX in an isolated worker subprocess so unload can reclaim that process's Metal allocations",
     ),
 ) -> None:
     """Run localhost OpenAI-compatible HTTP server (menu bar on by default)."""
@@ -538,6 +538,7 @@ def transcribe_cmd(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(18787, "--port"),
     home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
 ) -> None:
     """Transcribe an audio file to text using local speech-to-text (Whisper)."""
     import httpx
@@ -552,10 +553,10 @@ def transcribe_cmd(
     try:
         with file_path.open("rb") as f:
             files = {"file": (file_path.name, f, "audio/wav")}
-            data = {"model": model, "response_format": response_format}
+            data_map = {"model": model, "response_format": response_format}
             if language:
-                data["language"] = language
-            resp = httpx.post(url, files=files, data=data, timeout=60.0)
+                data_map["language"] = language
+            resp = httpx.post(url, files=files, data=data_map, timeout=60.0)
             if resp.status_code == 200:
                 daemon_ok = True
                 typer.echo(resp.text)
@@ -565,7 +566,7 @@ def transcribe_cmd(
 
     if not daemon_ok:
         # Fall back to in-process execution via local store
-        store = _store(home)
+        store = _store(home, data)
         pkg = store.load_manifest(model)
         if pkg is None:
             from pantry.resolve import find_by_model_string
@@ -610,6 +611,7 @@ def image_cmd(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(18787, "--port"),
     home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
 ) -> None:
     """Generate an image from a text prompt using local image generation."""
     import base64
@@ -634,7 +636,7 @@ def image_cmd(
         daemon_ok = False
 
     if not daemon_ok:
-        store = _store(home)
+        store = _store(home, data)
         pkg = store.load_manifest(model)
         if pkg is None:
             from pantry.resolve import find_by_model_string
@@ -670,6 +672,7 @@ def music_cmd(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(18787, "--port"),
     home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
 ) -> None:
     """Generate audio/music from a text prompt."""
     import base64
@@ -689,9 +692,9 @@ def music_cmd(
         resp = httpx.post(url, json=payload, timeout=60.0)
         if resp.status_code == 200:
             daemon_ok = True
-            data = resp.json().get("data", [])
-            if data and "b64_json" in data[0]:
-                raw = base64.b64decode(data[0]["b64_json"])
+            data_resp = resp.json().get("data", [])
+            if data_resp and "b64_json" in data_resp[0]:
+                raw = base64.b64decode(data_resp[0]["b64_json"])
                 out_path = Path(output) if output else Path(f"pantry-music-{int(time.time())}.wav")
                 out_path.write_bytes(raw)
                 typer.echo(f"Audio generated: {out_path.resolve()}")
@@ -702,7 +705,7 @@ def music_cmd(
         daemon_ok = False
 
     if not daemon_ok:
-        store = _store(home)
+        store = _store(home, data)
         pkg = store.load_manifest(model)
         if pkg is None:
             from pantry.resolve import find_by_model_string
@@ -730,6 +733,78 @@ def music_cmd(
             typer.echo(f"Audio generated: {out_path.resolve()}")
             if play and shutil.which("afplay"):
                 subprocess.run(["afplay", str(out_path)], check=False)
+
+
+@app.command("chat")
+def chat_cmd(
+    prompt: str = typer.Argument(..., help="Prompt or message to send"),
+    model: str = typer.Option("chat-standard", "--model", help="Model name, package id, or alias (e.g. chat-fast, chat-standard, chat-compact)"),
+    speculative: bool = typer.Option(False, "--speculative", help="Prefer curated speculative decoding"),
+    max_tokens: int = typer.Option(256, "--max-tokens"),
+    temperature: float = typer.Option(0.7, "--temperature"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
+) -> None:
+    """Generate a chat completion using local models (intent-based or explicit)."""
+    import httpx
+    from pantry.schemas import ChatMessage
+
+    daemon_ok = False
+    url = f"http://{host}:{port}/v1/chat/completions"
+    want_spec = speculative or model.strip() in {"chat-fast"}
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": False,
+        "prefer_speculative": want_spec,
+    }
+    try:
+        resp = httpx.post(url, json=payload, timeout=60.0)
+        if resp.status_code == 200:
+            daemon_ok = True
+            choices = resp.json().get("choices", [])
+            if choices:
+                content = choices[0].get("message", {}).get("content", "")
+                typer.echo(content)
+                return
+    except Exception:
+        daemon_ok = False
+
+    if not daemon_ok:
+        import asyncio
+        from pantry.runtime import runtime_for
+        from pantry.resolve import find_by_model_string
+
+        store = _store(home, data)
+        pkg = store.load_manifest(model)
+        if pkg is None:
+            pkg = find_by_model_string(model, store.list_manifests(), is_ready=store.weights_ready)
+        if pkg is None:
+            typer.secho(f"unknown chat model: {model}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+
+        rt = runtime_for(pkg, store)
+        messages = [ChatMessage(role="user", content=prompt)]
+
+        async def _run() -> str:
+            return await rt.complete(
+                pkg,
+                messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                prefer_speculative=want_spec,
+            )
+
+        try:
+            result = asyncio.run(_run())
+            typer.echo(result)
+        except Exception as e:
+            typer.secho(f"chat generation failed: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from e
 
 
 if __name__ == "__main__":

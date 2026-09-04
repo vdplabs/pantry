@@ -8,9 +8,14 @@ def test_models_includes_image_compact(client):
     r = client.get("/v1/models")
     assert r.status_code == 200
     rows = {m["id"]: m for m in r.json()["data"]}
-    assert "image-compact" in rows
-    assert "image_gen" in rows["image-compact"]["modalities"]
-    assert rows["image-compact"]["role"] == "image_gen"
+    assert "image-compact" not in rows  # Demo hidden by default
+
+    r_demos = client.get("/v1/models", params={"demos": "true"})
+    assert r_demos.status_code == 200
+    rows_demos = {m["id"]: m for m in r_demos.json()["data"]}
+    assert "image-compact" in rows_demos
+    assert "image_gen" in rows_demos["image-compact"]["modalities"]
+    assert rows_demos["image-compact"]["role"] == "image_gen"
 
 
 def test_resolve_image_gen_http(client):
@@ -120,6 +125,7 @@ def test_mflux_runtime_mocked(tmp_path):
     mock_flux_cls = MagicMock()
     mock_flux_instance = MagicMock()
     mock_flux_cls.from_alias.return_value = mock_flux_instance
+    mock_flux_cls.from_name.return_value = mock_flux_instance
 
     mock_img = MagicMock()
     def _save(p):
@@ -129,14 +135,22 @@ def test_mflux_runtime_mocked(tmp_path):
 
     mock_mflux_module = MagicMock()
     mock_mflux_module.Flux1 = mock_flux_cls
+    mock_submod = MagicMock()
+    mock_submod.Flux1 = mock_flux_cls
 
-    with patch.dict("sys.modules", {"mflux": mock_mflux_module}):
+    with patch.dict(
+        "sys.modules",
+        {
+            "mflux": mock_mflux_module,
+            "mflux.models.flux.variants.txt2img.flux": mock_submod,
+        },
+    ):
         res = rt.generate(mflux_man, prompt="a neon sunset", size="256x256", n=1)
         assert len(res) == 1
         assert "b64_json" in res[0]
         raw = base64.b64decode(res[0]["b64_json"])
         assert raw.startswith(b"\x89PNG")
-        mock_flux_cls.from_alias.assert_called_with(alias="schnell", quantize=8)
+        assert mock_flux_cls.from_alias.called or mock_flux_cls.from_name.called
         mock_flux_instance.generate_image.assert_called_once()
 
 

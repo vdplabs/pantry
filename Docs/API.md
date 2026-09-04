@@ -14,7 +14,7 @@ Service name, version, and path hints (`chat`, `images`, `resolve`, …).
 {
   "ok": true,
   "name": "pantry",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "packages": 7,
   "loaded": [],
   "home": "/Users/…/VDPPantry",
@@ -38,8 +38,7 @@ See [Memory.md](Memory.md) for the watchdog and `GET /v1/memory` / `POST /v1/mem
 
 OpenAI-style list. By default:
 
-- Omits demo chat echo packages (`runtime.primary == echo` or `listable: false`)
-- Includes listable generative demos (e.g. `image-compact`)
+- Omits echo / demo packages (`runtime.primary` contains `echo`, `family` contains `demo`, or `listable: false`)
 - One preferred id per package (first alias, else package id)
 - Includes unpulled listable packs (`weights_ready: false`)
 - Each row includes `role` and `modalities`
@@ -48,7 +47,7 @@ Query flags:
 
 | Flag | Effect |
 | --- | --- |
-| `demos=1` | Include demo / echo chat packages |
+| `demos=1` | Include demo / echo packages (chat, image, music, embed, STT scaffolds) |
 | `ready_only=1` | Only packages with weights on disk |
 | `all_ids=1` | Also emit raw package ids when they differ from the preferred alias |
 
@@ -261,7 +260,7 @@ Demo pack uses **`echo_music`** (deterministic sine WAV).
 | `pantry resolve --modality chat --ram-gb-max 8 --quality compact` | Capability resolve |
 | `pantry list` | Installed packages (`need-pull` / `ready`) |
 | `pantry load` / `unload` | Prefer running daemon (`POST /v1/load`, `/v1/unload`); else local `state.json` only |
-| `pantry serve [--host] [--port] [--worker-isolation]` | HTTP server + menu bar (`--worker-isolation` for 100% Metal reclaim) |
+| `pantry serve [--host] [--port] [--worker-isolation]` | HTTP server + menu bar (`--worker-isolation` so unload reclaims that worker's Metal allocations) |
 | `pantry service install` / `start` / `stop` / `status` | Manage macOS login LaunchAgent daemon |
 | `pantry catalog update` / `list` | Sync remote catalog manifests from registry / GitHub |
 | `pantry transcribe <file>` | Local speech-to-text audio transcription via Whisper |

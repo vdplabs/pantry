@@ -3,6 +3,7 @@ from __future__ import annotations
 """Audio transcription (Speech-to-Text) runtimes for Apple Silicon and mock testing."""
 
 import datetime
+import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Any
@@ -127,11 +128,57 @@ class EchoAudioTranscriptionRuntime(AudioTranscriptionRuntime):
         }
 
 
+def _load_audio_file(path: Path) -> Any:
+    """Decode audio file to mono float32 16kHz numpy array if ffmpeg is missing."""
+    import shutil
+
+    if shutil.which("ffmpeg"):
+        return str(path)
+
+    try:
+        import wave
+        import numpy as np
+
+        with wave.open(str(path), "rb") as wf:
+            n_channels = wf.getnchannels()
+            sampwidth = wf.getsampwidth()
+            framerate = wf.getframerate()
+            frames = wf.readframes(wf.getnframes())
+
+        if sampwidth == 2:
+            audio = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
+        elif sampwidth == 4:
+            audio = np.frombuffer(frames, dtype=np.int32).astype(np.float32) / 2147483648.0
+        elif sampwidth == 1:
+            audio = (np.frombuffer(frames, dtype=np.uint8).astype(np.float32) - 128.0) / 128.0
+        else:
+            return str(path)
+
+        if n_channels > 1:
+            audio = audio.reshape(-1, n_channels).mean(axis=1)
+
+        if framerate != 16000:
+            from scipy import signal
+
+            num_samples = int(len(audio) * 16000 / framerate)
+            audio = signal.resample(audio, num_samples).astype(np.float32)
+
+        return audio.astype(np.float32)
+    except Exception:
+        return str(path)
+
+
 class MLXWhisperRuntime(AudioTranscriptionRuntime):
     """Real on-device Whisper STT backend powered by mlx-whisper on Apple Silicon."""
 
     def __init__(self, store: PackageStore | None = None) -> None:
         self.store = store
+
+    def _ensure_cache_env(self) -> None:
+        if "HF_HOME" not in os.environ and "HF_HUB_CACHE" not in os.environ:
+            if self.store and self.store.data_root != self.store.root:
+                os.environ["HF_HOME"] = str(self.store.data_root / "huggingface")
+                os.environ["HF_HUB_CACHE"] = str(self.store.data_root / "huggingface" / "hub")
 
     def transcribe(
         self,
@@ -144,6 +191,8 @@ class MLXWhisperRuntime(AudioTranscriptionRuntime):
         word_timestamps: bool = False,
         original_filename: str | None = None,
     ) -> dict[str, Any]:
+        self._ensure_cache_env()
+
         try:
             import mlx_whisper
         except ImportError as exc:
@@ -156,14 +205,12 @@ class MLXWhisperRuntime(AudioTranscriptionRuntime):
         if not path.exists():
             raise FileNotFoundError(f"audio file not found: {audio_path}")
 
-        # Choose model path: local pulled weights dir if ready, or HF repo
-        model_target: str = "mlx-community/whisper-tiny"
-        if self.store and self.store.weights_ready(manifest):
-            weights_dir = self.store.weights_dir(manifest.id)
-            if weights_dir.is_dir():
-                model_target = str(weights_dir)
-        elif manifest.runtime.hf_repo:
-            model_target = manifest.runtime.hf_repo
+        # Prefer shared HF snapshot / package weights via store; else Hub id.
+        model_target: str = manifest.runtime.hf_repo or "mlx-community/whisper-tiny"
+        if self.store is not None:
+            resolved = self.store.resolve_weights_path(manifest)
+            if resolved is not None:
+                model_target = str(resolved)
 
         kwargs: dict[str, Any] = {
             "path_or_hf_repo": model_target,
@@ -176,7 +223,8 @@ class MLXWhisperRuntime(AudioTranscriptionRuntime):
         if prompt:
             kwargs["initial_prompt"] = prompt
 
-        result = mlx_whisper.transcribe(str(path), **kwargs)
+        audio_input = _load_audio_file(path)
+        result = mlx_whisper.transcribe(audio_input, **kwargs)
 
         text = result.get("text", "").strip()
         segments = result.get("segments", [])

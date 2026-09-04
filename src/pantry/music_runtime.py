@@ -101,5 +101,6 @@ def music_runtime_for(manifest: PackageManifest, store: PackageStore) -> EchoMus
         return EchoMusicRuntime(store)
     raise RuntimeError(
         f"music runtime {manifest.runtime.primary!r} is not implemented yet "
-        f"(package {manifest.id})"
+        f"(package {manifest.id}). Real MLX music generation is on the roadmap."
     )
+

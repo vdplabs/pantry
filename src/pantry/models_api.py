@@ -24,8 +24,8 @@ def list_model_entries(
     data: list[dict] = []
     for p in store.list_manifests():
         primary_runtime = (p.runtime.primary or "").lower()
-        is_chat_echo = primary_runtime == "echo"
-        if not include_demos and (not p.listable or is_chat_echo):
+        is_echo = "echo" in primary_runtime or "demo" in p.family.lower()
+        if not include_demos and (not p.listable or is_echo):
             continue
         ready = store.weights_ready(p)
         if not include_unready and not ready:

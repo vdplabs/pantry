@@ -131,7 +131,7 @@
         "embed-compact",
         "embed-demo"
       ],
-      "listable": true,
+      "listable": false,
       "runtime": {
         "primary": "echo_embed",
         "hf_repo": null,
@@ -181,7 +181,7 @@
       },
       "blobs": [],
       "system_preamble": "",
-      "listable": true
+      "listable": false
     },
     {
       "id": "vdplabs.demo-llama.standard.v1",
@@ -238,7 +238,8 @@
       "template_family": "none",
       "tool_protocol": null,
       "aliases": [
-        "music-compact"
+        "music-compact",
+        "music"
       ],
       "runtime": {
         "primary": "echo_music",
@@ -256,7 +257,7 @@
       },
       "blobs": [],
       "system_preamble": "",
-      "listable": true
+      "listable": false
     },
     {
       "id": "vdplabs.demo-transcribe.compact.v1",
@@ -280,7 +281,7 @@
         "whisper-demo",
         "transcribe-compact"
       ],
-      "listable": true,
+      "listable": false,
       "runtime": {
         "primary": "echo_stt",
         "hf_repo": null,
@@ -301,8 +302,8 @@
       "quality_tier": "standard",
       "quant_method": "mflux-8bit",
       "bits_approx": 8.0,
-      "ram_gb_min": 12.0,
-      "ram_gb_comfortable": 16.0,
+      "ram_gb_min": 24.0,
+      "ram_gb_comfortable": 32.0,
       "modalities": [
         "image_gen"
       ],
@@ -313,7 +314,6 @@
       "tool_protocol": null,
       "aliases": [
         "flux-schnell",
-        "image-standard",
         "flux"
       ],
       "listable": true,
@@ -545,6 +545,43 @@
         "suite_id": "librispeech-clean",
         "score": 0.92,
         "notes": "OpenAI Whisper Tiny converted to Apple Silicon MLX format for real-time dictation."
+      },
+      "system_preamble": ""
+    },
+    {
+      "id": "vdplabs.z-image-turbo.standard.v1",
+      "family": "z-image",
+      "role": "image_gen",
+      "params_b": 6.0,
+      "quality_tier": "standard",
+      "quant_method": "mlx-bf16",
+      "bits_approx": 16.0,
+      "ram_gb_min": 8.0,
+      "ram_gb_comfortable": 14.0,
+      "modalities": [
+        "image_gen"
+      ],
+      "context_max": 512,
+      "license": "apache-2.0",
+      "chat_template_id": "none",
+      "template_family": "none",
+      "tool_protocol": null,
+      "aliases": [
+        "z-image-turbo",
+        "z-image",
+        "image-standard",
+        "image"
+      ],
+      "listable": true,
+      "runtime": {
+        "primary": "mflux",
+        "hf_repo": "mlx-community/Z-Image-Turbo-bf16",
+        "draft_package_id": null
+      },
+      "eval": {
+        "suite_id": "coco-gen-2024",
+        "score": 0.92,
+        "notes": "Z-Image-Turbo fast photorealistic text-to-image generator powered by mflux on Apple Silicon Metal."
       },
       "system_preamble": ""
     }

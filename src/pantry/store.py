@@ -125,17 +125,104 @@ class PackageStore:
         safe = package_id.replace("/", "__")
         return self.data_root / "packages" / safe / "weights"
 
+    def find_hf_snapshot(self, repo_id: str, revision: str | None = None) -> Path | None:
+        """Locate a snapshot for repo_id in the shared Hugging Face cache.
+
+        Search order (unique roots, first hit wins):
+        1. ``HF_HUB_CACHE`` (when set — exclusive of the default ``~/.cache`` path)
+        2. ``HF_HOME/hub`` (when set)
+        3. ``~/.cache/huggingface/hub`` (only when neither HF env override is set)
+        4. ``PANTRY_DATA/huggingface/hub`` when data root differs from metadata home
+        """
+        import os
+
+        cache_roots: list[Path] = []
+        seen: set[Path] = set()
+
+        def _add(path: Path) -> None:
+            resolved = path.expanduser()
+            key = resolved.resolve() if resolved.exists() else resolved
+            if key in seen:
+                return
+            seen.add(key)
+            cache_roots.append(resolved)
+
+        hub_cache = os.environ.get("HF_HUB_CACHE")
+        hf_home = os.environ.get("HF_HOME")
+        if hub_cache:
+            _add(Path(hub_cache))
+        if hf_home:
+            _add(Path(hf_home) / "hub")
+        # Honor HF override isolation: do not fall through to the user default
+        # cache when tests / operators pin HF_HUB_CACHE or HF_HOME.
+        if not hub_cache and not hf_home:
+            _add(Path.home() / ".cache" / "huggingface" / "hub")
+        if self.data_root != self.root:
+            _add(self.data_root / "huggingface" / "hub")
+
+        folder_name = f"models--{repo_id.replace('/', '--')}"
+        for root in cache_roots:
+            snapshots_dir = root / folder_name / "snapshots"
+            if not snapshots_dir.is_dir():
+                continue
+
+            if revision:
+                cand = snapshots_dir / revision
+                if cand.is_dir():
+                    return cand
+
+            # Find the most recently modified snapshot
+            snaps = [s for s in snapshots_dir.iterdir() if s.is_dir()]
+            if snaps:
+                snaps.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+                return snaps[0]
+
+        return None
+
+    def _is_dir_weights_complete(self, path: Path, manifest: PackageManifest) -> bool:
+        if not path.is_dir():
+            return False
+        primary = (manifest.runtime.primary or "echo").lower()
+        if primary == "echo" or primary.startswith("echo_"):
+            return True
+        has_config = (
+            (path / "config.json").is_file()
+            or (path / "model_index.json").is_file()
+            or (path / "transformer" / "config.json").is_file()
+            or (path / "unet" / "config.json").is_file()
+        )
+        has_weights = (
+            any(path.glob("*.safetensors"))
+            or any(path.glob("*.npz"))
+            or any(path.glob("*.bin"))
+            or (path / "transformer").is_dir()
+            or (path / "unet").is_dir()
+        )
+        return has_config and has_weights
+
+    def resolve_weights_path(self, manifest: PackageManifest) -> Path | None:
+        primary = (manifest.runtime.primary or "echo").lower()
+        if primary == "echo" or primary.startswith("echo_"):
+            return None
+
+        # 1. Check local package store
+        local = self.weights_dir(manifest.id)
+        if self._is_dir_weights_complete(local, manifest):
+            return local
+
+        # 2. Check shared Hugging Face cache
+        if manifest.runtime.hf_repo:
+            snap = self.find_hf_snapshot(manifest.runtime.hf_repo, manifest.runtime.hf_revision)
+            if snap and self._is_dir_weights_complete(snap, manifest):
+                return snap
+
+        return None
+
     def weights_ready(self, manifest: PackageManifest) -> bool:
         primary = (manifest.runtime.primary or "echo").lower()
         if primary == "echo" or primary.startswith("echo_"):
             return True
-        path = self.weights_dir(manifest.id)
-        if not path.is_dir():
-            return False
-        # MLX trees need config + at least one weight shard.
-        has_config = (path / "config.json").is_file()
-        has_weights = any(path.glob("*.safetensors")) or any(path.glob("*.npz"))
-        return has_config and has_weights
+        return self.resolve_weights_path(manifest) is not None
 
     def install_from_bundled_catalog(self, package_id: str) -> PackageManifest | None:
         from pantry.config import bundled_catalog_dir
