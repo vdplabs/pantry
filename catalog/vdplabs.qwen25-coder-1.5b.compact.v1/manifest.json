@@ -1,0 +1,30 @@
+{
+  "id": "vdplabs.qwen25-coder-1.5b.compact.v1",
+  "family": "qwen2.5-coder",
+  "role": "code",
+  "params_b": 1.5,
+  "quality_tier": "compact",
+  "quant_method": "mlx_4bit",
+  "bits_approx": 4.0,
+  "ram_gb_min": 2,
+  "ram_gb_comfortable": 4,
+  "modalities": ["text"],
+  "context_max": 32768,
+  "license": "apache-2.0",
+  "chat_template_id": "qwen2.5-coder-instruct",
+  "template_family": "chatml",
+  "tool_protocol": null,
+  "aliases": ["coder-compact", "qwen-coder-1.5b"],
+  "listable": true,
+  "runtime": {
+    "primary": "mlx",
+    "hf_repo": "mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit",
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-code-smoke-2026.09",
+    "score": 0.68,
+    "notes": "Code specialization model; lightweight code completion on base Macs."
+  },
+  "system_preamble": "You are a coding assistant running locally via pantry."
+}

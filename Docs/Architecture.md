@@ -56,15 +56,22 @@ Preference order when several packages match: weights ready → non-demo/real ru
 | Runtime | When |
 | --- | --- |
 | `echo` | Deterministic chat demo / tests (hidden from `/v1/models` by default) |
+| `echo_embed` | Deterministic vector embedding scaffold for `/v1/embeddings` |
 | `echo_image` | Deterministic PNG scaffold for `/v1/images/generations` |
 | `echo_music` | Deterministic WAV scaffold for `/v1/audio/generations` |
-| `mlx` | Apple Silicon chat via `mlx-lm` after `pantry pull` |
+| `mlx` | Apple Silicon chat & embeddings via `mlx-lm` after `pantry pull` |
 
-Planner hooks exist for speculative draft packages and future adapters; MVP chat inference is single-engine load + generate. Image Diffusers / Z-Image and MAGNeT music engines are follow-on.
+Planner hooks exist for speculative draft packages and future adapters; chat inference supports exact token usage telemetry, OpenAI-compatible tool/function calling, and optional worker process isolation for complete Metal memory reclaim.
+
+## Process model & Worker Isolation
+
+- **Install**: Homebrew (`brew tap vdplabs/tap && brew install pantry`), or `pip` / `uv`.
+- **Daemon**: `pantry serve` binds `127.0.0.1` by default (port `18787`). Managed at login via `pantry service install`.
+- **Worker Isolation**: Pass `--worker-isolation` to isolate MLX graph evaluation inside a child worker process. Calling `pantry unload` terminates the worker process, guaranteeing 100% of GPU Metal driver allocations and OS unified memory pools are reclaimed immediately.
 
 ## Scheduling (MVP)
 
-Completions take a process-wide asyncio lock (FIFO). A `priority=batch` flag exists for future work; today it does **not** preempt interactive requests. Longer-term: prefer interactive when both contend, chunk long prefills, hard memory caps, and optional worker subprocesses so Metal buffers can be reclaimed cleanly.
+Completions take a process-wide asyncio lock (FIFO). A `priority=batch` flag exists for future work; today it does **not** preempt interactive requests.
 
 ## Security posture
 

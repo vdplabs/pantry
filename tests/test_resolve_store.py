@@ -5,11 +5,11 @@ from unittest.mock import patch
 
 import pytest
 
-from pantry.schemas import CapabilityRequest, PackageManifest, QualityTier, ChatMessage
+from pantry.pull import PullError, pull_package
 from pantry.resolve import ResolveError, find_by_model_string, resolve
+from pantry.schemas import CapabilityRequest, ChatMessage, PackageManifest, QualityTier
 from pantry.store import PackageStore
 from pantry.template import apply_chat_template
-from pantry.pull import pull_package, PullError
 
 
 def _pkg(**kwargs) -> PackageManifest:
@@ -41,7 +41,7 @@ def _pkg(**kwargs) -> PackageManifest:
         ),
         (
             {"modality": "chat", "template_family": "llama3"},
-            "vdplabs.demo-llama.standard.v1",
+            "vdplabs.llama32-1b.compact.v1",
         ),
         (
             {

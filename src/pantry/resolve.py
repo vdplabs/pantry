@@ -27,6 +27,8 @@ def _normalize_modality(modality: str) -> str:
         return "music"
     if key in {"image_gen", "image"}:
         return "image_gen"
+    if key in {"embed", "embeddings", "embedding"}:
+        return "embed"
     return key
 
 
@@ -161,6 +163,13 @@ def resolve(
             alias = "chat-compact"
         elif chosen.quality_tier == QualityTier.extreme:
             alias = "chat-extreme"
+    elif modality_key == "embed":
+        if chosen.quality_tier == QualityTier.standard:
+            alias = "embed-standard"
+        elif chosen.quality_tier == QualityTier.compact:
+            alias = "embed-compact"
+        elif chosen.quality_tier == QualityTier.extreme:
+            alias = "embed-extreme"
 
     return ResolveResult(
         package_id=chosen.id,
@@ -193,6 +202,8 @@ def find_by_model_string(
         "image-standard": (QualityTier.standard, "image_gen"),
         "music-compact": (QualityTier.compact, "music"),
         "music-standard": (QualityTier.standard, "music"),
+        "embed-compact": (QualityTier.compact, "embed"),
+        "embed-standard": (QualityTier.standard, "embed"),
     }
     if key in soft:
         tier, modality_key = soft[key]
@@ -214,5 +225,5 @@ def find_by_model_string(
                 p.id,
             )
 
-        return sorted(tiered, key=sort_key)[0]
+        return min(tiered, key=sort_key)
     return None

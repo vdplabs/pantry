@@ -22,9 +22,10 @@ def test_resolve_draft_path_requires_ready_weights(tmp_path, catalog_dir):
 
 
 def test_echo_speculative_annotation():
+    import asyncio
+
     from pantry.runtime import EchoRuntime
     from pantry.schemas import ChatMessage, RuntimeInfo
-    import asyncio
 
     man = PackageManifest(
         id="t",

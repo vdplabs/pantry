@@ -99,6 +99,9 @@ class ChatMessage(BaseModel):
     role: str
     # OpenAI clients may send null (tool turns) or content-part arrays.
     content: str | list[Any] | None = ""
+    name: str | None = None
+    tool_calls: list[dict[str, Any]] | None = None
+    tool_call_id: str | None = None
 
     def text(self) -> str:
         return normalize_message_content(self.content)
@@ -114,9 +117,8 @@ def normalize_message_content(content: str | list[Any] | None) -> str:
         for part in content:
             if isinstance(part, str):
                 parts.append(part)
-            elif isinstance(part, dict):
-                if "text" in part:
-                    parts.append(str(part.get("text") or ""))
+            elif isinstance(part, dict) and "text" in part:
+                parts.append(str(part.get("text") or ""))
         return "".join(parts)
     return str(content)
 
@@ -132,6 +134,8 @@ class CompleteRequest(BaseModel):
     priority: str = "interactive"  # interactive | batch
     # When true (or model alias chat-fast), use draft_package_id if weights are ready.
     prefer_speculative: bool = False
+    tools: list[dict[str, Any]] | None = None
+    tool_choice: str | dict[str, Any] | None = None
 
     def effective_max_tokens(self) -> int | None:
         if self.max_tokens is not None:
@@ -167,3 +171,24 @@ class AudioGenerateRequest(BaseModel):
     duration_seconds: float = Field(default=2.0, ge=0.25, le=30.0)
     response_format: str = "b64_json"  # b64_json | url
     priority: str = "interactive"
+
+
+class EmbeddingRequest(BaseModel):
+    model: str
+    input: str | list[str]
+    encoding_format: str = "float"
+    user: str | None = None
+    priority: str = "interactive"
+
+
+class EmbeddingData(BaseModel):
+    object: str = "embedding"
+    index: int
+    embedding: list[float]
+
+
+class EmbeddingResponse(BaseModel):
+    object: str = "list"
+    data: list[EmbeddingData]
+    model: str
+    usage: dict[str, int]

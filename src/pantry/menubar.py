@@ -9,7 +9,7 @@ Opened automatically by ``pantry serve`` when rumps is installed
 import signal
 import subprocess
 from collections.abc import Callable
-from typing import Any, Optional
+from typing import Any
 
 import httpx
 
@@ -39,7 +39,7 @@ def _models(host: str, port: int) -> list[dict[str, Any]]:
 
 def _pids_on_port(port: int) -> list[int]:
     try:
-        out = subprocess.check_output(  # noqa: S603
+        out = subprocess.check_output(
             ["lsof", "-nP", f"-iTCP:{port}", "-sTCP:LISTEN", "-t"],
             stderr=subprocess.DEVNULL,
             text=True,
@@ -69,7 +69,7 @@ def _stop_serve(port: int) -> int:
 
 def _copy(text: str) -> None:
     try:
-        subprocess.run(  # noqa: S603
+        subprocess.run(
             ["pbcopy"],
             input=text.encode("utf-8"),
             check=False,
@@ -87,19 +87,42 @@ def rumps_available() -> bool:
         return False
 
 
+def set_accessory_activation_policy() -> bool:
+    """Configure Cocoa so pantry runs as an accessory app (menu bar only, no Dock icon).
+
+    By default on macOS, running Python with a GUI event loop sets a regular activation
+    policy, displaying the Python rocket icon in the Dock and Cmd+Tab switcher.
+    Setting NSApplicationActivationPolicyAccessory hides the Dock icon while preserving
+    the status bar item in the macOS menu bar.
+    """
+    try:
+        import AppKit
+        import Foundation
+
+        Foundation.NSProcessInfo.processInfo().setProcessName_("pantry")
+        app = AppKit.NSApplication.sharedApplication()
+        return bool(
+            app.setActivationPolicy_(AppKit.NSApplicationActivationPolicyAccessory)
+        )
+    except Exception:  # noqa: BLE001
+        return False
+
+
 def run_menubar(
     host: str = "127.0.0.1",
     port: int = 18787,
     *,
     embedded: bool = False,
     on_quit: Callable[[], None] | None = None,
-    serve_cmd: Optional[str] = None,
+    serve_cmd: str | None = None,
 ) -> None:
     """Run the status item.
 
     *embedded*: serve is already running in this process (default path via
     ``pantry serve``). Quit stops serve via *on_quit*.
     """
+    set_accessory_activation_policy()
+
     try:
         import rumps
     except ImportError as e:
@@ -109,6 +132,7 @@ def run_menubar(
 
     class PantryMenuApp(rumps.App):
         def __init__(self) -> None:
+            set_accessory_activation_policy()
             super().__init__("pantry", title="P", quit_button=None)
             self._host = host
             self._port = port
@@ -372,12 +396,12 @@ def run_menubar(
             self.refresh()
 
         def on_open_health(self, _: rumps.MenuItem) -> None:
-            subprocess.Popen(  # noqa: S603,S607
+            subprocess.Popen(
                 ["open", f"http://{self._host}:{self._port}/v1/health"]
             )
 
         def on_open_memory(self, _: rumps.MenuItem) -> None:
-            subprocess.Popen(  # noqa: S603,S607
+            subprocess.Popen(
                 ["open", f"http://{self._host}:{self._port}/v1/memory"]
             )
 
@@ -403,7 +427,7 @@ def run_menubar(
                 self.refresh()
                 return
 
-            self._serve_proc = subprocess.Popen(  # noqa: S603
+            self._serve_proc = subprocess.Popen(
                 [
                     self._serve_cmd,
                     "serve",
@@ -425,7 +449,7 @@ def run_menubar(
             if self._on_quit is not None:
                 try:
                     self._on_quit()
-                except Exception:  # noqa: BLE001
+                except Exception:  # noqa: BLE001, S110
                     pass
             rumps.quit_application()
 

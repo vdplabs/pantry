@@ -67,9 +67,7 @@ def looks_like_repetition_loop(text: str) -> bool:
     if needle in earlier:
         return True
     head = needle[:64]
-    if len(head) >= 48 and head in earlier:
-        return True
-    return False
+    return bool(len(head) >= 48 and head in earlier)
 
 
 class StreamStopper:

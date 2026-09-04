@@ -1,0 +1,445 @@
+{
+  "packages": [
+    {
+      "id": "vdplabs.deepseek-r1-distill-qwen-1.5b.compact.v1",
+      "family": "deepseek-r1",
+      "role": "reasoning",
+      "params_b": 1.5,
+      "quality_tier": "compact",
+      "quant_method": "mlx_4bit",
+      "bits_approx": 4.0,
+      "ram_gb_min": 2,
+      "ram_gb_comfortable": 4,
+      "modalities": [
+        "text"
+      ],
+      "context_max": 32768,
+      "license": "mit",
+      "chat_template_id": "deepseek-r1-distill-qwen",
+      "template_family": "chatml",
+      "tool_protocol": null,
+      "aliases": [
+        "reasoning-compact",
+        "r1-1.5b"
+      ],
+      "listable": true,
+      "runtime": {
+        "primary": "mlx",
+        "hf_repo": "mlx-community/DeepSeek-R1-Distill-Qwen-1.5B-4bit",
+        "draft_package_id": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-reasoning-smoke-2026.09",
+        "score": 0.72,
+        "notes": "DeepSeek R1 distilled reasoning model in 1.5B size."
+      },
+      "system_preamble": "You are a reasoning assistant running locally via pantry."
+    },
+    {
+      "id": "vdplabs.demo-chat.compact.v1",
+      "family": "demo",
+      "role": "chat",
+      "params_b": 0.05,
+      "quality_tier": "compact",
+      "quant_method": "none",
+      "bits_approx": 3.0,
+      "ram_gb_min": 1,
+      "ram_gb_comfortable": 1.5,
+      "modalities": [
+        "text"
+      ],
+      "context_max": 4096,
+      "license": "mit",
+      "chat_template_id": "chatml-v1",
+      "template_family": "chatml",
+      "tool_protocol": null,
+      "aliases": [
+        "demo-compact"
+      ],
+      "runtime": {
+        "primary": "echo",
+        "adapters": [],
+        "draft_package_id": null,
+        "ane_prefill": false,
+        "mlc_artifact": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-chat-smoke-2026.09",
+        "score": 0.9,
+        "notes": "Smaller echo stand-in for compact tier"
+      },
+      "blobs": [],
+      "system_preamble": "You are a compact pantry demo assistant.",
+      "listable": false
+    },
+    {
+      "id": "vdplabs.demo-chat.standard.v1",
+      "family": "demo",
+      "role": "chat",
+      "params_b": 0.1,
+      "quality_tier": "standard",
+      "quant_method": "none",
+      "bits_approx": null,
+      "ram_gb_min": 1,
+      "ram_gb_comfortable": 2,
+      "modalities": [
+        "text"
+      ],
+      "context_max": 8192,
+      "license": "mit",
+      "chat_template_id": "chatml-v1",
+      "template_family": "chatml",
+      "tool_protocol": null,
+      "aliases": [
+        "demo-standard"
+      ],
+      "runtime": {
+        "primary": "echo",
+        "adapters": [],
+        "draft_package_id": "vdplabs.demo-chat.compact.v1",
+        "ane_prefill": false,
+        "mlc_artifact": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-chat-smoke-2026.09",
+        "score": 0.99,
+        "notes": "Echo package for host wiring tests"
+      },
+      "blobs": [],
+      "system_preamble": "You are a pantry demo assistant.",
+      "listable": false
+    },
+    {
+      "id": "vdplabs.demo-embed.compact.v1",
+      "family": "demo-embed",
+      "role": "embed",
+      "params_b": 0.05,
+      "quality_tier": "compact",
+      "quant_method": "none",
+      "bits_approx": null,
+      "ram_gb_min": 0.2,
+      "ram_gb_comfortable": 0.5,
+      "modalities": [
+        "embed"
+      ],
+      "context_max": 2048,
+      "license": "mit",
+      "chat_template_id": "none",
+      "template_family": "none",
+      "tool_protocol": null,
+      "aliases": [
+        "embed-compact",
+        "embed-demo"
+      ],
+      "listable": true,
+      "runtime": {
+        "primary": "echo_embed",
+        "hf_repo": null,
+        "draft_package_id": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-embed-smoke-2026.09",
+        "score": 0.99,
+        "notes": "Deterministic demo embeddings generator for smoke testing and offline verification."
+      },
+      "system_preamble": ""
+    },
+    {
+      "id": "vdplabs.demo-image.compact.v1",
+      "family": "demo-image",
+      "role": "image_gen",
+      "params_b": 0,
+      "quality_tier": "compact",
+      "quant_method": "none",
+      "bits_approx": null,
+      "ram_gb_min": 1,
+      "ram_gb_comfortable": 1.5,
+      "modalities": [
+        "image_gen"
+      ],
+      "context_max": 0,
+      "license": "mit",
+      "chat_template_id": "none",
+      "template_family": "none",
+      "tool_protocol": null,
+      "aliases": [
+        "image-compact"
+      ],
+      "runtime": {
+        "primary": "echo_image",
+        "adapters": [],
+        "draft_package_id": null,
+        "ane_prefill": false,
+        "mlc_artifact": null,
+        "hf_repo": null,
+        "hf_revision": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-image-smoke-2026.09",
+        "score": 0.5,
+        "notes": "Echo image runtime \u2014 proves /v1/images/generations without MLX Diffusers weights."
+      },
+      "blobs": [],
+      "system_preamble": "",
+      "listable": true
+    },
+    {
+      "id": "vdplabs.demo-llama.standard.v1",
+      "family": "llama",
+      "role": "chat",
+      "params_b": 0.1,
+      "quality_tier": "standard",
+      "quant_method": "none",
+      "ram_gb_min": 2,
+      "ram_gb_comfortable": 4,
+      "modalities": [
+        "text"
+      ],
+      "context_max": 8192,
+      "license": "llama3",
+      "chat_template_id": "llama3-v1",
+      "template_family": "llama3",
+      "tool_protocol": "openai-tools-v1",
+      "aliases": [
+        "demo-llama"
+      ],
+      "runtime": {
+        "primary": "echo",
+        "adapters": [],
+        "draft_package_id": null,
+        "ane_prefill": false,
+        "mlc_artifact": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-chat-smoke-2026.09",
+        "score": 0.95,
+        "notes": "Different template_family to prove resolve will not cross templates"
+      },
+      "blobs": [],
+      "system_preamble": "You are a llama-template demo.",
+      "listable": false
+    },
+    {
+      "id": "vdplabs.demo-music.compact.v1",
+      "family": "demo-music",
+      "role": "music",
+      "params_b": 0,
+      "quality_tier": "compact",
+      "quant_method": "none",
+      "bits_approx": null,
+      "ram_gb_min": 1,
+      "ram_gb_comfortable": 1.5,
+      "modalities": [
+        "music"
+      ],
+      "context_max": 0,
+      "license": "mit",
+      "chat_template_id": "none",
+      "template_family": "none",
+      "tool_protocol": null,
+      "aliases": [
+        "music-compact"
+      ],
+      "runtime": {
+        "primary": "echo_music",
+        "adapters": [],
+        "draft_package_id": null,
+        "ane_prefill": false,
+        "mlc_artifact": null,
+        "hf_repo": null,
+        "hf_revision": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-music-smoke-2026.09",
+        "score": 0.5,
+        "notes": "Echo music runtime \u2014 short sine WAV for /v1/audio/generations wiring."
+      },
+      "blobs": [],
+      "system_preamble": "",
+      "listable": true
+    },
+    {
+      "id": "vdplabs.llama32-1b.compact.v1",
+      "family": "llama3.2",
+      "role": "chat",
+      "params_b": 1.23,
+      "quality_tier": "compact",
+      "quant_method": "mlx_4bit",
+      "bits_approx": 4.0,
+      "ram_gb_min": 2,
+      "ram_gb_comfortable": 3,
+      "modalities": [
+        "text"
+      ],
+      "context_max": 131072,
+      "license": "llama3.2",
+      "chat_template_id": "llama-3.2-instruct",
+      "template_family": "llama3",
+      "tool_protocol": null,
+      "aliases": [
+        "llama3-compact",
+        "llama-1b"
+      ],
+      "listable": true,
+      "runtime": {
+        "primary": "mlx",
+        "hf_repo": "mlx-community/Llama-3.2-1B-Instruct-4bit",
+        "draft_package_id": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-chat-smoke-2026.09",
+        "score": 0.65,
+        "notes": "Compact Llama 3.2 1B Instruct 4-bit; ultra-low RAM footprint."
+      },
+      "system_preamble": "You are a helpful assistant running locally via pantry."
+    },
+    {
+      "id": "vdplabs.llama32-3b.standard.v1",
+      "family": "llama3.2",
+      "role": "chat",
+      "params_b": 3.21,
+      "quality_tier": "standard",
+      "quant_method": "mlx_4bit",
+      "bits_approx": 4.0,
+      "ram_gb_min": 3,
+      "ram_gb_comfortable": 5,
+      "modalities": [
+        "text"
+      ],
+      "context_max": 131072,
+      "license": "llama3.2",
+      "chat_template_id": "llama-3.2-instruct",
+      "template_family": "llama3",
+      "tool_protocol": null,
+      "aliases": [
+        "llama3-standard",
+        "llama-3b"
+      ],
+      "listable": true,
+      "runtime": {
+        "primary": "mlx",
+        "hf_repo": "mlx-community/Llama-3.2-3B-Instruct-4bit",
+        "draft_package_id": "vdplabs.llama32-1b.compact.v1"
+      },
+      "eval": {
+        "suite_id": "vdplabs-chat-smoke-2026.09",
+        "score": 0.76,
+        "notes": "Standard Llama 3.2 3B Instruct 4-bit with 1B draft speculative pair."
+      },
+      "system_preamble": "You are a helpful assistant running locally via pantry."
+    },
+    {
+      "id": "vdplabs.qwen25-0.5b.compact.v1",
+      "family": "qwen2.5",
+      "role": "chat",
+      "params_b": 0.5,
+      "quality_tier": "compact",
+      "quant_method": "mlx_4bit",
+      "bits_approx": 4.0,
+      "ram_gb_min": 1,
+      "ram_gb_comfortable": 2,
+      "modalities": [
+        "text"
+      ],
+      "context_max": 32768,
+      "license": "apache-2.0",
+      "chat_template_id": "qwen2.5-instruct-v1",
+      "template_family": "chatml",
+      "tool_protocol": null,
+      "aliases": [
+        "chat-compact"
+      ],
+      "runtime": {
+        "primary": "mlx",
+        "adapters": [],
+        "draft_package_id": null,
+        "ane_prefill": false,
+        "mlc_artifact": null,
+        "hf_repo": "mlx-community/Qwen2.5-0.5B-Instruct-4bit",
+        "hf_revision": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-chat-smoke-2026.09",
+        "score": 0.55,
+        "notes": "Tiny starter pack (~278 MB). Prefer larger packages for quality."
+      },
+      "blobs": [],
+      "system_preamble": "You are a helpful assistant running locally via pantry."
+    },
+    {
+      "id": "vdplabs.qwen25-1.5b.standard.v1",
+      "family": "qwen2.5",
+      "role": "chat",
+      "params_b": 1.5,
+      "quality_tier": "standard",
+      "quant_method": "mlx_4bit",
+      "bits_approx": 4.0,
+      "ram_gb_min": 2,
+      "ram_gb_comfortable": 4,
+      "modalities": [
+        "text"
+      ],
+      "context_max": 32768,
+      "license": "apache-2.0",
+      "chat_template_id": "qwen2.5-instruct-v1",
+      "template_family": "chatml",
+      "tool_protocol": null,
+      "aliases": [
+        "chat-standard",
+        "chat-fast"
+      ],
+      "runtime": {
+        "primary": "mlx",
+        "adapters": [],
+        "draft_package_id": "vdplabs.qwen25-0.5b.compact.v1",
+        "ane_prefill": false,
+        "mlc_artifact": null,
+        "hf_repo": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+        "hf_revision": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-chat-smoke-2026.09",
+        "score": 0.72,
+        "notes": "Mid-size default (~869 MB). Speculative draft = qwen25-0.5b compact when pulled."
+      },
+      "blobs": [],
+      "system_preamble": "You are a helpful assistant running locally via pantry.",
+      "listable": true
+    },
+    {
+      "id": "vdplabs.qwen25-coder-1.5b.compact.v1",
+      "family": "qwen2.5-coder",
+      "role": "code",
+      "params_b": 1.5,
+      "quality_tier": "compact",
+      "quant_method": "mlx_4bit",
+      "bits_approx": 4.0,
+      "ram_gb_min": 2,
+      "ram_gb_comfortable": 4,
+      "modalities": [
+        "text"
+      ],
+      "context_max": 32768,
+      "license": "apache-2.0",
+      "chat_template_id": "qwen2.5-coder-instruct",
+      "template_family": "chatml",
+      "tool_protocol": null,
+      "aliases": [
+        "coder-compact",
+        "qwen-coder-1.5b"
+      ],
+      "listable": true,
+      "runtime": {
+        "primary": "mlx",
+        "hf_repo": "mlx-community/Qwen2.5-Coder-1.5B-Instruct-4bit",
+        "draft_package_id": null
+      },
+      "eval": {
+        "suite_id": "vdplabs-code-smoke-2026.09",
+        "score": 0.68,
+        "notes": "Code specialization model; lightweight code completion on base Macs."
+      },
+      "system_preamble": "You are a coding assistant running locally via pantry."
+    }
+  ]
+}

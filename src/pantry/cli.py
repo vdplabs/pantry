@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
 
 import typer
 import uvicorn
@@ -21,7 +20,7 @@ app = typer.Typer(
 )
 
 
-def _store(home: Optional[Path], data: Optional[Path] = None) -> PackageStore:
+def _store(home: Path | None, data: Path | None = None) -> PackageStore:
     root = Path(home).expanduser().resolve() if home else default_home()
     data_root = Path(data).expanduser().resolve() if data else default_data(root)
     store = PackageStore(root, data_root=data_root)
@@ -70,13 +69,13 @@ def version() -> None:
 
 @app.command("init")
 def init_cmd(
-    home: Optional[Path] = typer.Option(None, help="Override PANTRY_HOME (metadata)"),
-    data: Optional[Path] = typer.Option(
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME (metadata)"),
+    data: Path | None = typer.Option(
         None,
         "--data",
         help="Override PANTRY_DATA (blobs + weights; e.g. external SSD)",
     ),
-    catalog: Optional[Path] = typer.Option(None, help="Catalog directory of package manifests"),
+    catalog: Path | None = typer.Option(None, help="Catalog directory of package manifests"),
 ) -> None:
     """Create library dirs and seed bundled catalog manifests."""
     store = _store(home, data)
@@ -92,14 +91,14 @@ def init_cmd(
 @app.command("resolve")
 def resolve_cmd(
     modality: str = typer.Option("chat", "--modality"),
-    ram_gb_max: Optional[float] = typer.Option(None, "--ram-gb-max"),
-    quality: Optional[str] = typer.Option(None, "--quality", help="standard|compact|extreme"),
+    ram_gb_max: float | None = typer.Option(None, "--ram-gb-max"),
+    quality: str | None = typer.Option(None, "--quality", help="standard|compact|extreme"),
     latency: str = typer.Option("balanced", "--latency", help="balanced|fast"),
-    family_prefer: Optional[str] = typer.Option(None, "--family"),
-    template_family: Optional[str] = typer.Option(None, "--template-family"),
-    tool_protocol: Optional[str] = typer.Option(None, "--tool-protocol"),
+    family_prefer: str | None = typer.Option(None, "--family"),
+    template_family: str | None = typer.Option(None, "--template-family"),
+    tool_protocol: str | None = typer.Option(None, "--tool-protocol"),
     prefer_speculative: bool = typer.Option(False, "--speculative"),
-    home: Optional[Path] = typer.Option(None, help="Override PANTRY_HOME"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
 ) -> None:
     """Resolve a package from capabilities (installed catalog only)."""
     store = _store(home)
@@ -125,7 +124,7 @@ def resolve_cmd(
 @app.command()
 def pull(
     package_id: str = typer.Argument(..., help="Package id to pull / register"),
-    home: Optional[Path] = typer.Option(None, help="Override PANTRY_HOME"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
 ) -> None:
     """Download package weights (HF) into the local pantry library."""
     from pantry.pull import PullError, pull_package
@@ -143,7 +142,7 @@ def pull(
 @app.command("list")
 def list_cmd(
     loaded: bool = typer.Option(False, "--loaded"),
-    home: Optional[Path] = typer.Option(None, help="Override PANTRY_HOME"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
 ) -> None:
     """List installed (or loaded) packages."""
     store = _store(home)
@@ -165,7 +164,7 @@ def list_cmd(
 def load(
     package_id: str = typer.Argument(...),
     pin: bool = typer.Option(False, "--pin"),
-    home: Optional[Path] = typer.Option(None, help="Override PANTRY_HOME"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(18787, "--port"),
 ) -> None:
@@ -200,10 +199,10 @@ def load(
 
 @app.command()
 def unload(
-    package_id: Optional[str] = typer.Argument(
+    package_id: str | None = typer.Argument(
         None, help="Package id (omit to unload all warm runtimes)"
     ),
-    home: Optional[Path] = typer.Option(None, help="Override PANTRY_HOME"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(18787, "--port"),
 ) -> None:
@@ -245,8 +244,8 @@ def unload(
 
 @app.command()
 def status(
-    home: Optional[Path] = typer.Option(None, help="Override PANTRY_HOME (metadata)"),
-    data: Optional[Path] = typer.Option(
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME (metadata)"),
+    data: Path | None = typer.Option(
         None,
         "--data",
         help="Override PANTRY_DATA (blobs + weights)",
@@ -299,8 +298,8 @@ def health(
 def serve(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(18787, "--port"),
-    home: Optional[Path] = typer.Option(None, help="Override PANTRY_HOME (metadata)"),
-    data: Optional[Path] = typer.Option(
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME (metadata)"),
+    data: Path | None = typer.Option(
         None,
         "--data",
         help="Override PANTRY_DATA (blobs + weights; e.g. external SSD)",
@@ -310,6 +309,11 @@ def serve(
         True,
         "--menubar/--no-menubar",
         help="Open the Mac menu bar monitor (default on; needs pantry[menubar])",
+    ),
+    worker_isolation: bool = typer.Option(
+        False,
+        "--worker-isolation",
+        help="Run MLX runtime in an isolated worker subprocess for 100% Metal memory reclaim",
     ),
 ) -> None:
     """Run localhost OpenAI-compatible HTTP server (menu bar on by default)."""
@@ -322,14 +326,18 @@ def serve(
         if cat.is_dir():
             store.seed_from_catalog(cat)
             typer.echo(f"auto-seeded catalog from {cat}")
-    fastapi_app = create_app(store)
+    fastapi_app = create_app(store, worker_isolation=worker_isolation)
     typer.echo(
         f"pantry serve http://{host}:{port}  home={store.root}  data={store.data_root}"
     )
 
     want_menubar = bool(menubar) and not reload
     if want_menubar:
-        from pantry.menubar import rumps_available, run_menubar
+        from pantry.menubar import (
+            rumps_available,
+            run_menubar,
+            set_accessory_activation_policy,
+        )
 
         if not rumps_available():
             typer.secho(
@@ -339,6 +347,8 @@ def serve(
                 err=True,
             )
             want_menubar = False
+        else:
+            set_accessory_activation_policy()
 
     if not want_menubar:
         uvicorn.run(
@@ -382,3 +392,122 @@ def serve(
     finally:
         server.should_exit = True
         thread.join(timeout=5.0)
+
+
+service_app = typer.Typer(
+    name="service",
+    help="Manage macOS background service (launchd).",
+    no_args_is_help=True,
+)
+
+
+@service_app.command("install")
+def service_install_cmd(
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
+    menubar: bool = typer.Option(
+        True,
+        "--menubar/--no-menubar",
+        help="Open menu bar with background service (default true)",
+    ),
+    worker_isolation: bool = typer.Option(
+        False,
+        "--worker-isolation/--no-worker-isolation",
+        help="Enable worker process isolation for Metal memory reclaim",
+    ),
+) -> None:
+    """Install and load pantry as a macOS LaunchAgent (run at login)."""
+    from pantry.service import install_service
+
+    res = install_service(
+        host=host,
+        port=port,
+        home=home,
+        data=data,
+        menubar=menubar,
+        worker_isolation=worker_isolation,
+    )
+    typer.echo(json.dumps(res, indent=2))
+
+
+@service_app.command("uninstall")
+def service_uninstall_cmd() -> None:
+    """Unload and remove the macOS LaunchAgent plist."""
+    from pantry.service import uninstall_service
+
+    res = uninstall_service()
+    typer.echo(json.dumps(res, indent=2))
+
+
+@service_app.command("start")
+def service_start_cmd() -> None:
+    """Start the installed pantry LaunchAgent service."""
+    from pantry.service import start_service
+
+    res = start_service()
+    typer.echo(json.dumps(res, indent=2))
+
+
+@service_app.command("stop")
+def service_stop_cmd() -> None:
+    """Stop the installed pantry LaunchAgent service."""
+    from pantry.service import stop_service
+
+    res = stop_service()
+    typer.echo(json.dumps(res, indent=2))
+
+
+@service_app.command("status")
+def service_status_cmd(
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+) -> None:
+    """Check status of the installed pantry LaunchAgent service."""
+    from pantry.service import status_service
+
+    res = status_service(host=host, port=port)
+    typer.echo(json.dumps(res, indent=2))
+
+
+app.add_typer(service_app, name="service")
+
+catalog_app = typer.Typer(
+    name="catalog",
+    help="Inspect and synchronize model package catalog.",
+    no_args_is_help=True,
+)
+
+
+@catalog_app.command("update")
+def catalog_update_cmd(
+    url: str | None = typer.Option(None, "--url", help="Override remote catalog URL"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+) -> None:
+    """Synchronize package catalog manifests from a remote registry or GitHub."""
+    from pantry.catalog_sync import CatalogSyncError, sync_remote_catalog
+
+    store = _store(home)
+    try:
+        res = sync_remote_catalog(store, url=url)
+        typer.echo(json.dumps(res, indent=2))
+    except CatalogSyncError as e:
+        typer.secho(e.message, fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from e
+
+
+@catalog_app.command("list")
+def catalog_list_cmd(
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+) -> None:
+    """List all manifests in the local catalog."""
+    store = _store(home)
+    for p in store.list_manifests():
+        mods = ",".join(p.modalities)
+        ready = "ready" if store.weights_ready(p) else "need-pull"
+        typer.echo(f"{p.id}\tmodalities={mods}\ttier={p.quality_tier.value}\t{ready}")
+
+
+app.add_typer(catalog_app, name="catalog")
+

@@ -1,0 +1,30 @@
+{
+  "id": "vdplabs.demo-embed.compact.v1",
+  "family": "demo-embed",
+  "role": "embed",
+  "params_b": 0.05,
+  "quality_tier": "compact",
+  "quant_method": "none",
+  "bits_approx": null,
+  "ram_gb_min": 0.2,
+  "ram_gb_comfortable": 0.5,
+  "modalities": ["embed"],
+  "context_max": 2048,
+  "license": "mit",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": ["embed-compact", "embed-demo"],
+  "listable": true,
+  "runtime": {
+    "primary": "echo_embed",
+    "hf_repo": null,
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-embed-smoke-2026.09",
+    "score": 0.99,
+    "notes": "Deterministic demo embeddings generator for smoke testing and offline verification."
+  },
+  "system_preamble": ""
+}

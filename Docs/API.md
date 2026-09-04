@@ -14,7 +14,7 @@ Service name, version, and path hints (`chat`, `images`, `resolve`, …).
 {
   "ok": true,
   "name": "pantry",
-  "version": "0.3.4",
+  "version": "0.4.0",
   "packages": 7,
   "loaded": [],
   "home": "/Users/…/VDPPantry",
@@ -105,12 +105,45 @@ OpenAI Chat Completions subset. Rejects non-text packages (`400`).
 | `temperature` | Optional |
 | `prefer_speculative` | Use curated draft model when declared + pulled |
 | `priority` | `interactive` (default) or `batch` (FIFO today; no preemption yet) |
+| `tools` | Optional array of OpenAI-compatible function definitions |
+| `tool_choice` | Optional (`auto`, `none`, or function object) |
 
-Non-stream responses include `package_id` and approximate `usage` (char/4 until mlx-lm counts are plumbed).
+Non-stream and stream responses include exact token `usage` (`prompt_tokens`, `completion_tokens`, `total_tokens`) computed via the tokenizer. When `tools` are passed, the host formats tool schemas into the prompt and parses `<tool_call>` outputs into standard OpenAI `tool_calls` structures with `finish_reason="tool_calls"`.
 
 If weights are missing for an MLX package: `409` with a pull hint.
 
-Streaming emits live SSE deltas from the runtime (not a post-hoc chunk of the full reply).
+Streaming emits live SSE deltas from the runtime.
+
+### `POST /v1/embeddings`
+
+OpenAI-style vector embeddings endpoint for `embed` packages.
+
+| Field | Notes |
+| --- | --- |
+| `model` | e.g. `embed-compact`, `embed-standard`, or package id |
+| `input` | Single `string` or `list[string]` |
+| `encoding_format` | `float` (default) |
+| `priority` | `interactive` \| `batch` |
+
+Response:
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "object": "embedding",
+      "index": 0,
+      "embedding": [-0.0123, 0.0456, "..."]
+    }
+  ],
+  "model": "embed-compact",
+  "usage": {
+    "prompt_tokens": 8,
+    "total_tokens": 8
+  }
+}
+```
 
 ### `POST /v1/images/generations`
 
@@ -169,7 +202,9 @@ Demo pack uses **`echo_music`** (deterministic sine WAV). Real MAGNeT is follow-
 | `pantry resolve --modality chat --ram-gb-max 8 --quality compact` | Capability resolve |
 | `pantry list` | Installed packages (`need-pull` / `ready`) |
 | `pantry load` / `unload` | Prefer running daemon (`POST /v1/load`, `/v1/unload`); else local `state.json` only |
-| `pantry serve [--host] [--port]` | HTTP server + menu bar by default (`--no-menubar` to disable) |
+| `pantry serve [--host] [--port] [--worker-isolation]` | HTTP server + menu bar (`--worker-isolation` for 100% Metal reclaim) |
+| `pantry service install` / `start` / `stop` / `status` | Manage macOS login LaunchAgent daemon |
+| `pantry catalog update` / `list` | Sync remote catalog manifests from registry / GitHub |
 | `pantry status` | JSON library snapshot + Metal memory |
 | `pantry health [--host] [--port]` | Hit `/v1/health` |
 

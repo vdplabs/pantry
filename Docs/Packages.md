@@ -95,4 +95,25 @@ Echo packages need no download.
 
 ## Bundled catalog
 
-Seeded by `pantry init` from the `catalog/` directory. Demo packages exist for wiring tests (`listable: false` for chat echo; `vdplabs.demo-image.compact.v1` is listable for image API smoke). The public chat starters are the Qwen 0.5B / 1.5B MLX 4-bit packages.
+Seeded by `pantry init` from the `catalog/` directory:
+
+| Package ID | Modality | Role | Tier | RAM (Comfortable) | Primary Runtime | Notes |
+| --- | --- | --- | --- | --- | --- | --- |
+| `vdplabs.qwen25-0.5b.compact.v1` | `text` | `chat` | `compact` | 2 GB | `mlx` | Starter chat / draft model |
+| `vdplabs.qwen25-1.5b.standard.v1` | `text` | `chat` | `standard` | 4 GB | `mlx` | Standard chat + speculative target |
+| `vdplabs.llama32-1b.compact.v1` | `text` | `chat` | `compact` | 3 GB | `mlx` | Llama 3.2 1B Instruct (Llama3 template) |
+| `vdplabs.llama32-3b.standard.v1` | `text` | `chat` | `standard` | 5 GB | `mlx` | Llama 3.2 3B Instruct + 1B speculative pair |
+| `vdplabs.qwen25-coder-1.5b.compact.v1` | `text` | `code` | `compact` | 4 GB | `mlx` | Code specialization |
+| `vdplabs.deepseek-r1-distill-qwen-1.5b.compact.v1` | `text` | `reasoning` | `compact` | 4 GB | `mlx` | Distilled reasoning model |
+| `vdplabs.demo-embed.compact.v1` | `embed` | `embed` | `compact` | 0.5 GB | `echo_embed` | Deterministic embeddings scaffold |
+| `vdplabs.demo-image.compact.v1` | `image_gen` | `image_gen` | `compact` | 0.5 GB | `echo_image` | Image generation scaffold |
+| `vdplabs.demo-music.compact.v1` | `music` | `music` | `compact` | 0.5 GB | `echo_music` | Music generation scaffold |
+
+## Remote catalog sync
+
+To update or discover new manifests from the remote registry:
+
+```bash
+pantry catalog update
+pantry catalog list
+```

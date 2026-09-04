@@ -44,8 +44,26 @@ curl -s -X POST http://127.0.0.1:18787/v1/memory/clear | jq
 
 Unload models (`POST /v1/unload` or the menu) then clear cache if the heap stays high.
 
+## Worker Process Isolation (100% Metal Reclaim)
+
+On Apple Silicon, Metal GPU drivers and system allocator pools often retain committed memory within the host process address space even after calling `mx.clear_cache()` and `gc.collect()`.
+
+To guarantee that 100% of GPU unified memory is returned to macOS when models are unloaded, pantry supports **Worker Subprocess Isolation**:
+
+```bash
+pantry serve --worker-isolation
+# or: export PANTRY_WORKER_ISOLATION=1
+```
+
+When worker isolation is enabled:
+1. Model loading and MLX graph evaluation run in an isolated subprocess.
+2. Unloading all packages (`POST /v1/unload` or `pantry unload`) cleanly terminates the worker process.
+3. The macOS kernel immediately reclaims all GPU driver allocations, restoring process memory usage to zero.
+4. Subsequent inference requests automatically spin up a fresh worker on demand.
+
 ## API
 
 - `GET /v1/health` → compact `memory` object  
 - `GET /v1/memory` → full snapshot + limits applied at start  
 - `POST /v1/memory/clear` → `mx.clear_cache()` best-effort  
+

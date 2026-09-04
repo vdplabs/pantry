@@ -22,6 +22,8 @@ class Runtime(ABC):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
+        usage: dict[str, int] | None = None,
+        tools: list[dict] | None = None,
     ) -> str:
         raise NotImplementedError
 
@@ -33,6 +35,8 @@ class Runtime(ABC):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
+        usage: dict[str, int] | None = None,
+        tools: list[dict] | None = None,
     ) -> AsyncIterator[str]:
         text = await self.complete(
             manifest,
@@ -40,6 +44,8 @@ class Runtime(ABC):
             max_tokens=max_tokens,
             temperature=temperature,
             prefer_speculative=prefer_speculative,
+            usage=usage,
+            tools=tools,
         )
         step = max(8, len(text) // 8 or 1)
         for i in range(0, len(text), step):
@@ -58,8 +64,10 @@ class EchoRuntime(Runtime):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
+        usage: dict[str, int] | None = None,
+        tools: list[dict] | None = None,
     ) -> str:
-        prompt = apply_chat_template(manifest, messages)
+        prompt = apply_chat_template(manifest, messages, tools=tools)
         last_user = ""
         for m in reversed(messages):
             if m.role == "user":
@@ -75,7 +83,14 @@ class EchoRuntime(Runtime):
         )
         max_toks = clamp_max_tokens(max_tokens)
         body = body[: max_toks * 4]
-        return strip_stop_tokens(body, manifest)
+        cleaned = strip_stop_tokens(body, manifest)
+        if usage is not None:
+            p_toks = max(1, len(prompt.split()))
+            c_toks = max(1, len(cleaned.split()))
+            usage["prompt_tokens"] = p_toks
+            usage["completion_tokens"] = c_toks
+            usage["total_tokens"] = p_toks + c_toks
+        return cleaned
 
 
 def resolve_draft_path(
@@ -114,7 +129,7 @@ class MLXRuntime(Runtime):
             import mlx.core as mx  # type: ignore
 
             mx.clear_cache()
-        except Exception:  # noqa: BLE001 — best-effort reclaim
+        except Exception:  # noqa: BLE001, S110 — best-effort reclaim
             pass
 
     async def complete(
@@ -125,6 +140,8 @@ class MLXRuntime(Runtime):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
+        usage: dict[str, int] | None = None,
+        tools: list[dict] | None = None,
     ) -> str:
         parts: list[str] = []
         async for chunk in self.stream(
@@ -133,6 +150,8 @@ class MLXRuntime(Runtime):
             max_tokens=max_tokens,
             temperature=temperature,
             prefer_speculative=prefer_speculative,
+            usage=usage,
+            tools=tools,
         ):
             parts.append(chunk)
         return strip_stop_tokens("".join(parts), manifest)
@@ -145,6 +164,8 @@ class MLXRuntime(Runtime):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
+        usage: dict[str, int] | None = None,
+        tools: list[dict] | None = None,
     ) -> AsyncIterator[str]:
         try:
             from mlx_lm import load, stream_generate  # type: ignore
@@ -160,7 +181,7 @@ class MLXRuntime(Runtime):
             self._models[model_path] = loaded  # type: ignore[assignment]
         model, tokenizer = self._models[model_path]
 
-        draft_path, draft_id = resolve_draft_path(
+        draft_path, _draft_id = resolve_draft_path(
             self.store, manifest, prefer_speculative=prefer_speculative
         )
         draft_model = None
@@ -170,14 +191,26 @@ class MLXRuntime(Runtime):
                 self._models[draft_path] = loaded_draft  # type: ignore[assignment]
             draft_model, _draft_tok = self._models[draft_path]
 
-        prompt = apply_chat_template(manifest, messages)
+        prompt = apply_chat_template(manifest, messages, tools=tools)
         max_toks = clamp_max_tokens(max_tokens)
         temp = 0.0 if temperature is None else float(temperature)
+
+        prompt_tokens_count = 0
+        try:
+            prompt_tokens_count = len(tokenizer.encode(prompt))
+        except Exception:  # noqa: BLE001
+            prompt_tokens_count = max(1, len(prompt) // 4)
+
+        if usage is not None:
+            usage["prompt_tokens"] = prompt_tokens_count
+            usage["completion_tokens"] = 0
+            usage["total_tokens"] = prompt_tokens_count
 
         queue: asyncio.Queue[str | None] = asyncio.Queue()
         loop = asyncio.get_running_loop()
         errors: list[BaseException] = []
         cancel = threading.Event()
+        gen_tokens_count = [0]
 
         def _produce() -> None:
             try:
@@ -205,6 +238,11 @@ class MLXRuntime(Runtime):
                 for item in gen:
                     if cancel.is_set():
                         break
+                    gt = getattr(item, "generation_tokens", None)
+                    if gt is not None:
+                        gen_tokens_count[0] = int(gt)
+                    else:
+                        gen_tokens_count[0] += 1
                     text = getattr(item, "text", None) or ""
                     if text:
                         loop.call_soon_threadsafe(queue.put_nowait, text)
@@ -233,6 +271,10 @@ class MLXRuntime(Runtime):
         finally:
             cancel.set()
             await producer
+            if usage is not None:
+                usage["prompt_tokens"] = prompt_tokens_count
+                usage["completion_tokens"] = gen_tokens_count[0]
+                usage["total_tokens"] = prompt_tokens_count + gen_tokens_count[0]
 
     def _resolve_weights_path(self, manifest: PackageManifest) -> str:
         if self.store is not None:
@@ -251,10 +293,16 @@ class MLXRuntime(Runtime):
 class RuntimeHub:
     """Process-wide runtime instances keyed by engine."""
 
-    def __init__(self, store: PackageStore) -> None:
+    def __init__(self, store: PackageStore, worker_isolation: bool = False) -> None:
         self.store = store
+        self.worker_isolation = worker_isolation
         self.echo = EchoRuntime()
-        self.mlx = MLXRuntime(store)
+        if worker_isolation:
+            from pantry.worker import IsolatedMLXRuntime
+
+            self.mlx: Runtime = IsolatedMLXRuntime(store)
+        else:
+            self.mlx = MLXRuntime(store)
 
     def for_manifest(self, manifest: PackageManifest) -> Runtime:
         primary = (manifest.runtime.primary or "echo").lower()
@@ -263,7 +311,8 @@ class RuntimeHub:
         return self.echo
 
     def unload(self, package_id: str | None = None) -> None:
-        self.mlx.unload(package_id)
+        if hasattr(self.mlx, "unload"):
+            self.mlx.unload(package_id)
 
 
 def runtime_for(manifest: PackageManifest, store: PackageStore | None = None) -> Runtime:

@@ -6,7 +6,6 @@ import base64
 import math
 import struct
 import zlib
-from pathlib import Path
 
 from pantry.schemas import PackageManifest
 from pantry.store import PackageStore

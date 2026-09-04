@@ -60,7 +60,7 @@ def pull_package(store: PackageStore, package_id: str) -> dict:
             local_dir=str(dest),
             token=token,
         )
-    except Exception as e:  # noqa: BLE001 — surface hub errors to CLI
+    except Exception as e:
         raise PullError(f"download failed for {man.runtime.hf_repo}: {e}") from e
 
     if not store.weights_ready(man):

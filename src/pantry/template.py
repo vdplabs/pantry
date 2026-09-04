@@ -1,15 +1,53 @@
 from __future__ import annotations
 
+import json
+
 from pantry.schemas import ChatMessage, PackageManifest
 
 
-def apply_chat_template(manifest: PackageManifest, messages: list[ChatMessage]) -> str:
+def _format_tools_prompt(tools: list[dict]) -> str:
+    return (
+        "\n\n# Tools\n"
+        "You may call one or more functions to assist with the user query.\n"
+        "You are provided with function signatures within <tools></tools> XML tags:\n"
+        "<tools>\n"
+        f"{json.dumps(tools, indent=2)}\n"
+        "</tools>\n\n"
+        "For each function call, return a json object with function name and arguments within <tool_call></tool_call> XML tags:\n"
+        "<tool_call>\n"
+        '{"name": "<function-name>", "arguments": <args-dict>}\n'
+        "</tool_call>"
+    )
+
+
+def apply_chat_template(
+    manifest: PackageManifest,
+    messages: list[ChatMessage],
+    tools: list[dict] | None = None,
+) -> str:
     """Host-owned templating so capability resolve cannot strand clients on raw tokens."""
     family = (manifest.template_family or "chatml").lower()
     preamble = manifest.system_preamble.strip()
+    tools_prompt = _format_tools_prompt(tools) if tools else ""
+
     msgs = list(messages)
-    if preamble and not any(m.role == "system" for m in msgs):
-        msgs = [ChatMessage(role="system", content=preamble), *msgs]
+    has_sys = any(m.role == "system" for m in msgs)
+
+    if not has_sys:
+        combined = (preamble + tools_prompt).strip()
+        if combined:
+            msgs = [ChatMessage(role="system", content=combined), *msgs]
+    elif tools_prompt:
+        # Append tools prompt to existing system message
+        new_msgs: list[ChatMessage] = []
+        appended = False
+        for m in msgs:
+            if m.role == "system" and not appended:
+                new_msgs.append(ChatMessage(role="system", content=m.text() + tools_prompt))
+                appended = True
+            else:
+                new_msgs.append(m)
+        msgs = new_msgs
 
     if family in {"chatml", "qwen", "chatml-v1"}:
         return _chatml(msgs)

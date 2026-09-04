@@ -12,10 +12,10 @@ Clients ask for *capabilities* — chat, fit in 8 GB RAM, prefer speed — and
 
 | | |
 | --- | --- |
-| **Version** | **v0.3.4** — usable alpha (MIT, brew + pip) |
-| **Ships today** | Capability resolve · **shared library** under `PANTRY_HOME`/`PANTRY_DATA` (one pull for many apps) · `pantry serve` OpenAI-compatible HTTP + SSE · MLX chat via `mlx-lm` · host-owned ChatML/Llama templates + stop stripping · speculative draft hooks for curated pairs · Mac menu bar · Metal memory soft caps / watchdog · Homebrew tap |
-| **Scaffold / not production** | Image + music HTTP endpoints (`echo_image` / `echo_music` demos only) · CAS blob layer for weight trees (API exists; HF pulls still land as package weight dirs) · login-item / launchd polish · PyPI publish |
-| **Roadmap (not shipped)** | Real Diffusers / Z-Image + MAGNeT engines · Unix domain sockets / Mach-style zero-copy IPC · worker process isolation for Metal reclaim · multi-publisher catalog federation · broader curated catalog beyond starter Qwen packs |
+| **Version** | **v0.4.0** — usable alpha (MIT, brew + pip) |
+| **Ships today** | Capability resolve · **shared library** under `PANTRY_HOME`/`PANTRY_DATA` (one pull for many apps) · `pantry serve` OpenAI-compatible HTTP + SSE · MLX chat with **exact token usage** · **Embeddings** (`/v1/embeddings`) · **Worker subprocess isolation** for 100% Metal reclaim (`--worker-isolation`) · **Service management** CLI (`pantry service install/start/stop`) · **Remote catalog sync** (`pantry catalog update`) · **Tool/function calling** · host-owned ChatML/Llama templates + stop stripping · speculative draft hooks · expanded catalog (Llama 3.2 1B/3B, Qwen Coder, DeepSeek-R1) · Mac menu bar · Metal watchdog · Homebrew tap |
+| **Scaffold / not production** | Image + music HTTP endpoints (`echo_image` / `echo_music` demos only) · CAS blob layer for weight trees · PyPI publish |
+| **Roadmap (not shipped)** | Real Diffusers / Z-Image + MAGNeT engines · Unix domain sockets / Mach-style zero-copy IPC · multi-publisher catalog federation |
 
 Transparency over hype: clone it, run the tests, hit `/v1/chat/completions` with a pulled Qwen pack — that path is real. Ambitious diagrams that mention native IPC or production image/music are **vision**, not current code.
 
@@ -215,9 +215,11 @@ curl -s http://127.0.0.1:18787/v1/resolve \
 | `pantry pull <package_id>` | Download package weights (Hugging Face) |
 | `pantry resolve …` | Pick a package from capability constraints |
 | `pantry list` | Installed packages |
-| `pantry load` / `unload` | Mark warm / release; unload clears MLX cache when possible |
-| `pantry serve` | HTTP server **+ Mac menu bar** by default (`--no-menubar` to disable) |
+| `pantry load` / `unload` | Mark warm / release; unload clears MLX cache (or shuts down isolated worker) |
+| `pantry serve` | HTTP server **+ Mac menu bar** (`--no-menubar` to disable; `--worker-isolation` for 100% Metal reclaim) |
 | `pantry status` / `pantry health` | Library / HTTP health (includes memory) |
+| `pantry service install` / `start` / `stop` / `status` | Manage login LaunchAgent daemon (`com.vdplabs.pantry.serve`) |
+| `pantry catalog update` / `list` | Synchronize manifests from remote registry or inspect local catalog |
 
 ## HTTP API
 
@@ -227,7 +229,8 @@ curl -s http://127.0.0.1:18787/v1/resolve \
 | `GET` | `/v1/memory` | Full unified-memory watchdog snapshot |
 | `POST` | `/v1/memory/clear` | Reclaim MLX Metal free cache |
 | `GET` | `/v1/models` | Listable packages (one id each) with `role` / `modalities`. Chat demos omitted; `?demos=1` includes them; `?ready_only=1` hides unpulled |
-| `POST` | `/v1/chat/completions` | Live SSE streaming; `max_tokens` capped at 4096 |
+| `POST` | `/v1/chat/completions` | Live SSE streaming; exact token counts; tool/function calling support |
+| `POST` | `/v1/embeddings` | Vector embeddings (`modality=embed`); single or batched inputs |
 | `POST` | `/v1/images/generations` | Image packs (`echo_image` scaffold today) |
 | `POST` | `/v1/audio/generations` | Music packs (`echo_music` scaffold today) |
 | `POST` | `/v1/resolve` | Capability → package (strict modality) |

@@ -6,7 +6,6 @@ import os
 import time
 from typing import Any
 
-
 # Soft defaults: keep MLX free-cache from eating most of the recommended working set.
 _DEFAULT_CACHE_RATIO = 0.45
 _DEFAULT_MEMORY_RATIO = 0.85
@@ -56,7 +55,7 @@ def device_budget(mx: Any) -> dict[str, Any]:
             raw = mx.metal.device_info()
             if isinstance(raw, dict):
                 info = dict(raw)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001, S110
             pass
     memory_size = int(info.get("memory_size") or info.get("total_memory") or 0) or None
     recommended = int(info.get("max_recommended_working_set_size") or 0) or None
@@ -94,7 +93,7 @@ def snapshot(*, apply_limits: bool = False) -> dict[str, Any]:
         active = int(mx.get_active_memory())
         peak = int(mx.get_peak_memory())
         cache = int(mx.get_cache_memory())
-    except Exception:  # noqa: BLE001
+    except Exception:  # noqa: BLE001, S110
         pass
 
     budget = device_budget(mx)
@@ -216,7 +215,7 @@ def clear_metal_cache() -> dict[str, Any]:
         return {"ok": False, "cleared": False, "before": before, "after": before}
     try:
         mx.clear_cache()
-    except Exception:
+    except Exception:  # noqa: BLE001
         try:
             mx.metal.clear_cache()
         except Exception as e:  # noqa: BLE001

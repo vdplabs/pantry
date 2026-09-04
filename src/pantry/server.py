@@ -12,7 +12,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from pantry import __version__
-from pantry.memory import apply_protection_limits, clear_metal_cache, snapshot as memory_snapshot
+from pantry.memory import apply_protection_limits, clear_metal_cache
+from pantry.memory import snapshot as memory_snapshot
 from pantry.models_api import list_model_entries
 from pantry.pull import PullError, pull_package
 from pantry.resolve import ResolveError, find_by_model_string, resolve
@@ -22,6 +23,7 @@ from pantry.schemas import (
     AudioGenerateRequest,
     CapabilityRequest,
     CompleteRequest,
+    EmbeddingRequest,
     ImageGenerateRequest,
     LoadBody,
     PackageManifest,
@@ -33,7 +35,7 @@ from pantry.template import apply_chat_template
 
 
 def _estimate_usage(pkg: PackageManifest, messages: list, completion: str) -> dict[str, int]:
-    """Rough token counts until mlx-lm usage is plumbed end-to-end."""
+    """Rough token counts fallback when runtime cannot report exact counts."""
     prompt = apply_chat_template(pkg, messages)
     prompt_tokens = max(1, len(prompt) // 4)
     completion_tokens = max(0, len(completion) // 4)
@@ -59,11 +61,42 @@ def _is_music_package(pkg: PackageManifest) -> bool:
     return "music" in mods or (pkg.role or "").lower() in {"music", "audio_gen", "audio"}
 
 
+def _is_embed_package(pkg: PackageManifest) -> bool:
+    mods = {m.lower() for m in pkg.modalities}
+    return "embed" in mods or (pkg.role or "").lower() in {"embed", "embedding"}
+
+
+def _parse_tool_calls(text: str) -> list[dict[str, Any]] | None:
+    import re
+
+    tool_calls: list[dict[str, Any]] = []
+    matches = re.findall(r"<tool_call>\s*(.*?)\s*</tool_call>", text, re.DOTALL)
+    for m in matches:
+        try:
+            parsed = json.loads(m)
+            if isinstance(parsed, dict) and "name" in parsed:
+                args = parsed.get("arguments", {})
+                args_str = json.dumps(args) if isinstance(args, dict) else str(args)
+                tool_calls.append(
+                    {
+                        "id": f"call_{uuid.uuid4().hex[:8]}",
+                        "type": "function",
+                        "function": {
+                            "name": str(parsed["name"]),
+                            "arguments": args_str,
+                        },
+                    }
+                )
+        except Exception:  # noqa: BLE001, S112
+            continue
+    return tool_calls if tool_calls else None
+
+
 class Service:
-    def __init__(self, store: PackageStore) -> None:
+    def __init__(self, store: PackageStore, worker_isolation: bool = False) -> None:
         self.store = store
         self.scheduler = Scheduler()
-        self.runtimes = RuntimeHub(store)
+        self.runtimes = RuntimeHub(store, worker_isolation=worker_isolation)
 
     def packages(self) -> list[PackageManifest]:
         return self.store.list_manifests()
@@ -85,8 +118,8 @@ class Service:
         return pkg
 
 
-def create_app(store: PackageStore) -> FastAPI:
-    svc = Service(store)
+def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
+    svc = Service(store, worker_isolation=worker_isolation)
     app = FastAPI(title="pantry", version=__version__)
     app.state.svc = svc
     # Soft Metal cache/memory caps so serve starts protecting unified RAM immediately.
@@ -108,6 +141,7 @@ def create_app(store: PackageStore) -> FastAPI:
             "health": "/v1/health",
             "models": "/v1/models",
             "chat": "/v1/chat/completions",
+            "embeddings": "/v1/embeddings",
             "images": "/v1/images/generations",
             "audio": "/v1/audio/generations",
             "memory": "/v1/memory",
@@ -231,6 +265,8 @@ def create_app(store: PackageStore) -> FastAPI:
         )
         speculative = draft_path is not None
 
+        usage_info: dict[str, int] = {}
+
         async def _complete() -> str:
             return await runtime.complete(
                 pkg,
@@ -238,10 +274,22 @@ def create_app(store: PackageStore) -> FastAPI:
                 max_tokens=req.effective_max_tokens(),
                 temperature=req.temperature,
                 prefer_speculative=want_spec,
+                usage=usage_info,
+                tools=req.tools,
             )
 
         if not req.stream:
             text = await svc.scheduler.run(req.priority, _complete)
+            tool_calls = _parse_tool_calls(text) if req.tools else None
+            message_obj: dict[str, Any] = {
+                "role": "assistant",
+                "content": None if tool_calls else text,
+            }
+            if tool_calls:
+                message_obj["tool_calls"] = tool_calls
+            finish_reason = "tool_calls" if tool_calls else "stop"
+
+            usage = usage_info if usage_info else _estimate_usage(pkg, req.messages, text)
             return {
                 "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
                 "object": "chat.completion",
@@ -253,17 +301,18 @@ def create_app(store: PackageStore) -> FastAPI:
                 "choices": [
                     {
                         "index": 0,
-                        "message": {"role": "assistant", "content": text},
-                        "finish_reason": "stop",
+                        "message": message_obj,
+                        "finish_reason": finish_reason,
                     }
                 ],
-                "usage": _estimate_usage(pkg, req.messages, text),
+                "usage": usage,
             }
 
         async def event_stream() -> AsyncIterator[bytes]:
             cid = f"chatcmpl-{uuid.uuid4().hex[:12]}"
             created = int(time.time())
             assembled: list[str] = []
+            stream_usage: dict[str, int] = {}
 
             async def _locked_stream() -> AsyncIterator[str]:
                 async with svc.scheduler.hold(req.priority):
@@ -273,6 +322,8 @@ def create_app(store: PackageStore) -> FastAPI:
                         max_tokens=req.effective_max_tokens(),
                         temperature=req.temperature,
                         prefer_speculative=want_spec,
+                        usage=stream_usage,
+                        tools=req.tools,
                     ):
                         yield chunk
 
@@ -294,19 +345,67 @@ def create_app(store: PackageStore) -> FastAPI:
                     ],
                 }
                 yield f"data: {json.dumps(payload)}\n\n".encode()
-            usage = _estimate_usage(pkg, req.messages, "".join(assembled))
+
+            full_text = "".join(assembled)
+            tool_calls = _parse_tool_calls(full_text) if req.tools else None
+            finish_reason = "tool_calls" if tool_calls else "stop"
+
+            usage = stream_usage if stream_usage else _estimate_usage(pkg, req.messages, full_text)
             done = {
                 "id": cid,
                 "object": "chat.completion.chunk",
                 "created": created,
                 "model": req.model,
-                "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
+                "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
                 "usage": usage,
             }
             yield f"data: {json.dumps(done)}\n\n".encode()
             yield b"data: [DONE]\n\n"
 
         return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    @app.post("/v1/embeddings")
+    async def embeddings(req: EmbeddingRequest) -> dict[str, Any]:
+        pkg = svc.resolve_model(req.model)
+        if not _is_embed_package(pkg):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"package {pkg.id} is not an embed model "
+                    f"(modalities={pkg.modalities}); use /v1/chat/completions for chat"
+                ),
+            )
+        if not store.weights_ready(pkg):
+            raise HTTPException(
+                status_code=409,
+                detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
+            )
+        from pantry.embed_runtime import embed_runtime_for
+
+        runtime = embed_runtime_for(pkg, store)
+        inputs = [req.input] if isinstance(req.input, str) else list(req.input)
+
+        def _run_embed() -> tuple[list[list[float]], dict[str, int]]:
+            return runtime.embed(pkg, inputs)
+
+        embeddings_data, usage = await svc.scheduler.run(
+            req.priority, lambda: asyncio.to_thread(_run_embed)
+        )
+
+        data_items = [
+            {
+                "object": "embedding",
+                "index": i,
+                "embedding": vec,
+            }
+            for i, vec in enumerate(embeddings_data)
+        ]
+        return {
+            "object": "list",
+            "data": data_items,
+            "model": req.model,
+            "usage": usage,
+        }
 
     @app.post("/v1/images/generations")
     async def images_generations(req: ImageGenerateRequest) -> dict[str, Any]:

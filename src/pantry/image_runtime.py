@@ -5,7 +5,6 @@ from __future__ import annotations
 import base64
 import struct
 import zlib
-from pathlib import Path
 
 from pantry.schemas import PackageManifest
 from pantry.store import PackageStore
