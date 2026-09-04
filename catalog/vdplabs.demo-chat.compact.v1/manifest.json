@@ -1,0 +1,33 @@
+{
+  "id": "vdplabs.demo-chat.compact.v1",
+  "family": "demo",
+  "role": "chat",
+  "params_b": 0.05,
+  "quality_tier": "compact",
+  "quant_method": "none",
+  "bits_approx": 3.0,
+  "ram_gb_min": 1,
+  "ram_gb_comfortable": 1.5,
+  "modalities": ["text"],
+  "context_max": 4096,
+  "license": "mit",
+  "chat_template_id": "chatml-v1",
+  "template_family": "chatml",
+  "tool_protocol": null,
+  "aliases": ["demo-compact"],
+  "runtime": {
+    "primary": "echo",
+    "adapters": [],
+    "draft_package_id": null,
+    "ane_prefill": false,
+    "mlc_artifact": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-chat-smoke-2026.09",
+    "score": 0.9,
+    "notes": "Smaller echo stand-in for compact tier"
+  },
+  "blobs": [],
+  "system_preamble": "You are a compact pantry demo assistant.",
+  "listable": false
+}

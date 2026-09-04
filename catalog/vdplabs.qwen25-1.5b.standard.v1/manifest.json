@@ -1,0 +1,35 @@
+{
+  "id": "vdplabs.qwen25-1.5b.standard.v1",
+  "family": "qwen2.5",
+  "role": "chat",
+  "params_b": 1.5,
+  "quality_tier": "standard",
+  "quant_method": "mlx_4bit",
+  "bits_approx": 4.0,
+  "ram_gb_min": 2,
+  "ram_gb_comfortable": 4,
+  "modalities": ["text"],
+  "context_max": 32768,
+  "license": "apache-2.0",
+  "chat_template_id": "qwen2.5-instruct-v1",
+  "template_family": "chatml",
+  "tool_protocol": null,
+  "aliases": ["chat-standard", "chat-fast"],
+  "runtime": {
+    "primary": "mlx",
+    "adapters": [],
+    "draft_package_id": "vdplabs.qwen25-0.5b.compact.v1",
+    "ane_prefill": false,
+    "mlc_artifact": null,
+    "hf_repo": "mlx-community/Qwen2.5-1.5B-Instruct-4bit",
+    "hf_revision": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-chat-smoke-2026.09",
+    "score": 0.72,
+    "notes": "Mid-size default (~869 MB). Speculative draft = qwen25-0.5b compact when pulled."
+  },
+  "blobs": [],
+  "system_preamble": "You are a helpful assistant running locally via pantry.",
+  "listable": true
+}

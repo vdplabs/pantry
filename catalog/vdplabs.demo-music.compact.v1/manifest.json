@@ -1,0 +1,35 @@
+{
+  "id": "vdplabs.demo-music.compact.v1",
+  "family": "demo-music",
+  "role": "music",
+  "params_b": 0,
+  "quality_tier": "compact",
+  "quant_method": "none",
+  "bits_approx": null,
+  "ram_gb_min": 1,
+  "ram_gb_comfortable": 1.5,
+  "modalities": ["music"],
+  "context_max": 0,
+  "license": "mit",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": ["music-compact"],
+  "runtime": {
+    "primary": "echo_music",
+    "adapters": [],
+    "draft_package_id": null,
+    "ane_prefill": false,
+    "mlc_artifact": null,
+    "hf_repo": null,
+    "hf_revision": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-music-smoke-2026.09",
+    "score": 0.5,
+    "notes": "Echo music runtime — short sine WAV for /v1/audio/generations wiring."
+  },
+  "blobs": [],
+  "system_preamble": "",
+  "listable": true
+}

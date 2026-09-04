@@ -1,0 +1,32 @@
+{
+  "id": "vdplabs.demo-llama.standard.v1",
+  "family": "llama",
+  "role": "chat",
+  "params_b": 0.1,
+  "quality_tier": "standard",
+  "quant_method": "none",
+  "ram_gb_min": 2,
+  "ram_gb_comfortable": 4,
+  "modalities": ["text"],
+  "context_max": 8192,
+  "license": "llama3",
+  "chat_template_id": "llama3-v1",
+  "template_family": "llama3",
+  "tool_protocol": "openai-tools-v1",
+  "aliases": ["demo-llama"],
+  "runtime": {
+    "primary": "echo",
+    "adapters": [],
+    "draft_package_id": null,
+    "ane_prefill": false,
+    "mlc_artifact": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-chat-smoke-2026.09",
+    "score": 0.95,
+    "notes": "Different template_family to prove resolve will not cross templates"
+  },
+  "blobs": [],
+  "system_preamble": "You are a llama-template demo.",
+  "listable": false
+}

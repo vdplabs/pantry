@@ -1,0 +1,33 @@
+{
+  "id": "vdplabs.demo-chat.standard.v1",
+  "family": "demo",
+  "role": "chat",
+  "params_b": 0.1,
+  "quality_tier": "standard",
+  "quant_method": "none",
+  "bits_approx": null,
+  "ram_gb_min": 1,
+  "ram_gb_comfortable": 2,
+  "modalities": ["text"],
+  "context_max": 8192,
+  "license": "mit",
+  "chat_template_id": "chatml-v1",
+  "template_family": "chatml",
+  "tool_protocol": null,
+  "aliases": ["demo-standard"],
+  "runtime": {
+    "primary": "echo",
+    "adapters": [],
+    "draft_package_id": "vdplabs.demo-chat.compact.v1",
+    "ane_prefill": false,
+    "mlc_artifact": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-chat-smoke-2026.09",
+    "score": 0.99,
+    "notes": "Echo package for host wiring tests"
+  },
+  "blobs": [],
+  "system_preamble": "You are a pantry demo assistant.",
+  "listable": false
+}
