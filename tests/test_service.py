@@ -43,9 +43,16 @@ def test_generate_plist_xml(tmp_path):
 
 
 def test_set_accessory_activation_policy():
+    import sys
+    from unittest.mock import patch
+
     from pantry.menubar import set_accessory_activation_policy
 
     res = set_accessory_activation_policy()
-    # On macOS with PyObjC / AppKit installed, this returns True
-    assert res is True
+    assert isinstance(res, bool)
+
+    # When AppKit is unavailable (e.g. core-only or headless CI), it safely returns False
+    with patch.dict(sys.modules, {"AppKit": None}):
+        assert set_accessory_activation_policy() is False
+
 
