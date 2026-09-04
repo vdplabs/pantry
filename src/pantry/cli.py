@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import time
 from pathlib import Path
 
@@ -657,6 +658,78 @@ def image_cmd(
             out_path = Path(output) if output else Path(f"pantry-{int(time.time())}.png")
             out_path.write_bytes(raw)
             typer.echo(f"Image generated: {out_path.resolve()}")
+
+
+@app.command("music")
+def music_cmd(
+    prompt: str = typer.Argument(..., help="Text prompt describing the desired audio/music"),
+    model: str = typer.Option("music-compact", "--model", help="Model name, package id, or alias"),
+    duration: float = typer.Option(2.0, "--duration", "-d", help="Duration in seconds (0.25 to 30.0)"),
+    output: Path | None = typer.Option(None, "--output", "-o", help="File to save the generated audio (.wav) to"),
+    play: bool = typer.Option(False, "--play", help="Play the audio after generating (via afplay on macOS)"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+) -> None:
+    """Generate audio/music from a text prompt."""
+    import base64
+    import subprocess
+
+    import httpx
+
+    url = f"{_daemon_base(host, port)}/v1/audio/generations"
+    payload = {
+        "model": model,
+        "prompt": prompt,
+        "duration_seconds": duration,
+        "response_format": "b64_json",
+    }
+    daemon_ok = False
+    try:
+        resp = httpx.post(url, json=payload, timeout=60.0)
+        if resp.status_code == 200:
+            daemon_ok = True
+            data = resp.json().get("data", [])
+            if data and "b64_json" in data[0]:
+                raw = base64.b64decode(data[0]["b64_json"])
+                out_path = Path(output) if output else Path(f"pantry-music-{int(time.time())}.wav")
+                out_path.write_bytes(raw)
+                typer.echo(f"Audio generated: {out_path.resolve()}")
+                if play and shutil.which("afplay"):
+                    subprocess.run(["afplay", str(out_path)], check=False)
+                return
+    except Exception:  # noqa: BLE001
+        daemon_ok = False
+
+    if not daemon_ok:
+        store = _store(home)
+        pkg = store.load_manifest(model)
+        if pkg is None:
+            from pantry.resolve import find_by_model_string
+
+            pkg = find_by_model_string(model, store.list_manifests())
+        if pkg is None:
+            typer.secho(f"unknown music model: {model}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+
+        from pantry.music_runtime import music_runtime_for
+
+        runtime = music_runtime_for(pkg, store)
+        try:
+            items = runtime.generate(
+                pkg, prompt=prompt, duration_seconds=duration, response_format="b64_json"
+            )
+        except Exception as e:
+            typer.secho(f"audio generation failed: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from e
+
+        if items and "b64_json" in items[0]:
+            raw = base64.b64decode(items[0]["b64_json"])
+            out_path = Path(output) if output else Path(f"pantry-music-{int(time.time())}.wav")
+            out_path.write_bytes(raw)
+            typer.echo(f"Audio generated: {out_path.resolve()}")
+            if play and shutil.which("afplay"):
+                subprocess.run(["afplay", str(out_path)], check=False)
 
 
 if __name__ == "__main__":
