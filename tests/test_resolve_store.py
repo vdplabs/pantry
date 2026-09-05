@@ -82,6 +82,8 @@ def test_resolve_prefers_real_over_echo_even_if_unready(catalog_packages, tmp_pa
     )
     assert result.package_id == qwen.id
     assert result.plan.get("weights_ready") is False
+    assert result.weights_ready is False
+    assert result.approx_bytes > 0
 
 
 def test_resolve_extreme_no_silent_fallback(catalog_packages):

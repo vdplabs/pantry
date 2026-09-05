@@ -92,6 +92,9 @@ class ResolveResult(BaseModel):
     package_id: str
     alias: str | None = None
     reason: str = ""
+    weights_ready: bool = False
+    ram_gb_min: float = 1.0
+    approx_bytes: int = 0
     plan: dict[str, Any] = Field(default_factory=dict)
 
 

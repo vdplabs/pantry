@@ -173,6 +173,7 @@ def resolve(
         elif chosen.quality_tier == QualityTier.extreme:
             alias = "embed-extreme"
 
+    approx = _approx_package_bytes(chosen)
     return ResolveResult(
         package_id=chosen.id,
         alias=alias,
@@ -180,8 +181,20 @@ def resolve(
             f"matched modality={modality_key} tier={chosen.quality_tier.value} "
             f"family={chosen.family} runtime={chosen.runtime.primary}"
         ),
+        weights_ready=bool(plan.get("weights_ready", False)),
+        ram_gb_min=float(chosen.ram_gb_min),
+        approx_bytes=approx,
         plan=plan,
     )
+
+
+def _approx_package_bytes(pkg: PackageManifest) -> int:
+    blob_sum = sum(b.size_bytes for b in pkg.blobs if b.size_bytes)
+    if blob_sum > 0:
+        return blob_sum
+    if pkg.params_b and pkg.bits_approx:
+        return int(pkg.params_b * 1_000_000_000 * (pkg.bits_approx / 8.0))
+    return 0
 
 
 def find_by_model_string(
