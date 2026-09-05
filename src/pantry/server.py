@@ -285,7 +285,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             )
 
         if not req.stream:
-            text = await svc.scheduler.run(req.priority, _complete)
+            text = await svc.scheduler.run(req.priority, _complete, modality="text")
             tool_calls = _parse_tool_calls(text) if req.tools else None
             message_obj: dict[str, Any] = {
                 "role": "assistant",
@@ -321,7 +321,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             stream_usage: dict[str, int] = {}
 
             async def _locked_stream() -> AsyncIterator[str]:
-                async with svc.scheduler.hold(req.priority):
+                async with svc.scheduler.hold(req.priority, modality="text"):
                     async for chunk in runtime.stream(
                         pkg,
                         req.messages,
@@ -395,7 +395,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             return runtime.embed(pkg, inputs)
 
         embeddings_data, usage = await svc.scheduler.run(
-            req.priority, lambda: asyncio.to_thread(_run_embed)
+            req.priority, lambda: asyncio.to_thread(_run_embed), modality="embed"
         )
 
         data_items = [
@@ -446,7 +446,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             )
 
         try:
-            data = await svc.scheduler.run(req.priority, _gen)
+            data = await svc.scheduler.run(req.priority, _gen, modality="image")
         except RuntimeError as e:
             # Preflight / Metal hints — surface as 503 so Sink shows the message
             # instead of a bare ASGI 500.
@@ -487,7 +487,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 response_format=req.response_format,
             )
 
-        data = await svc.scheduler.run(req.priority, _gen)
+        data = await svc.scheduler.run(req.priority, _gen, modality="audio")
         return {
             "created": int(time.time()),
             "model": req.model,
@@ -556,7 +556,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             finally:
                 tmp_path.unlink(missing_ok=True)
 
-        result = await svc.scheduler.run("interactive", _transcribe)
+        result = await svc.scheduler.run("interactive", _transcribe, modality="stt")
 
         fmt = (response_format or "json").lower().strip()
         if fmt == "text":
