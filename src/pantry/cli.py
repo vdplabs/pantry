@@ -34,19 +34,50 @@ def _daemon_base(host: str, port: int) -> str:
     return f"http://{host}:{port}"
 
 
+def _get_daemon_client(
+    host: str = "127.0.0.1",
+    port: int = 18787,
+    socket_path: Path | None = None,
+) -> tuple[Any, str]:
+    """Return an httpx.Client and base_url, preferring Unix domain socket if available."""
+    import os
+    import httpx
+
+    sock = socket_path
+    if not sock:
+        env = os.environ.get("PANTRY_SOCKET")
+        if env:
+            sock = Path(env).expanduser().resolve()
+        else:
+            default_sock = default_home() / "pantry.sock"
+            if default_sock.is_socket():
+                sock = default_sock
+
+    if sock and sock.is_socket():
+        try:
+            transport = httpx.HTTPTransport(uds=str(sock))
+            client = httpx.Client(transport=transport, timeout=5.0)
+            return client, "http://localhost"
+        except Exception:
+            pass
+
+    return httpx.Client(timeout=5.0), f"http://{host}:{port}"
+
+
 def _daemon_post(
     path: str,
     payload: dict,
     *,
     host: str = "127.0.0.1",
     port: int = 18787,
+    socket_path: Path | None = None,
 ) -> dict | None:
     """POST to a running pantry serve; return JSON or None if unreachable."""
-    import httpx
-
-    url = f"{_daemon_base(host, port)}{path}"
+    client, base_url = _get_daemon_client(host=host, port=port, socket_path=socket_path)
+    url = f"{base_url}{path}"
     try:
-        r = httpx.post(url, json=payload, timeout=5.0)
+        with client:
+            r = client.post(url, json=payload)
     except Exception:  # noqa: BLE001
         return None
     if r.status_code >= 400:
@@ -282,14 +313,15 @@ def status(
 def health(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(18787, "--port"),
+    socket_path: Path | None = typer.Option(None, "--uds", "--socket", help="Override socket path"),
 ) -> None:
-    """HTTP health check against a running pantry serve."""
-    import httpx
-
-    url = f"http://{host}:{port}/v1/health"
+    """HTTP / UDS health check against a running pantry serve."""
+    client, base_url = _get_daemon_client(host=host, port=port, socket_path=socket_path)
+    url = f"{base_url}/v1/health"
     try:
-        r = httpx.get(url, timeout=5.0)
-        r.raise_for_status()
+        with client:
+            r = client.get(url, timeout=5.0)
+            r.raise_for_status()
     except Exception as e:
         typer.secho(f"health failed: {e}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from e
@@ -300,6 +332,12 @@ def health(
 def serve(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(18787, "--port"),
+    uds: Path | None = typer.Option(
+        None,
+        "--uds",
+        "--socket",
+        help="Unix domain socket path (default: <PANTRY_HOME>/pantry.sock; pass 'none' to disable)",
+    ),
     home: Path | None = typer.Option(None, help="Override PANTRY_HOME (metadata)"),
     data: Path | None = typer.Option(
         None,
@@ -318,7 +356,7 @@ def serve(
         help="Run MLX in an isolated worker subprocess so unload can reclaim that process's Metal allocations",
     ),
 ) -> None:
-    """Run localhost OpenAI-compatible HTTP server (menu bar on by default)."""
+    """Run localhost OpenAI-compatible HTTP server with dual TCP and UDS listeners."""
     import threading
     import time
 
@@ -335,20 +373,65 @@ def serve(
 
     import socket
 
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-        s.settimeout(0.5)
-        if s.connect_ex((host, port)) == 0:
+    sockets: list[socket.socket] = []
+
+    s_tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s_tcp.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        s_tcp.bind((host, port))
+        s_tcp.listen(128)
+        sockets.append(s_tcp)
+    except OSError as e:
+        typer.secho(
+            f"Error: port {port} is already in use on {host}.\n"
+            "A background pantry service or another server may already be running.\n"
+            "Run 'pantry service status' to check, 'pantry service stop' to stop it, "
+            "or pass '--port <number>' to use a different port.",
+            fg=typer.colors.RED,
+            err=True,
+        )
+        raise typer.Exit(code=1) from e
+
+    uds_path: Path | None = None
+    if uds is None or str(uds).lower() not in {"none", "off", "0", "false"}:
+        uds_path = Path(uds).resolve() if uds else store.socket_path
+        uds_path.parent.mkdir(parents=True, exist_ok=True)
+        if uds_path.is_socket() or uds_path.is_file():
+            uds_path.unlink(missing_ok=True)
+        try:
+            s_uds = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s_uds.bind(str(uds_path))
+            try:
+                uds_path.chmod(0o600)
+            except OSError:
+                pass
+            s_uds.listen(128)
+            sockets.append(s_uds)
+            typer.echo(f"pantry UDS socket bound at {uds_path}")
+        except Exception as e:
             typer.secho(
-                f"Error: port {port} is already in use on {host}.\n"
-                "A background pantry service or another server may already be running.\n"
-                "Run 'pantry service status' to check, 'pantry service stop' to stop it, "
-                "or pass '--port <number>' to use a different port.",
-                fg=typer.colors.RED,
+                f"Warning: could not bind Unix domain socket at {uds_path}: {e}",
+                fg=typer.colors.YELLOW,
                 err=True,
             )
-            raise typer.Exit(code=1)
+            uds_path = None
 
-    want_menubar = bool(menubar) and not reload
+    if reload:
+        for s in sockets:
+            s.close()
+        if uds_path and (uds_path.is_socket() or uds_path.is_file()):
+            uds_path.unlink(missing_ok=True)
+        uvicorn.run(
+            fastapi_app, host=host, port=port, reload=True, log_level="info"
+        )
+        return
+
+    config = uvicorn.Config(
+        fastapi_app, log_level="info", reload=False
+    )
+    server = uvicorn.Server(config)
+
+    want_menubar = bool(menubar)
     if want_menubar:
         from pantry.menubar import (
             rumps_available,
@@ -368,18 +451,15 @@ def serve(
             set_accessory_activation_policy()
 
     if not want_menubar:
-        uvicorn.run(
-            fastapi_app, host=host, port=port, reload=reload, log_level="info"
-        )
+        try:
+            server.run(sockets=sockets)
+        finally:
+            if uds_path and (uds_path.is_socket() or uds_path.is_file()):
+                uds_path.unlink(missing_ok=True)
         return
 
-    config = uvicorn.Config(
-        fastapi_app, host=host, port=port, log_level="info", reload=False
-    )
-    server = uvicorn.Server(config)
-
     def _run_server() -> None:
-        server.run()
+        server.run(sockets=sockets)
 
     thread = threading.Thread(target=_run_server, daemon=True, name="pantry-uvicorn")
     thread.start()
@@ -409,6 +489,8 @@ def serve(
     finally:
         server.should_exit = True
         thread.join(timeout=5.0)
+        if uds_path and (uds_path.is_socket() or uds_path.is_file()):
+            uds_path.unlink(missing_ok=True)
 
 
 service_app = typer.Typer(

@@ -37,6 +37,37 @@ class PackageStore:
     def artifacts_dir(self) -> Path:
         return self.data_root / "artifacts"
 
+    @property
+    def shm_dir(self) -> Path:
+        d = self.data_root / "shm"
+        d.mkdir(parents=True, exist_ok=True)
+        try:
+            d.chmod(0o700)
+        except OSError:
+            pass
+        return d
+
+    @property
+    def shm(self):
+        from pantry.shm import ShmManager
+
+        return ShmManager(self.shm_dir)
+
+    @property
+    def socket_path(self) -> Path:
+        import os
+
+        env = os.environ.get("PANTRY_SOCKET")
+        if env:
+            return Path(env).expanduser().resolve()
+        candidate = self.root / "pantry.sock"
+        # On Darwin, AF_UNIX sun_path cannot exceed 104 bytes. If root is deeply nested,
+        # fallback to a user-isolated path in /tmp with 0600 permissions.
+        if len(str(candidate).encode("utf-8")) >= 100:
+            uid = os.getuid() if hasattr(os, "getuid") else 1000
+            return Path(f"/tmp/pantry_{uid}.sock")
+        return candidate
+
     def _write_state(self, state: dict) -> None:
         self.state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 

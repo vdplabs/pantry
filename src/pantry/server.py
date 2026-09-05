@@ -8,7 +8,7 @@ from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 
@@ -152,6 +152,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "audio": "/v1/audio/generations",
             "memory": "/v1/memory",
             "resolve": "/v1/resolve",
+            "shm": "/v1/shm",
         }
 
     @app.get("/v1/health")
@@ -166,6 +167,11 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "loaded": state.get("loaded", []),
             "home": str(store.root),
             "data": str(store.data_root),
+            "socket": str(store.socket_path) if store.socket_path.exists() else None,
+            "shm": {
+                "dir": str(store.shm_dir),
+                "active_buffers": len(list(store.shm_dir.glob("*.bin"))),
+            },
             "memory": {
                 "pressure": mem.get("pressure"),
                 "active_bytes": mem.get("active_bytes"),
@@ -414,7 +420,9 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         }
 
     @app.post("/v1/images/generations")
-    async def images_generations(req: ImageGenerateRequest) -> dict[str, Any]:
+    async def images_generations(
+        req: ImageGenerateRequest, request: Request
+    ) -> dict[str, Any]:
         pkg = svc.resolve_model(req.model)
         if not _is_image_package(pkg):
             raise HTTPException(
@@ -451,6 +459,26 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             # Preflight / Metal hints — surface as 503 so Sink shows the message
             # instead of a bare ASGI 500.
             raise HTTPException(status_code=503, detail=str(e)) from e
+
+        want_shm = (req.response_format or "").lower() == "shm" or request.headers.get("x-pantry-transport", "").lower() == "shm"
+        if want_shm:
+            for item in data:
+                img_path = Path(item["path"]) if "path" in item else None
+                if img_path and img_path.is_file():
+                    raw_bytes = img_path.read_bytes()
+                    desc = store.shm.allocate(
+                        raw_bytes,
+                        format="png",
+                        prefix="img",
+                        metadata={
+                            "width": item.get("width"),
+                            "height": item.get("height"),
+                        },
+                    )
+                    item["shm"] = desc.to_dict()
+                    if (req.response_format or "").lower() == "shm":
+                        item.pop("b64_json", None)
+
         return {
             "created": int(time.time()),
             "model": req.model,
@@ -459,7 +487,9 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         }
 
     @app.post("/v1/audio/generations")
-    async def audio_generations(req: AudioGenerateRequest) -> dict[str, Any]:
+    async def audio_generations(
+        req: AudioGenerateRequest, request: Request
+    ) -> dict[str, Any]:
         pkg = svc.resolve_model(req.model)
         if not _is_music_package(pkg):
             raise HTTPException(
@@ -488,12 +518,56 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             )
 
         data = await svc.scheduler.run(req.priority, _gen, modality="audio")
+
+        want_shm = (req.response_format or "").lower() == "shm" or request.headers.get("x-pantry-transport", "").lower() == "shm"
+        if want_shm:
+            for item in data:
+                aud_path = Path(item["path"]) if "path" in item else None
+                if aud_path and aud_path.is_file():
+                    raw_bytes = aud_path.read_bytes()
+                    desc = store.shm.allocate(
+                        raw_bytes,
+                        format="wav",
+                        prefix="aud",
+                        metadata={
+                            "sample_rate": item.get("sample_rate"),
+                            "duration_seconds": item.get("duration_seconds"),
+                        },
+                    )
+                    item["shm"] = desc.to_dict()
+                    if (req.response_format or "").lower() == "shm":
+                        item.pop("b64_json", None)
+
         return {
             "created": int(time.time()),
             "model": req.model,
             "package_id": pkg.id,
             "data": data,
         }
+
+    @app.get("/v1/shm/{key}")
+    async def get_shm(key: str) -> Response:
+        store.shm.cleanup()
+        path = store.shm.resolve(key)
+        if path is None:
+            raise HTTPException(status_code=404, detail=f"shared memory buffer not found: {key}")
+        data = path.read_bytes()
+        return Response(
+            content=data,
+            media_type="application/octet-stream",
+            headers={
+                "X-Pantry-SHM-Key": key,
+                "X-Pantry-SHM-Path": str(path),
+                "Content-Length": str(len(data)),
+            },
+        )
+
+    @app.delete("/v1/shm/{key}")
+    async def delete_shm(key: str) -> dict[str, Any]:
+        released = store.shm.release(key)
+        if not released:
+            raise HTTPException(status_code=404, detail=f"shared memory buffer not found: {key}")
+        return {"ok": True, "key": key}
 
     @app.post("/v1/audio/transcriptions")
     async def audio_transcriptions(
