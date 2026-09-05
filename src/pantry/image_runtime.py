@@ -33,16 +33,19 @@ def _solid_png(width: int, height: int, rgb: tuple[int, int, int]) -> bytes:
 
 
 def _parse_size(size: str | None) -> tuple[int, int]:
-    raw = (size or "256x256").lower().strip()
+    raw = (size or "1024x1024").lower().strip()
     if "x" not in raw:
-        return 256, 256
+        return 1024, 1024
     try:
         w_s, h_s = raw.split("x", 1)
         w, h = int(w_s), int(h_s)
     except ValueError:
-        return 256, 256
-    w = max(16, min(w, 1024))
-    h = max(16, min(h, 1024))
+        return 1024, 1024
+    w = max(64, min(w, 2048))
+    h = max(64, min(h, 2048))
+    # Align to multiple of 16 (required for latents and VAE patchification)
+    w = (w // 16) * 16
+    h = (h // 16) * 16
     return w, h
 
 
@@ -211,6 +214,11 @@ class EchoImageRuntime:
         size: str | None = None,
         n: int = 1,
         response_format: str = "b64_json",
+        seed: int | None = None,
+        num_inference_steps: int | None = None,
+        guidance: float | None = None,
+        negative_prompt: str | None = None,
+        **kwargs: Any,
     ) -> list[dict]:
         width, height = _parse_size(size)
         n = max(1, min(int(n), 4))
@@ -228,6 +236,8 @@ class EchoImageRuntime:
                     f"[pantry echo_image · {manifest.id}] {prompt.strip()[:200]}"
                 ),
                 "path": str(path),
+                "width": width,
+                "height": height,
             }
             fmt = (response_format or "b64_json").lower()
             if fmt == "b64_json":
@@ -297,6 +307,8 @@ class MFluxImageRuntime:
         response_format: str = "b64_json",
         seed: int | None = None,
         num_inference_steps: int | None = None,
+        guidance: float | None = None,
+        negative_prompt: str | None = None,
     ) -> list[dict]:
         import time
 
@@ -308,9 +320,15 @@ class MFluxImageRuntime:
 
         width, height = _parse_size(size)
         host = _host_ram_gb()
-        # On ≤16–18 GB machines, keep the working set small even when the user asks larger.
-        if host is not None and host <= 18 and (width > 512 or height > 512):
-            width, height = min(width, 512), min(height, 512)
+        # On ≤16–18 GB machines, keep working set within ~1 MP (1024x1024)
+        # while STRICTLY preserving the user's requested aspect ratio.
+        max_pixels = 1024 * 1024
+        total_pixels = width * height
+        if host is not None and host <= 18 and total_pixels > max_pixels:
+            import math
+            scale = math.sqrt(max_pixels / float(total_pixels))
+            width = max(64, (int(width * scale) // 16) * 16)
+            height = max(64, (int(height * scale) // 16) * 16)
 
         n = max(1, min(int(n), 4))
         artifacts = self.store.artifacts_dir / manifest.id
@@ -408,6 +426,8 @@ class MFluxImageRuntime:
                     steps=steps,
                     height=height,
                     width=width,
+                    guidance=guidance,
+                    negative_prompt=negative_prompt,
                     reload_model=reload_fn,
                 )
                 # Cold-start retry may have replaced a gutted cached model.
@@ -419,6 +439,8 @@ class MFluxImageRuntime:
                 item: dict = {
                     "revised_prompt": prompt.strip(),
                     "path": str(path),
+                    "width": width,
+                    "height": height,
                 }
                 fmt = (response_format or "b64_json").lower()
                 if fmt == "b64_json":
@@ -456,6 +478,8 @@ class MFluxImageRuntime:
         steps: int,
         height: int,
         width: int,
+        guidance: float | None = None,
+        negative_prompt: str | None = None,
         max_attempts: int = 2,
         reload_model: Any | None = None,
     ) -> Any:
@@ -489,13 +513,18 @@ class MFluxImageRuntime:
                         )
                 elif reload_model is not None and not _mflux_model_intact(model):
                     model = reload_model()
-                return model.generate_image(
-                    seed=seed,
-                    prompt=prompt,
-                    num_inference_steps=steps,
-                    height=height,
-                    width=width,
-                )
+                gen_kwargs: dict[str, Any] = {
+                    "seed": seed,
+                    "prompt": prompt,
+                    "num_inference_steps": steps,
+                    "height": height,
+                    "width": width,
+                }
+                if guidance is not None:
+                    gen_kwargs["guidance"] = guidance
+                if negative_prompt is not None and negative_prompt.strip():
+                    gen_kwargs["negative_prompt"] = negative_prompt.strip()
+                return model.generate_image(**gen_kwargs)
             except Exception as exc:
                 last_exc = exc
                 if attempt < max_attempts and _is_metal_timeout(exc):

@@ -32,15 +32,21 @@ def test_images_generations_echo(client):
         json={
             "model": "image-compact",
             "prompt": "a red cube on a table",
-            "size": "32x32",
+            "size": "768x1344",
             "n": 1,
             "response_format": "b64_json",
+            "steps": 8,
+            "guidance": 3.5,
+            "negative_prompt": "blurry",
+            "seed": 1234,
         },
     )
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["package_id"] == "vdplabs.demo-image.compact.v1"
     assert len(body["data"]) == 1
+    assert body["data"][0]["width"] == 768
+    assert body["data"][0]["height"] == 1344
     b64 = body["data"][0]["b64_json"]
     raw = base64.b64decode(b64)
     assert raw[:8] == b"\x89PNG\r\n\x1a\n"

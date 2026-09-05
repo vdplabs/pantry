@@ -163,9 +163,13 @@ class ImageGenerateRequest(BaseModel):
     model: str
     prompt: str = Field(..., min_length=1)
     n: int = Field(default=1, ge=1, le=4)
-    size: str | None = "256x256"
+    size: str | None = "1024x1024"
     response_format: str = "b64_json"  # b64_json | url
     priority: str = "interactive"
+    steps: int | None = Field(default=None, ge=1, le=50)
+    guidance: float | None = Field(default=None, ge=0.0, le=20.0)
+    negative_prompt: str | None = None
+    seed: int | None = None
 
 
 class AudioGenerateRequest(BaseModel):

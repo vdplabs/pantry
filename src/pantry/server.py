@@ -439,6 +439,10 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 size=req.size,
                 n=req.n,
                 response_format=req.response_format,
+                seed=req.seed,
+                num_inference_steps=req.steps,
+                guidance=req.guidance,
+                negative_prompt=req.negative_prompt,
             )
 
         try:
