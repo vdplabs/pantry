@@ -32,10 +32,11 @@ dev = ["pytest>=8.0", "ruff>=0.6"]
 mlx = ["mlx>=0.22", "mlx-lm>=0.22"]
 whisper = ["mlx-whisper>=0.4.0"]
 mflux = ["mflux>=0.19.0"]
+music = ["mlx-audiogen>=0.2.0"]
 menubar = ["rumps>=0.4.0"]
 # Default Mac host setup: inference + menu bar (what `pantry serve` expects).
 mac = ["mlx>=0.22", "mlx-lm>=0.22", "rumps>=0.4.0"]
-all = ["mlx>=0.22", "mlx-lm>=0.22", "mlx-whisper>=0.4.0", "mflux>=0.19.0", "rumps>=0.4.0"]
+all = ["mlx>=0.22", "mlx-lm>=0.22", "mlx-whisper>=0.4.0", "mflux>=0.19.0", "mlx-audiogen>=0.2.0", "rumps>=0.4.0"]
 
 [project.scripts]
 pantry = "pantry.cli:app"

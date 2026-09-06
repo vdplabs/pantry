@@ -586,4 +586,26 @@ def test_mflux_image_runtime_step_callback(tmp_path, monkeypatch):
     assert len(mock_callbacks.in_loop) == 0
 
 
+def test_parse_size_table():
+    from pantry.image_runtime import _parse_size
+
+    test_cases = [
+        # (input_size, expected_width, expected_height)
+        ("1024x1024", 1024, 1024),
+        ("1920x1088", 1920, 1088),
+        ("2048x2048", 2048, 2048),
+        ("3840x2160", 3840, 2160),
+        ("5000x5000", 4096, 4096),  # clamped to 4096
+        ("32x32", 64, 64),          # clamped to minimum 64
+        (None, 1024, 1024),         # default fallback
+        ("garbage", 1024, 1024),    # invalid format fallback
+        ("1920x1080", 1920, 1072),  # aligned to 16 multiple (1080 // 16 * 16 = 1072)
+    ]
+
+    for size_str, exp_w, exp_h in test_cases:
+        w, h = _parse_size(size_str)
+        assert (w, h) == (exp_w, exp_h), f"Failed for {size_str}: expected ({exp_w}, {exp_h}), got ({w}, {h})"
+
+
+
 

@@ -41,8 +41,8 @@ def _parse_size(size: str | None) -> tuple[int, int]:
         w, h = int(w_s), int(h_s)
     except ValueError:
         return 1024, 1024
-    w = max(64, min(w, 2048))
-    h = max(64, min(h, 2048))
+    w = max(64, min(w, 4096))
+    h = max(64, min(h, 4096))
     # Align to multiple of 16 (required for latents and VAE patchification)
     w = (w // 16) * 16
     h = (h // 16) * 16
@@ -359,11 +359,19 @@ class MFluxImageRuntime:
 
         width, height = _parse_size(size)
         host = _host_ram_gb()
-        # On ≤16–18 GB machines, keep working set within ~1 MP (1024x1024)
-        # while STRICTLY preserving the user's requested aspect ratio.
-        max_pixels = 1024 * 1024
+        # Memory-tiered pixel budget to prevent Metal GPU command buffer timeouts:
+        # - ≤18 GB unified RAM (e.g. 8/16 GB Macs): scale down to ~1 MP (1024x1024) while strictly preserving aspect ratio.
+        # - 19–36 GB unified RAM (e.g. 24/36 GB Macs): cap at ~4.2 MP (2048x2048 / 2K QHD).
+        # - >36 GB unified RAM (e.g. 48/64/96/128/192 GB Mac Studio / Max): unconstrained up to 4K (4096x4096).
         total_pixels = width * height
-        if host is not None and host <= 18 and total_pixels > max_pixels:
+        if host is not None and host <= 18:
+            max_pixels = 1024 * 1024
+        elif host is not None and host <= 36:
+            max_pixels = 2048 * 2048
+        else:
+            max_pixels = 4096 * 4096
+
+        if total_pixels > max_pixels:
             import math
             scale = math.sqrt(max_pixels / float(total_pixels))
             width = max(64, (int(width * scale) // 16) * 16)

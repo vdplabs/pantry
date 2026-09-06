@@ -1,0 +1,37 @@
+{
+  "id": "vdplabs.musicgen-small.standard.v1",
+  "family": "musicgen",
+  "role": "music",
+  "params_b": 0.3,
+  "quality_tier": "standard",
+  "quant_method": "mlx-fp32",
+  "bits_approx": 16.0,
+  "ram_gb_min": 4.0,
+  "ram_gb_comfortable": 8.0,
+  "modalities": [
+    "music"
+  ],
+  "context_max": 1024,
+  "license": "mit",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": [
+    "music-standard",
+    "music",
+    "musicgen-small",
+    "musicgen"
+  ],
+  "listable": true,
+  "runtime": {
+    "primary": "musicgen",
+    "hf_repo": "jasonvassallo/mlx-musicgen-small",
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "music-caps-2024",
+    "score": 0.88,
+    "notes": "MusicGen-Small 32 kHz high-fidelity text-to-music on Apple Silicon MLX."
+  },
+  "system_preamble": ""
+}

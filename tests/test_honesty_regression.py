@@ -57,18 +57,18 @@ def test_no_hardcoded_developer_paths() -> None:
 
 
 def test_music_resolve_honesty(client: TestClient, catalog_packages) -> None:
-    """Ensure capability resolve for music returns honest demo scaffold and never a fake neural runtime."""
+    """Ensure capability resolve for music returns real MLX musicgen runtime and never a fake neural runtime."""
     r = client.post("/v1/resolve", json={"modality": "music"})
     assert r.status_code == 200
     body = r.json()
-    assert body["package_id"] == "vdplabs.demo-music.compact.v1"
-    assert body["alias"] in {"music-compact", "music"}
+    assert body["package_id"] == "vdplabs.musicgen-small.standard.v1"
+    assert body["alias"] in {"music-standard", "music"}
 
-    # Soft alias music-standard must not invent a fake engine — fall back to compact scaffold.
+    # music-standard resolves to real MLX musicgen package, never fake magnet
     chosen = find_by_model_string("music-standard", catalog_packages, is_ready=lambda _p: True)
     assert chosen is not None
-    assert chosen.id == "vdplabs.demo-music.compact.v1"
-    assert (chosen.runtime.primary or "").startswith("echo")
+    assert chosen.id == "vdplabs.musicgen-small.standard.v1"
+    assert chosen.runtime.primary == "musicgen"
     assert "magnet" not in (chosen.runtime.primary or "").lower()
     assert "magnet" not in chosen.family.lower()
     assert not any(p.family.lower() == "magnet" for p in catalog_packages)
