@@ -262,6 +262,7 @@ class MFluxImageRuntime:
         self._models: dict[str, Any] = {}
 
     def _ensure_cache_env(self) -> None:
+        os.environ.setdefault("AGX_RELAX_CDM_CTXSTORE_TIMEOUT", "1")
         if os.environ.get("HF_HOME") or os.environ.get("HF_HUB_CACHE"):
             return
         if not self.store or self.store.data_root == self.store.root:
@@ -293,12 +294,14 @@ class MFluxImageRuntime:
             return
 
         swap = _swap_used_gb()
-        if swap is not None and swap >= 8.0:
+        swap_threshold = 4.5 if (host is not None and host <= 18) else 8.0
+        if swap is not None and swap >= swap_threshold:
             raise RuntimeError(
-                f"refusing cold image load: this Mac already has ~{swap:.1f} GB of swap in use. "
+                f"refusing cold image load: this Mac already has ~{swap:.1f} GB of swap in use "
+                f"(limit is {swap_threshold:.1f} GB on {host or 16:.0f} GB RAM). "
                 "Z-Image / FLUX cold-starts are unreliable under that pressure — Metal will "
                 "often GPU-timeout while compiling shaders. Free memory first: "
-                "`pantry unload`, quit heavy apps, wait for `sysctl vm.swapusage` to drop, "
+                "`pantry unload`, quit heavy apps (browsers, IDEs), wait for `sysctl vm.swapusage` to drop, "
                 "or reboot. Once an image pack is warm (menu bar → Loaded), retries are allowed "
                 "even with residual swap."
             )
@@ -443,6 +446,13 @@ class MFluxImageRuntime:
                             step = t + 1
                             total = config.num_inference_steps
                             try:
+                                import mlx.core as mx
+
+                                # 1. Evaluate latents first to retire the transformer command buffer
+                                # cleanly and decouple it from VAE decoding.
+                                mx.eval(latents)
+                                mx.clear_cache()
+
                                 if self.is_zimage:
                                     from mflux.models.z_image.latent_creator.z_image_latent_creator import ZImageLatentCreator
 
@@ -456,11 +466,15 @@ class MFluxImageRuntime:
 
                                 from mflux.models.common.vae.vae_util import VAEUtil
 
+                                # Fast preview: untiled decode (tiling_config=None) for intermediate thumbnails
                                 decoded = VAEUtil.decode(
                                     vae=self.model.vae,
                                     latent=unpacked,
-                                    tiling_config=getattr(self.model, "tiling_config", None),
+                                    tiling_config=None,
                                 )
+                                mx.eval(decoded)
+                                mx.clear_cache()
+
                                 from mflux.utils.image_util import ImageUtil
 
                                 pil_img = ImageUtil.to_pil(decoded)
@@ -477,13 +491,11 @@ class MFluxImageRuntime:
                                 buf = io.BytesIO()
                                 preview.convert("RGB").save(buf, format="JPEG", quality=75)
                                 self.cb(step, total, buf.getvalue(), preview.width, preview.height)
-                                import mlx.core as mx
-
                                 mx.clear_cache()
                             except Exception as exc:
                                 import sys
 
-                                print(f"[pantry] Error in diffusion step callback: {exc}", file=sys.stderr)
+                                print(f"[pantry] Diffusion step {step}/{total} preview skipped: {exc}", file=sys.stderr)
 
                     step_cb_obj = _MFluxStepCallback(model, is_zimage, step_callback)
 
