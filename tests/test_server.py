@@ -143,3 +143,45 @@ def test_load_http(client):
     )
     assert r.status_code == 200, r.text
     assert "vdplabs.demo-chat.compact.v1" in r.json()["loaded"]
+
+
+def test_responses_api_non_streaming(client):
+    r = client.post(
+        "/v1/responses",
+        json={
+            "model": "demo-compact",
+            "input": "Tell me a fun fact",
+            "instructions": "Be brief",
+            "stream": False,
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["object"] == "response"
+    assert body["status"] == "completed"
+    assert len(body["output"]) == 1
+    assert body["output"][0]["role"] == "assistant"
+    assert len(body["output"][0]["content"]) == 1
+    assert body["output"][0]["content"][0]["type"] == "output_text"
+    assert len(body["output"][0]["content"][0]["text"]) > 0
+
+
+def test_responses_api_streaming(client):
+    with client.stream(
+        "POST",
+        "/v1/responses",
+        json={
+            "model": "demo-compact",
+            "input": [
+                {"role": "user", "content": "Tell me a fun fact"}
+            ],
+            "stream": True,
+        },
+    ) as r:
+        assert r.status_code == 200
+        text = "".join(r.iter_text())
+    assert "event: response.output_text.delta" in text
+    assert "event: response.output_text.done" in text
+    assert "event: response.completed" in text
+    assert "[DONE]" in text
+

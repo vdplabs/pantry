@@ -24,6 +24,7 @@ from pantry.scheduler import Scheduler
 from pantry.schemas import (
     AudioGenerateRequest,
     CapabilityRequest,
+    ChatMessage,
     CompleteRequest,
     EmbeddingRequest,
     ImageGenerateRequest,
@@ -151,6 +152,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "health": "/v1/health",
             "models": "/v1/models",
             "chat": "/v1/chat/completions",
+            "responses": "/v1/responses",
             "embeddings": "/v1/embeddings",
             "images": "/v1/images/generations",
             "audio": "/v1/audio/generations",
@@ -401,6 +403,202 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             yield b"data: [DONE]\n\n"
 
         return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    @app.post("/v1/responses")
+    async def responses(request: Request) -> Any:
+        try:
+            body = await request.json()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"invalid JSON: {e}") from e
+
+        model = body.get("model")
+        if not model:
+            raise HTTPException(status_code=400, detail="model is required")
+
+        messages: list[ChatMessage] = []
+        instructions = body.get("instructions")
+        if instructions:
+            messages.append(ChatMessage(role="system", content=str(instructions)))
+
+        raw_input = body.get("input")
+        if raw_input is None:
+            raw_input = body.get("messages")
+
+        if isinstance(raw_input, str):
+            messages.append(ChatMessage(role="user", content=raw_input))
+        elif isinstance(raw_input, list):
+            for item in raw_input:
+                if isinstance(item, str):
+                    messages.append(ChatMessage(role="user", content=item))
+                elif isinstance(item, dict):
+                    role = item.get("role") or ("user" if item.get("type") == "message" else "user")
+                    content = item.get("content", "")
+                    if isinstance(content, list):
+                        parts: list[str] = []
+                        for part in content:
+                            if isinstance(part, str):
+                                parts.append(part)
+                            elif isinstance(part, dict) and "text" in part:
+                                parts.append(str(part.get("text") or ""))
+                        content = "".join(parts)
+                    messages.append(ChatMessage(role=str(role), content=content))
+        elif raw_input is not None:
+            messages.append(ChatMessage(role="user", content=str(raw_input)))
+
+        if not messages:
+            raise HTTPException(status_code=400, detail="input or messages required")
+
+        max_tokens = body.get("max_output_tokens") or body.get("max_tokens")
+        complete_req = CompleteRequest(
+            model=model,
+            messages=messages,
+            stream=bool(body.get("stream", False)),
+            temperature=body.get("temperature"),
+            max_tokens=max_tokens,
+            priority=body.get("priority", "interactive"),
+            tools=body.get("tools"),
+            tool_choice=body.get("tool_choice"),
+        )
+
+        pkg = svc.resolve_model(complete_req.model)
+        if not _is_text_package(pkg):
+            raise HTTPException(
+                status_code=400,
+                detail=f"package {pkg.id} is not a chat/text model (modalities={pkg.modalities})",
+            )
+        if not store.weights_ready(pkg):
+            raise HTTPException(
+                status_code=409,
+                detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
+            )
+        runtime = svc.runtimes.for_manifest(pkg)
+        want_spec = bool(complete_req.prefer_speculative) or complete_req.model.strip() in {
+            "chat-fast",
+            "chat-speculative",
+        }
+        from pantry.runtime import resolve_draft_path
+
+        draft_path, draft_id = resolve_draft_path(
+            store, pkg, prefer_speculative=want_spec
+        )
+        speculative = draft_path is not None
+        usage_info: dict[str, int] = {}
+        resp_id = f"resp_{uuid.uuid4().hex[:16]}"
+        msg_id = f"msg_{uuid.uuid4().hex[:12]}"
+        created = int(time.time())
+
+        if not complete_req.stream:
+            async def _complete() -> str:
+                return await runtime.complete(
+                    pkg,
+                    complete_req.messages,
+                    max_tokens=complete_req.effective_max_tokens(),
+                    temperature=complete_req.temperature,
+                    prefer_speculative=want_spec,
+                    usage=usage_info,
+                    tools=complete_req.tools,
+                )
+
+            text = await svc.scheduler.run(complete_req.priority, _complete, modality="text")
+            usage = usage_info if usage_info else _estimate_usage(pkg, complete_req.messages, text)
+            return {
+                "id": resp_id,
+                "object": "response",
+                "created_at": created,
+                "status": "completed",
+                "model": complete_req.model,
+                "speculative": speculative,
+                "draft_package_id": draft_id,
+                "output": [
+                    {
+                        "id": msg_id,
+                        "type": "message",
+                        "role": "assistant",
+                        "content": [
+                            {
+                                "type": "output_text",
+                                "text": text,
+                            }
+                        ],
+                    }
+                ],
+                "usage": usage,
+            }
+
+        async def responses_event_stream() -> AsyncIterator[bytes]:
+            assembled: list[str] = []
+            stream_usage: dict[str, int] = {}
+
+            async def _locked_stream() -> AsyncIterator[str]:
+                async with svc.scheduler.hold(complete_req.priority, modality="text"):
+                    async for chunk in runtime.stream(
+                        pkg,
+                        complete_req.messages,
+                        max_tokens=complete_req.effective_max_tokens(),
+                        temperature=complete_req.temperature,
+                        prefer_speculative=want_spec,
+                        usage=stream_usage,
+                        tools=complete_req.tools,
+                    ):
+                        yield chunk
+
+            seq = 0
+            async for piece in _locked_stream():
+                if not piece:
+                    continue
+                assembled.append(piece)
+                seq += 1
+                payload = {
+                    "type": "response.output_text.delta",
+                    "delta": piece,
+                    "sequence_number": seq,
+                    "item_id": msg_id,
+                    "output_index": 0,
+                    "content_index": 0,
+                    "choices": [{"index": 0, "delta": {"content": piece}}],
+                }
+                yield f"event: response.output_text.delta\ndata: {json.dumps(payload)}\n\n".encode()
+
+            full_text = "".join(assembled)
+            usage = stream_usage if stream_usage else _estimate_usage(pkg, complete_req.messages, full_text)
+
+            done_payload = {
+                "type": "response.output_text.done",
+                "text": full_text,
+                "item_id": msg_id,
+                "output_index": 0,
+                "content_index": 0,
+            }
+            yield f"event: response.output_text.done\ndata: {json.dumps(done_payload)}\n\n".encode()
+
+            completed_payload = {
+                "type": "response.completed",
+                "response": {
+                    "id": resp_id,
+                    "object": "response",
+                    "created_at": created,
+                    "status": "completed",
+                    "model": complete_req.model,
+                    "output": [
+                        {
+                            "id": msg_id,
+                            "type": "message",
+                            "role": "assistant",
+                            "content": [
+                                {
+                                    "type": "output_text",
+                                    "text": full_text,
+                                }
+                            ],
+                        }
+                    ],
+                    "usage": usage,
+                },
+            }
+            yield f"event: response.completed\ndata: {json.dumps(completed_payload)}\n\n".encode()
+            yield b"data: [DONE]\n\n"
+
+        return StreamingResponse(responses_event_stream(), media_type="text/event-stream")
 
     @app.post("/v1/embeddings")
     async def embeddings(req: EmbeddingRequest) -> dict[str, Any]:
