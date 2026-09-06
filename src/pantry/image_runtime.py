@@ -294,7 +294,7 @@ class MFluxImageRuntime:
             return
 
         swap = _swap_used_gb()
-        swap_threshold = 4.5 if (host is not None and host <= 18) else 8.0
+        swap_threshold = 7.5 if (host is not None and host <= 18) else 8.5
         if swap is not None and swap >= swap_threshold:
             raise RuntimeError(
                 f"refusing cold image load: this Mac already has ~{swap:.1f} GB of swap in use "
