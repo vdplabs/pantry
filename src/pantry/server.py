@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import json
 import time
 import uuid
@@ -447,7 +448,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
     @app.post("/v1/images/generations")
     async def images_generations(
         req: ImageGenerateRequest, request: Request
-    ) -> dict[str, Any]:
+    ) -> Any:
         pkg = svc.resolve_model(req.model)
         if not _is_image_package(pkg):
             raise HTTPException(
@@ -463,6 +464,98 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
             )
         runtime = svc.runtimes.image_runtime(pkg)
+
+        want_stream = req.stream or request.headers.get("accept", "").lower() == "text/event-stream"
+        want_shm = (req.response_format or "").lower() == "shm" or request.headers.get("x-pantry-transport", "").lower() == "shm"
+
+        if want_stream:
+            async def _stream_generator() -> AsyncIterator[str]:
+                queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+                loop = asyncio.get_running_loop()
+
+                def _on_step(step: int, total: int, preview_bytes: bytes | None, width: int, height: int) -> None:
+                    step_payload: dict[str, Any] = {
+                        "type": "step",
+                        "step": step,
+                        "total": total,
+                        "width": width,
+                        "height": height,
+                    }
+                    if preview_bytes:
+                        if want_shm:
+                            desc = store.shm.allocate(
+                                preview_bytes,
+                                format="png",
+                                prefix="step",
+                                metadata={"step": step, "total": total, "width": width, "height": height},
+                            )
+                            step_payload["shm"] = desc.to_dict()
+                        else:
+                            step_payload["b64_json"] = base64.b64encode(preview_bytes).decode("ascii")
+                    loop.call_soon_threadsafe(queue.put_nowait, ("step", step_payload))
+
+                def _worker_fn() -> list[dict]:
+                    return runtime.generate(
+                        pkg,
+                        prompt=req.prompt,
+                        size=req.size,
+                        n=req.n,
+                        response_format=req.response_format,
+                        seed=req.seed,
+                        num_inference_steps=req.steps,
+                        guidance=req.guidance,
+                        negative_prompt=req.negative_prompt,
+                        step_callback=_on_step,
+                    )
+
+                async def _worker_task() -> None:
+                    try:
+                        async def _sched_call() -> list[dict]:
+                            return await asyncio.to_thread(_worker_fn)
+                        gen_data = await svc.scheduler.run(req.priority, _sched_call, modality="image")
+                        if want_shm:
+                            for item in gen_data:
+                                img_path = Path(item["path"]) if "path" in item else None
+                                if img_path and img_path.is_file():
+                                    raw_bytes = img_path.read_bytes()
+                                    desc = store.shm.allocate(
+                                        raw_bytes,
+                                        format="png",
+                                        prefix="img",
+                                        metadata={
+                                            "width": item.get("width"),
+                                            "height": item.get("height"),
+                                        },
+                                    )
+                                    item["shm"] = desc.to_dict()
+                                    if (req.response_format or "").lower() == "shm":
+                                        item.pop("b64_json", None)
+                        await queue.put(("done", gen_data))
+                    except Exception as exc:
+                        await queue.put(("error", str(exc)))
+
+                task = asyncio.create_task(_worker_task())
+                while True:
+                    kind, payload = await queue.get()
+                    if kind == "step":
+                        yield f"event: step\ndata: {json.dumps(payload)}\n\n"
+                    elif kind == "done":
+                        done_payload = {
+                            "type": "done",
+                            "created": int(time.time()),
+                            "model": req.model,
+                            "package_id": pkg.id,
+                            "data": payload,
+                        }
+                        yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
+                        break
+                    elif kind == "error":
+                        err_payload = {"type": "error", "error": payload}
+                        yield f"event: error\ndata: {json.dumps(err_payload)}\n\n"
+                        break
+                await task
+
+            return StreamingResponse(_stream_generator(), media_type="text/event-stream")
 
         async def _gen() -> list[dict]:
             return await asyncio.to_thread(
@@ -485,7 +578,6 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             # instead of a bare ASGI 500.
             raise HTTPException(status_code=503, detail=str(e)) from e
 
-        want_shm = (req.response_format or "").lower() == "shm" or request.headers.get("x-pantry-transport", "").lower() == "shm"
         if want_shm:
             for item in data:
                 img_path = Path(item["path"]) if "path" in item else None

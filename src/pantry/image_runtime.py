@@ -218,6 +218,7 @@ class EchoImageRuntime:
         num_inference_steps: int | None = None,
         guidance: float | None = None,
         negative_prompt: str | None = None,
+        step_callback: Any | None = None,
         **kwargs: Any,
     ) -> list[dict]:
         width, height = _parse_size(size)
@@ -225,9 +226,14 @@ class EchoImageRuntime:
         color = _color_from_prompt(prompt.strip() or "pantry")
         artifacts = self.store.artifacts_dir / manifest.id
         artifacts.mkdir(parents=True, exist_ok=True)
+        total_steps = num_inference_steps or 4
 
         out: list[dict] = []
         for i in range(n):
+            if step_callback:
+                for s in range(1, total_steps + 1):
+                    preview_png = _solid_png(max(32, width // 2), max(32, height // 2), color)
+                    step_callback(s, total_steps, preview_png, max(32, width // 2), max(32, height // 2))
             png = _solid_png(width, height, color)
             path = artifacts / f"echo-{width}x{height}-{i}.png"
             path.write_bytes(png)
@@ -309,6 +315,8 @@ class MFluxImageRuntime:
         num_inference_steps: int | None = None,
         guidance: float | None = None,
         negative_prompt: str | None = None,
+        step_callback: Any | None = None,
+        **kwargs: Any,
     ) -> list[dict]:
         import time
 

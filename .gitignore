@@ -9,3 +9,5 @@ build/
 .coverage
 htmlcov/
 .DS_Store
+*.key
+.webui_secret_key

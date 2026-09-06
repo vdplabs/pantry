@@ -195,6 +195,7 @@ class ImageGenerateRequest(BaseModel):
     guidance: float | None = Field(default=None, ge=0.0, le=20.0)
     negative_prompt: str | None = None
     seed: int | None = None
+    stream: bool = False
 
 
 class AudioGenerateRequest(BaseModel):

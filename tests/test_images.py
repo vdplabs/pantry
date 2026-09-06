@@ -451,3 +451,49 @@ def test_cli_image_local(tmp_path):
     assert res.exit_code == 0
     assert out_file.is_file()
     assert out_file.read_bytes().startswith(b"\x89PNG")
+
+
+def test_images_generations_streaming_sse(client):
+    r = client.post(
+        "/v1/images/generations",
+        json={
+            "model": "image-compact",
+            "prompt": "a tranquil forest",
+            "size": "512x512",
+            "n": 1,
+            "steps": 4,
+            "stream": True,
+        },
+        headers={"Accept": "text/event-stream"},
+    )
+    assert r.status_code == 200
+    assert "text/event-stream" in r.headers["content-type"]
+    text = r.text
+    assert "event: step" in text
+    assert "event: done" in text
+    lines = [line for line in text.splitlines() if line.startswith("data: ")]
+    assert len(lines) >= 5
+
+
+def test_images_generations_streaming_sse_shm(client):
+    r = client.post(
+        "/v1/images/generations",
+        json={
+            "model": "image-compact",
+            "prompt": "a tranquil forest with shm",
+            "size": "512x512",
+            "n": 1,
+            "steps": 4,
+            "stream": True,
+            "response_format": "shm",
+        },
+        headers={"Accept": "text/event-stream", "X-Pantry-Transport": "shm"},
+    )
+    assert r.status_code == 200
+    assert "text/event-stream" in r.headers["content-type"]
+    text = r.text
+    assert "event: step" in text
+    assert "shm" in text
+    assert "event: done" in text
+
+
