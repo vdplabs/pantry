@@ -497,3 +497,93 @@ def test_images_generations_streaming_sse_shm(client):
     assert "event: done" in text
 
 
+def test_mflux_image_runtime_step_callback(tmp_path, monkeypatch):
+    """Verify that MFluxImageRuntime registers and invokes step_callback via in-loop callbacks."""
+    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 0.0)
+    monkeypatch.setattr("pantry.image_runtime._host_ram_gb", lambda: 16.0)
+    monkeypatch.setattr("pantry.image_runtime._enable_mflux_low_ram", lambda *_a, **_k: None)
+
+    store = PackageStore(tmp_path / "home")
+    store.ensure()
+    man = PackageManifest(
+        id="vdplabs.z-image-turbo.standard.v1",
+        family="z-image",
+        modalities=["image_gen"],
+        ram_gb_min=10.0,
+        bits_approx=4.0,
+        quant_method="mflux-4bit",
+        runtime={"primary": "mflux", "hf_repo": "test/z-image"},
+    )
+
+    class MockCallbacks:
+        def __init__(self):
+            self.in_loop = []
+
+        def register(self, cb):
+            self.in_loop.append(cb)
+
+    mock_callbacks = MockCallbacks()
+
+    class MockModel:
+        def __init__(self):
+            self.text_encoder = object()
+            self.transformer = object()
+            self.vae = object()
+            self.callbacks = mock_callbacks
+
+        def generate_image(self, **kwargs):
+            # Simulate mflux calling in_loop callbacks
+            for t in range(kwargs.get("num_inference_steps", 4)):
+                for cb in list(self.callbacks.in_loop):
+                    config = MagicMock()
+                    config.num_inference_steps = 4
+                    config.height = 512
+                    config.width = 512
+                    cb.call_in_loop(t, 42, "prompt", MagicMock(), config, None)
+            from PIL import Image
+            return Image.new("RGB", (64, 64), color="blue")
+
+    steps_recorded = []
+
+    def on_step(step, total, preview_bytes, width, height):
+        steps_recorded.append((step, total, len(preview_bytes), width, height))
+
+    from unittest.mock import MagicMock, patch
+
+    mock_pil_img = MagicMock()
+    mock_pil_img.size = (64, 64)
+    mock_pil_img.width = 64
+    mock_pil_img.height = 64
+    mock_pil_img.copy.return_value = mock_pil_img
+
+    class DummyInLoop:
+        pass
+
+    with (
+        patch.dict(
+            "sys.modules",
+            {
+                "mflux": MagicMock(),
+                "mflux.callbacks.callback": MagicMock(InLoopCallback=DummyInLoop),
+                "mflux.models.common.config.model_config": MagicMock(),
+                "mflux.models.z_image.variants.z_image": MagicMock(ZImage=lambda **_k: MockModel()),
+                "mflux.models.z_image.latent_creator.z_image_latent_creator": MagicMock(),
+                "mflux.models.common.vae.vae_util": MagicMock(),
+                "mflux.utils.image_util": MagicMock(ImageUtil=MagicMock(to_pil=lambda _dec: mock_pil_img)),
+                "mlx.core": MagicMock(),
+            },
+        )
+    ):
+        rt = MFluxImageRuntime(store)
+        res = rt.generate(man, prompt="test prompt", size="512x512", num_inference_steps=4, step_callback=on_step)
+
+    assert len(res) == 1
+    assert len(steps_recorded) == 4
+    assert steps_recorded[0][0] == 1
+    assert steps_recorded[0][1] == 4
+    assert steps_recorded[3][0] == 4
+    # Callback is cleaned up after generation
+    assert len(mock_callbacks.in_loop) == 0
+
+
+

@@ -418,6 +418,75 @@ class MFluxImageRuntime:
                     if seed is not None
                     else int(time.time() * 1000) % (2**31 - 1) + i
                 )
+
+                step_cb_obj = None
+                if step_callback:
+                    from mflux.callbacks.callback import InLoopCallback
+
+                    class _MFluxStepCallback(InLoopCallback):
+                        def __init__(self, m: Any, is_z: bool, cb: Any) -> None:
+                            self.model = m
+                            self.is_zimage = is_z
+                            self.cb = cb
+
+                        def call_in_loop(
+                            self,
+                            t: int,
+                            seed: int,
+                            prompt: str,
+                            latents: Any,
+                            config: Any,
+                            time_steps: Any,
+                        ) -> None:
+                            if not self.cb:
+                                return
+                            step = t + 1
+                            total = config.num_inference_steps
+                            try:
+                                if self.is_zimage:
+                                    from mflux.models.z_image.latent_creator.z_image_latent_creator import ZImageLatentCreator
+
+                                    unpacked = ZImageLatentCreator.unpack_latents(latents, config.height, config.width)
+                                else:
+                                    from mflux.models.flux.latent_creator.flux_latent_creator import FluxLatentCreator
+
+                                    unpacked = FluxLatentCreator.unpack_latents(
+                                        latents=latents, height=config.height, width=config.width
+                                    )
+
+                                from mflux.models.common.vae.vae_util import VAEUtil
+
+                                decoded = VAEUtil.decode(
+                                    vae=self.model.vae,
+                                    latent=unpacked,
+                                    tiling_config=getattr(self.model, "tiling_config", None),
+                                )
+                                from mflux.utils.image_util import ImageUtil
+
+                                pil_img = ImageUtil.to_pil(decoded)
+
+                                w, h = pil_img.size
+                                if max(w, h) > 512:
+                                    preview = pil_img.copy()
+                                    preview.thumbnail((512, 512))
+                                else:
+                                    preview = pil_img
+
+                                import io
+
+                                buf = io.BytesIO()
+                                preview.convert("RGB").save(buf, format="JPEG", quality=75)
+                                self.cb(step, total, buf.getvalue(), preview.width, preview.height)
+                                import mlx.core as mx
+
+                                mx.clear_cache()
+                            except Exception as exc:
+                                import sys
+
+                                print(f"[pantry] Error in diffusion step callback: {exc}", file=sys.stderr)
+
+                    step_cb_obj = _MFluxStepCallback(model, is_zimage, step_callback)
+
                 reload_fn = None
                 if is_zimage:
 
@@ -425,19 +494,33 @@ class MFluxImageRuntime:
                         fresh = _load_zimage()
                         self._models[model_key] = fresh
                         _enable_mflux_low_ram(fresh)
+                        if step_cb_obj:
+                            step_cb_obj.model = fresh
+                            if hasattr(fresh, "callbacks"):
+                                fresh.callbacks.register(step_cb_obj)
                         return fresh
 
-                img = self._generate_image_with_cold_start_retry(
-                    model,
-                    seed=current_seed,
-                    prompt=prompt,
-                    steps=steps,
-                    height=height,
-                    width=width,
-                    guidance=guidance,
-                    negative_prompt=negative_prompt,
-                    reload_model=reload_fn,
-                )
+                if step_cb_obj and hasattr(model, "callbacks"):
+                    model.callbacks.register(step_cb_obj)
+
+                try:
+                    img = self._generate_image_with_cold_start_retry(
+                        model,
+                        seed=current_seed,
+                        prompt=prompt,
+                        steps=steps,
+                        height=height,
+                        width=width,
+                        guidance=guidance,
+                        negative_prompt=negative_prompt,
+                        reload_model=reload_fn,
+                    )
+                finally:
+                    cur_m = self._models.get(model_key, model)
+                    if step_cb_obj and hasattr(cur_m, "callbacks") and step_cb_obj in cur_m.callbacks.in_loop:
+                        cur_m.callbacks.in_loop.remove(step_cb_obj)
+                    if step_cb_obj and hasattr(model, "callbacks") and step_cb_obj in model.callbacks.in_loop:
+                        model.callbacks.in_loop.remove(step_cb_obj)
                 # Cold-start retry may have replaced a gutted cached model.
                 model = self._models.get(model_key, model)
                 path = artifacts / f"mflux-{width}x{height}-{int(time.time())}-{i}.png"
