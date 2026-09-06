@@ -329,6 +329,85 @@ def health(
 
 
 @app.command()
+def storage(
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME (metadata)"),
+    data: Path | None = typer.Option(None, "--data", help="Override PANTRY_DATA (blobs + weights)"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    as_json: bool = typer.Option(False, "--json", help="Output raw JSON"),
+) -> None:
+    """Inspect Content-Addressed Storage (CAS) deduplication telemetry and disk savings."""
+    client, base_url = _get_daemon_client(host=host, port=port)
+    try:
+        with client:
+            r = client.get(f"{base_url}/v1/storage", timeout=2.0)
+            if r.status_code == 200:
+                stats = r.json()
+            else:
+                store = _store(home, data)
+                stats = store.cas.get_stats()
+    except Exception:
+        store = _store(home, data)
+        stats = store.cas.get_stats()
+
+    if as_json:
+        typer.echo(json.dumps(stats, indent=2))
+        return
+
+    def _fmt(b: int) -> str:
+        val = float(b)
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if val < 1024 or unit == "TB":
+                return f"{val:.1f} {unit}" if unit != "B" else f"{int(val)} B"
+            val /= 1024
+        return f"{val:.1f} B"
+
+    typer.echo(f"CAS Root:       {stats.get('data_root')}")
+    typer.echo(f"Total Packages: {stats.get('total_packages')}")
+    typer.echo(f"Total Chunks:   {stats.get('total_chunks')}")
+    typer.echo(f"Apparent Size:  {_fmt(stats.get('apparent_size_bytes', 0))}")
+    typer.echo(f"Physical Size:  {_fmt(stats.get('physical_size_bytes', 0))}")
+    typer.echo(f"Deduplication:  {stats.get('dedup_ratio', 1.0)}x")
+    typer.echo(f"Disk Saved:     {_fmt(stats.get('dedup_saved_bytes', 0))}")
+
+
+@app.command()
+def prune(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview reclaimable chunks without deleting"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME (metadata)"),
+    data: Path | None = typer.Option(None, "--data", help="Override PANTRY_DATA (blobs + weights)"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+) -> None:
+    """Reclaim unreferenced model weight chunks (refcount == 0)."""
+    client, base_url = _get_daemon_client(host=host, port=port)
+    try:
+        with client:
+            r = client.post(f"{base_url}/v1/storage/prune", json={"dry_run": dry_run}, timeout=10.0)
+            if r.status_code == 200:
+                res = r.json()
+            else:
+                store = _store(home, data)
+                count, bytes_rec = store.cas.prune(dry_run=dry_run)
+                res = {"ok": True, "dry_run": dry_run, "chunks_pruned": count, "bytes_reclaimed": bytes_rec}
+    except Exception:
+        store = _store(home, data)
+        count, bytes_rec = store.cas.prune(dry_run=dry_run)
+        res = {"ok": True, "dry_run": dry_run, "chunks_pruned": count, "bytes_reclaimed": bytes_rec}
+
+    def _fmt(b: int) -> str:
+        val = float(b)
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if val < 1024 or unit == "TB":
+                return f"{val:.1f} {unit}" if unit != "B" else f"{int(val)} B"
+            val /= 1024
+        return f"{val:.1f} B"
+
+    action = "reclaimable" if dry_run else "reclaimed"
+    typer.echo(f"{res.get('chunks_pruned', 0)} chunks {action} ({_fmt(res.get('bytes_reclaimed', 0))})")
+
+
+@app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(18787, "--port"),

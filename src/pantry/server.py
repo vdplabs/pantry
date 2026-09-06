@@ -29,6 +29,9 @@ from pantry.schemas import (
     LoadBody,
     PackageManifest,
     PullBody,
+    StoragePruneRequest,
+    StoragePruneResponse,
+    StorageStatsResponse,
     UnloadBody,
 )
 from pantry.store import PackageStore
@@ -112,7 +115,7 @@ class Service:
 
     def resolve_req(self, req: CapabilityRequest) -> dict[str, Any]:
         try:
-            result = resolve(req, self.packages(), is_ready=self._ready)
+            result = resolve(req, self.packages(), is_ready=self._ready, store=self.store)
         except ResolveError as e:
             raise HTTPException(status_code=404, detail=e.message) from e
         return result.model_dump()
@@ -153,12 +156,14 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "memory": "/v1/memory",
             "resolve": "/v1/resolve",
             "shm": "/v1/shm",
+            "storage": "/v1/storage",
         }
 
     @app.get("/v1/health")
     def health() -> dict[str, Any]:
         state = store.read_state()
         mem = memory_snapshot(apply_limits=False)
+        cas_stats = store.cas.get_stats()
         return {
             "ok": True,
             "name": "pantry",
@@ -172,6 +177,12 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 "dir": str(store.shm_dir),
                 "active_buffers": len(list(store.shm_dir.glob("*.bin"))),
             },
+            "cas": {
+                "dir": str(store.cas_dir),
+                "total_chunks": cas_stats.get("total_chunks", 0),
+                "dedup_ratio": cas_stats.get("dedup_ratio", 1.0),
+                "dedup_saved_bytes": cas_stats.get("dedup_saved_bytes", 0),
+            },
             "memory": {
                 "pressure": mem.get("pressure"),
                 "active_bytes": mem.get("active_bytes"),
@@ -184,6 +195,20 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 "message": mem.get("message"),
                 "limits": getattr(app.state, "memory_limits", {}) or mem.get("limits"),
             },
+        }
+
+    @app.get("/v1/storage", response_model=StorageStatsResponse)
+    def storage_stats() -> dict[str, Any]:
+        return store.cas.get_stats()
+
+    @app.post("/v1/storage/prune", response_model=StoragePruneResponse)
+    def storage_prune(req: StoragePruneRequest = StoragePruneRequest()) -> dict[str, Any]:
+        pruned_count, reclaimed_bytes = store.cas.prune(dry_run=req.dry_run)
+        return {
+            "ok": True,
+            "dry_run": req.dry_run,
+            "chunks_pruned": pruned_count,
+            "bytes_reclaimed": reclaimed_bytes,
         }
 
     @app.get("/v1/memory")

@@ -95,7 +95,32 @@ class ResolveResult(BaseModel):
     weights_ready: bool = False
     ram_gb_min: float = 1.0
     approx_bytes: int = 0
+    apparent_size_bytes: int = 0
+    download_size_bytes: int = 0
+    shared_existing_bytes: int = 0
     plan: dict[str, Any] = Field(default_factory=dict)
+
+
+class StorageStatsResponse(BaseModel):
+    cas_enabled: bool = True
+    data_root: str
+    total_packages: int
+    apparent_size_bytes: int
+    physical_size_bytes: int
+    dedup_saved_bytes: int
+    dedup_ratio: float
+    total_chunks: int
+
+
+class StoragePruneRequest(BaseModel):
+    dry_run: bool = False
+
+
+class StoragePruneResponse(BaseModel):
+    ok: bool = True
+    dry_run: bool = False
+    chunks_pruned: int = 0
+    bytes_reclaimed: int = 0
 
 
 class ChatMessage(BaseModel):

@@ -48,6 +48,54 @@ class PackageStore:
         return d
 
     @property
+    def cas_dir(self) -> Path:
+        d = self.data_root / "cas"
+        d.mkdir(parents=True, exist_ok=True)
+        try:
+            d.chmod(0o700)
+        except OSError:
+            pass
+        return d
+
+    @property
+    def cas(self):
+        from pantry.cas import CasManager
+
+        return CasManager(self.cas_dir)
+
+    def recipe_path(self, package_id: str) -> Path:
+        safe = package_id.replace("/", "__")
+        return self.package_dir(safe) / "recipe.json"
+
+    def load_recipe(self, package_id: str):
+        from pantry.recipe import PackageRecipe
+
+        p = self.recipe_path(package_id)
+        if not p.is_file():
+            return None
+        try:
+            return PackageRecipe.load(p)
+        except Exception:
+            return None
+
+    def ingest_package_into_cas(self, package_id: str, weights_dir: Path):
+        from pantry.recipe import RecipeAssembler
+
+        recipe = RecipeAssembler.build_recipe(package_id, weights_dir, self.cas, store_chunks=True)
+        recipe.save(self.recipe_path(package_id))
+        return recipe
+
+    def materialize_package(self, package_id: str, dest_dir: Path | None = None) -> Path:
+        from pantry.recipe import RecipeAssembler
+
+        recipe = self.load_recipe(package_id)
+        if recipe is None:
+            raise FileNotFoundError(f"no recipe.json found for package {package_id}")
+        target = dest_dir or self.weights_dir(package_id)
+        RecipeAssembler.materialize_recipe(recipe, target, self.cas)
+        return target
+
+    @property
     def shm(self):
         from pantry.shm import ShmManager
 
@@ -266,6 +314,20 @@ class PackageStore:
         if self._is_dir_weights_complete(local, manifest):
             return local
 
+        # 1b. Check if CAS recipe exists and can be materialized into local weights
+        recipe = self.load_recipe(manifest.id)
+        if recipe is not None:
+            all_chunks = all(
+                self.cas.has_chunk(ch.sha256)
+                for f in recipe.files
+                for ch in f.chunks
+            )
+            if all_chunks:
+                try:
+                    return self.materialize_package(manifest.id, dest_dir=local)
+                except Exception:
+                    pass
+
         # 2. Check shared Hugging Face cache
         if manifest.runtime.hf_repo:
             snap = self.find_hf_snapshot(manifest.runtime.hf_repo, manifest.runtime.hf_revision)
@@ -278,7 +340,27 @@ class PackageStore:
         primary = (manifest.runtime.primary or "echo").lower()
         if primary == "echo" or primary.startswith("echo_"):
             return True
-        return self.resolve_weights_path(manifest) is not None
+
+        local = self.weights_dir(manifest.id)
+        if self._is_dir_weights_complete(local, manifest):
+            return True
+
+        recipe = self.load_recipe(manifest.id)
+        if recipe is not None:
+            all_chunks = all(
+                self.cas.has_chunk(ch.sha256)
+                for f in recipe.files
+                for ch in f.chunks
+            )
+            if all_chunks:
+                return True
+
+        if manifest.runtime.hf_repo:
+            snap = self.find_hf_snapshot(manifest.runtime.hf_repo, manifest.runtime.hf_revision)
+            if snap and self._is_dir_weights_complete(snap, manifest):
+                return True
+
+        return False
 
     def install_from_bundled_catalog(self, package_id: str) -> PackageManifest | None:
         from pantry.config import bundled_catalog_dir

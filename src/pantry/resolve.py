@@ -57,6 +57,7 @@ def resolve(
     packages: list[PackageManifest],
     *,
     is_ready: ReadyFn | None = None,
+    store: Any = None,
 ) -> ResolveResult:
     """Pick a package without crossing incompatible template/tool contracts."""
     modality_key = _normalize_modality(request.modality)
@@ -174,6 +175,31 @@ def resolve(
             alias = "embed-extreme"
 
     approx = _approx_package_bytes(chosen)
+    apparent_bytes = approx
+    is_ready_bool = bool(plan.get("weights_ready", False))
+    download_bytes = 0 if is_ready_bool else approx
+    shared_bytes = approx if is_ready_bool else 0
+
+    if store is not None:
+        try:
+            recipe = store.load_recipe(chosen.id)
+            if recipe is not None:
+                apparent_bytes = recipe.total_uncompressed_bytes
+                if is_ready_bool:
+                    download_bytes = 0
+                    shared_bytes = apparent_bytes
+                else:
+                    needed = sum(
+                        ch.length
+                        for f in recipe.files
+                        for ch in f.chunks
+                        if not store.cas.has_chunk(ch.sha256)
+                    )
+                    download_bytes = needed
+                    shared_bytes = max(0, apparent_bytes - download_bytes)
+        except Exception:
+            pass
+
     return ResolveResult(
         package_id=chosen.id,
         alias=alias,
@@ -181,9 +207,12 @@ def resolve(
             f"matched modality={modality_key} tier={chosen.quality_tier.value} "
             f"family={chosen.family} runtime={chosen.runtime.primary}"
         ),
-        weights_ready=bool(plan.get("weights_ready", False)),
+        weights_ready=is_ready_bool,
         ram_gb_min=float(chosen.ram_gb_min),
         approx_bytes=approx,
+        apparent_size_bytes=apparent_bytes,
+        download_size_bytes=download_bytes,
+        shared_existing_bytes=shared_bytes,
         plan=plan,
     )
 

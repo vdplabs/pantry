@@ -77,6 +77,17 @@ def pull_package(store: PackageStore, package_id: str) -> dict:
     if not store._is_dir_weights_complete(snapshot_path, man):
         raise PullError(f"weights missing after download: {snapshot_path}")
 
+    recipe = None
+    try:
+        recipe = store.ingest_package_into_cas(man.id, snapshot_path)
+    except Exception:
+        pass
+
+    apparent = recipe.total_uncompressed_bytes if recipe else _dir_size(snapshot_path)
+    unique = recipe.unique_cas_bytes if recipe else _dir_size(snapshot_path)
+    shared = recipe.shared_cas_bytes if recipe else 0
+    ratio = recipe.dedup_ratio if recipe else 1.0
+
     return {
         "package_id": man.id,
         "status": "ready",
@@ -84,6 +95,11 @@ def pull_package(store: PackageStore, package_id: str) -> dict:
         "weights_path": str(snapshot_path),
         "hf_repo": man.runtime.hf_repo,
         "bytes_on_disk": _dir_size(snapshot_path),
+        "recipe_present": recipe is not None,
+        "apparent_size_bytes": apparent,
+        "unique_cas_bytes": unique,
+        "shared_cas_bytes": shared,
+        "dedup_ratio": ratio,
     }
 
 
