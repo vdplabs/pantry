@@ -125,6 +125,36 @@ def _enable_mflux_low_ram(model: Any, *, cache_limit_bytes: int = 10**9) -> None
         pass
 
 
+def _warmup_vae(model: Any, is_zimage: bool) -> None:
+    """Pre-compile VAE decoder Metal shaders on load with a tiny 64x64 latent.
+
+    The first VAE decode compiles dozens of ResNet and attention Metal shaders (~9s).
+    Pre-warming ensures that in-loop step callbacks take only ~35ms and never trip
+    Metal's 10-second command buffer timeout watchdog.
+    """
+    try:
+        import mlx.core as mx
+
+        if is_zimage:
+            from mflux.models.z_image.latent_creator.z_image_latent_creator import ZImageLatentCreator
+
+            noise = ZImageLatentCreator.create_noise(0, 64, 64)
+            unpacked = ZImageLatentCreator.unpack_latents(noise, 64, 64)
+        else:
+            from mflux.models.flux.latent_creator.flux_latent_creator import FluxLatentCreator
+
+            noise = FluxLatentCreator.create_noise(0, 64, 64)
+            unpacked = FluxLatentCreator.unpack_latents(latents=noise, height=64, width=64)
+
+        from mflux.models.common.vae.vae_util import VAEUtil
+
+        dec = VAEUtil.decode(vae=model.vae, latent=unpacked, tiling_config=None)
+        mx.eval(dec)
+        mx.clear_cache()
+    except Exception:
+        pass
+
+
 def _looks_prequantized(manifest: PackageManifest, source: str | None) -> bool:
     method = (manifest.quant_method or "").lower()
     blob = f"{method} {source or ''} {manifest.runtime.hf_repo or ''}".lower()
@@ -294,14 +324,12 @@ class MFluxImageRuntime:
             return
 
         swap = _swap_used_gb()
-        swap_threshold = 7.5 if (host is not None and host <= 18) else 8.5
-        if swap is not None and swap >= swap_threshold:
+        if swap is not None and swap >= 8.0:
             raise RuntimeError(
-                f"refusing cold image load: this Mac already has ~{swap:.1f} GB of swap in use "
-                f"(limit is {swap_threshold:.1f} GB on {host or 16:.0f} GB RAM). "
+                f"refusing cold image load: this Mac already has ~{swap:.1f} GB of swap in use. "
                 "Z-Image / FLUX cold-starts are unreliable under that pressure — Metal will "
                 "often GPU-timeout while compiling shaders. Free memory first: "
-                "`pantry unload`, quit heavy apps (browsers, IDEs), wait for `sysctl vm.swapusage` to drop, "
+                "`pantry unload`, quit heavy apps, wait for `sysctl vm.swapusage` to drop, "
                 "or reboot. Once an image pack is warm (menu bar → Loaded), retries are allowed "
                 "even with residual swap."
             )
@@ -375,7 +403,10 @@ class MFluxImageRuntime:
                     del self._models[model_key]
                     cached = None
                 if cached is None:
-                    self._models[model_key] = _load_zimage()
+                    fresh = _load_zimage()
+                    self._models[model_key] = fresh
+                    _enable_mflux_low_ram(fresh)
+                    _warmup_vae(fresh, is_zimage=True)
 
                 model = self._models[model_key]
                 _enable_mflux_low_ram(model)
@@ -397,18 +428,22 @@ class MFluxImageRuntime:
                     q = 8 if quantize is None else quantize
                     alias = "dev" if "dev" in manifest.id.lower() else "schnell"
                     if hasattr(Flux1, "from_name"):
-                        self._models[model_key] = Flux1.from_name(
+                        loaded_m = Flux1.from_name(
                             model_name=alias, quantize=q
                         )
                     elif hasattr(Flux1, "from_alias"):
-                        self._models[model_key] = Flux1.from_alias(
+                        loaded_m = Flux1.from_alias(
                             alias=alias, quantize=q
                         )
                     else:
                         from mflux.models.common.config.model_config import ModelConfig
 
                         cfg = ModelConfig.dev() if alias == "dev" else ModelConfig.schnell()
-                        self._models[model_key] = Flux1(model_config=cfg, quantize=q)
+                        loaded_m = Flux1(model_config=cfg, quantize=q)
+
+                    self._models[model_key] = loaded_m
+                    _enable_mflux_low_ram(loaded_m)
+                    _warmup_vae(loaded_m, is_zimage=False)
 
                 model = self._models[model_key]
                 _enable_mflux_low_ram(model)
@@ -493,8 +528,11 @@ class MFluxImageRuntime:
                                 self.cb(step, total, buf.getvalue(), preview.width, preview.height)
                                 mx.clear_cache()
                             except Exception as exc:
-                                import sys
+                                if _is_metal_timeout(exc):
+                                    raise
+                                import sys, traceback
 
+                                traceback.print_exc(file=sys.stderr)
                                 print(f"[pantry] Diffusion step {step}/{total} preview skipped: {exc}", file=sys.stderr)
 
                     step_cb_obj = _MFluxStepCallback(model, is_zimage, step_callback)
@@ -506,6 +544,7 @@ class MFluxImageRuntime:
                         fresh = _load_zimage()
                         self._models[model_key] = fresh
                         _enable_mflux_low_ram(fresh)
+                        _warmup_vae(fresh, is_zimage=True)
                         if step_cb_obj:
                             step_cb_obj.model = fresh
                             if hasattr(fresh, "callbacks"):
