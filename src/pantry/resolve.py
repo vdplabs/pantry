@@ -31,6 +31,8 @@ def _normalize_modality(modality: str) -> str:
         return "image_gen"
     if key in {"embed", "embeddings", "embedding"}:
         return "embed"
+    if key in {"video", "video_gen"}:
+        return "video"
     return key
 
 
@@ -253,6 +255,8 @@ def find_by_model_string(
         "whisper-standard": (QualityTier.standard, "stt"),
         "transcribe-compact": (QualityTier.compact, "stt"),
         "transcribe-standard": (QualityTier.standard, "stt"),
+        "video-compact": (QualityTier.compact, "video"),
+        "video-standard": (QualityTier.standard, "video"),
     }
     if key in soft:
         tier, modality_key = soft[key]
@@ -264,6 +268,15 @@ def find_by_model_string(
         # Honest music scaffold is compact-only until a real engine ships.
         # music-standard soft-falls back to compact rather than failing closed.
         if not tiered and modality_key == "music" and tier == QualityTier.standard:
+            tiered = [
+                p
+                for p in packages
+                if p.quality_tier == QualityTier.compact
+                and _matches_modality(p, modality_key)
+            ]
+        # Video scaffold is compact-only until real weights ship.
+        # video-standard soft-falls back to compact rather than failing closed.
+        if not tiered and modality_key == "video" and tier == QualityTier.standard:
             tiered = [
                 p
                 for p in packages

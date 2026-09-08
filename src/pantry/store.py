@@ -177,13 +177,19 @@ class PackageStore:
                     )
         return manifest
 
-    def seed_from_catalog(self, catalog_dir: Path) -> list[str]:
+    def seed_from_catalog(self, catalog_dir: Path, overwrite: bool = False) -> list[str]:
         installed: list[str] = []
         if not catalog_dir.is_dir():
             return installed
         for man in sorted(catalog_dir.glob("*/manifest.json")):
-            m = self.install_manifest_file(man)
-            installed.append(m.id)
+            try:
+                candidate = PackageManifest.model_validate_json(man.read_text(encoding="utf-8"))
+                if not overwrite and self.load_manifest(candidate.id) is not None:
+                    continue
+                m = self.install_manifest_file(man)
+                installed.append(m.id)
+            except Exception:
+                continue
         return installed
 
     def mark_loaded(self, package_id: str, *, pin: bool = False) -> None:

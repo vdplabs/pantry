@@ -113,7 +113,7 @@ def init_cmd(
     """Create library dirs and seed bundled catalog manifests."""
     store = _store(home, data)
     cat = Path(catalog) if catalog else bundled_catalog_dir()
-    installed = store.seed_from_catalog(cat)
+    installed = store.seed_from_catalog(cat, overwrite=True)
     typer.echo(f"home={store.root}")
     typer.echo(f"data={store.data_root}")
     typer.echo(f"seeded {len(installed)} package(s) from {cat}")
@@ -440,11 +440,11 @@ def serve(
     import time
 
     store = _store(home, data)
-    if not store.list_manifests():
-        cat = bundled_catalog_dir()
-        if cat.is_dir():
-            store.seed_from_catalog(cat)
-            typer.echo(f"auto-seeded catalog from {cat}")
+    cat = bundled_catalog_dir()
+    if cat.is_dir():
+        seeded = store.seed_from_catalog(cat, overwrite=False)
+        if seeded:
+            typer.echo(f"auto-seeded {len(seeded)} new package(s) from catalog: {', '.join(seeded)}")
     fastapi_app = create_app(store, worker_isolation=worker_isolation)
     typer.echo(
         f"pantry serve http://{host}:{port}  home={store.root}  data={store.data_root}"

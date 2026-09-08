@@ -25,7 +25,7 @@ def list_model_entries(
     for p in store.list_manifests():
         primary_runtime = (p.runtime.primary or "").lower()
         is_echo = "echo" in primary_runtime or "demo" in p.family.lower()
-        if not include_demos and (not p.listable or is_echo):
+        if not include_demos and (not p.listable or (is_echo and "video" not in p.modalities)):
             continue
         ready = store.weights_ready(p)
         if not include_unready and not ready:
