@@ -1,0 +1,38 @@
+{
+  "id": "vdplabs.ltx-video.standard.v1",
+  "family": "ltx-video",
+  "role": "video",
+  "params_b": 2.0,
+  "quality_tier": "standard",
+  "quant_method": "bf16",
+  "bits_approx": 16.0,
+  "ram_gb_min": 12.0,
+  "ram_gb_comfortable": 16.0,
+  "modalities": [
+    "video"
+  ],
+  "context_max": 512,
+  "license": "other",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": [
+    "video-standard",
+    "video",
+    "ltx-video",
+    "ltx-video-2b"
+  ],
+  "listable": true,
+  "runtime": {
+    "primary": "ltx_video",
+    "hf_repo": "Lightricks/LTX-Video",
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "vbench-2025",
+    "score": 0.82,
+    "notes": "Lightricks LTX-Video 2B diffusion transformer text-to-video runtime on Apple Silicon."
+  },
+  "blobs": [],
+  "system_preamble": ""
+}

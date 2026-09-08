@@ -14,7 +14,7 @@
   "chat_template_id": "none",
   "template_family": "none",
   "tool_protocol": null,
-  "aliases": ["video-compact", "video", "ltx-video", "echo-video"],
+  "aliases": ["video-compact", "echo-video", "demo-video"],
   "runtime": {
     "primary": "echo_video",
     "adapters": [],
