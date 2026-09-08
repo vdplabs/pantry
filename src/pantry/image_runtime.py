@@ -357,13 +357,14 @@ class MFluxImageRuntime:
         model_warm = cached is not None and _mflux_model_intact(cached)
         self._preflight(manifest, model_warm=model_warm)
 
-        width, height = _parse_size(size)
+        target_width, target_height = _parse_size(size)
+        diff_width, diff_height = target_width, target_height
         host = _host_ram_gb()
         # Memory-tiered pixel budget to prevent Metal GPU command buffer timeouts:
         # - ≤18 GB unified RAM (e.g. 8/16 GB Macs): scale down to ~1 MP (1024x1024) while strictly preserving aspect ratio.
         # - 19–36 GB unified RAM (e.g. 24/36 GB Macs): cap at ~4.2 MP (2048x2048 / 2K QHD).
         # - >36 GB unified RAM (e.g. 48/64/96/128/192 GB Mac Studio / Max): unconstrained up to 4K (4096x4096).
-        total_pixels = width * height
+        total_pixels = target_width * target_height
         if host is not None and host <= 18:
             max_pixels = 1024 * 1024
         elif host is not None and host <= 36:
@@ -374,8 +375,8 @@ class MFluxImageRuntime:
         if total_pixels > max_pixels:
             import math
             scale = math.sqrt(max_pixels / float(total_pixels))
-            width = max(64, (int(width * scale) // 16) * 16)
-            height = max(64, (int(height * scale) // 16) * 16)
+            diff_width = max(64, (int(target_width * scale) // 16) * 16)
+            diff_height = max(64, (int(target_height * scale) // 16) * 16)
 
         n = max(1, min(int(n), 4))
         artifacts = self.store.artifacts_dir / manifest.id
@@ -568,8 +569,8 @@ class MFluxImageRuntime:
                         seed=current_seed,
                         prompt=prompt,
                         steps=steps,
-                        height=height,
-                        width=width,
+                        height=diff_height,
+                        width=diff_width,
                         guidance=guidance,
                         negative_prompt=negative_prompt,
                         reload_model=reload_fn,
@@ -582,15 +583,25 @@ class MFluxImageRuntime:
                         model.callbacks.in_loop.remove(step_cb_obj)
                 # Cold-start retry may have replaced a gutted cached model.
                 model = self._models.get(model_key, model)
-                path = artifacts / f"mflux-{width}x{height}-{int(time.time())}-{i}.png"
+
+                # If diffusion ran at a reduced safe memory budget, upscale the resulting image
+                # to the requested target resolution using high-quality Lanczos filtering.
+                if (diff_width, diff_height) != (target_width, target_height):
+                    from PIL import Image
+                    img = img.resize((target_width, target_height), resample=Image.Resampling.LANCZOS)
+                    out_width, out_height = target_width, target_height
+                else:
+                    out_width, out_height = diff_width, diff_height
+
+                path = artifacts / f"mflux-{out_width}x{out_height}-{int(time.time())}-{i}.png"
                 img.save(str(path))
                 png_bytes = path.read_bytes()
 
                 item: dict = {
                     "revised_prompt": prompt.strip(),
                     "path": str(path),
-                    "width": width,
-                    "height": height,
+                    "width": out_width,
+                    "height": out_height,
                 }
                 fmt = (response_format or "b64_json").lower()
                 if fmt == "b64_json":
