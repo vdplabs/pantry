@@ -68,10 +68,19 @@ def device_budget(mx: Any) -> dict[str, Any]:
     }
 
 
-def snapshot(*, apply_limits: bool = False) -> dict[str, Any]:
+_last_snapshot: tuple[float, dict[str, Any]] | None = None
+
+
+def snapshot(*, apply_limits: bool = False, max_age: float = 2.0) -> dict[str, Any]:
     """Return Metal/MLX heap stats for status / health surfaces."""
-    mx = _load_mlx()
+    global _last_snapshot
     now = time.time()
+    if not apply_limits and _last_snapshot is not None:
+        cached_at, cached_snap = _last_snapshot
+        if now - cached_at < max_age:
+            return dict(cached_snap)
+
+    mx = _load_mlx()
     if mx is None:
         return {
             "ok": False,
@@ -124,6 +133,9 @@ def snapshot(*, apply_limits: bool = False) -> dict[str, Any]:
         "sampled_at": now,
         "message": _message(pressure, active, recommended),
     }
+    if not apply_limits:
+        _last_snapshot = (now, res)
+    return res
 
 
 def _message(pressure: str, active: int | None, recommended: int | None) -> str:

@@ -14,7 +14,7 @@ from typing import Any
 import httpx
 
 
-def _get(url: str, timeout: float = 1.5) -> dict | list | None:
+def _get(url: str, timeout: float = 4.5) -> dict | list | None:
     try:
         r = httpx.get(url, timeout=timeout)
         if r.status_code != 200:
@@ -24,13 +24,13 @@ def _get(url: str, timeout: float = 1.5) -> dict | list | None:
         return None
 
 
-def _health(host: str, port: int) -> dict | None:
-    body = _get(f"http://{host}:{port}/v1/health")
+def _health(host: str, port: int, timeout: float = 4.5) -> dict | None:
+    body = _get(f"http://{host}:{port}/v1/health", timeout=timeout)
     return body if isinstance(body, dict) else None
 
 
-def _models(host: str, port: int) -> list[dict[str, Any]]:
-    body = _get(f"http://{host}:{port}/v1/models?ready_only=1")
+def _models(host: str, port: int, timeout: float = 4.5) -> list[dict[str, Any]]:
+    body = _get(f"http://{host}:{port}/v1/models?ready_only=1", timeout=timeout)
     if not isinstance(body, dict):
         return []
     data = body.get("data") or []
@@ -140,6 +140,8 @@ def run_menubar(
             self._on_quit = on_quit
             self._serve_cmd = serve_cmd or "pantry"
             self._online = False
+            self._consecutive_failures = 0
+            self._is_refreshing = False
             self._serve_proc: subprocess.Popen[bytes] | None = None
             self._loaded: set[str] = set()
 
@@ -309,9 +311,65 @@ def run_menubar(
             self.memory_menu.add(clear)
 
         def refresh(self, *_: object) -> None:
-            body = _health(self._host, self._port)
+            if self._is_refreshing:
+                return
+            self._is_refreshing = True
+
+            def _worker() -> None:
+                body = None
+                models = None
+                listening = False
+                try:
+                    body = _health(self._host, self._port, timeout=4.5)
+                    if body is not None:
+                        models = _models(self._host, self._port, timeout=4.5)
+                    else:
+                        listening = bool(self._embedded or _pids_on_port(self._port))
+                except Exception:
+                    pass
+
+                def _ui() -> None:
+                    try:
+                        self._apply_refresh(body, models, listening)
+                    finally:
+                        self._is_refreshing = False
+
+                try:
+                    from PyObjCTools.AppHelper import callAfter
+
+                    callAfter(_ui)
+                except Exception:
+                    _ui()
+
+            import threading
+
+            threading.Thread(
+                target=_worker, daemon=True, name="pantry-menubar-refresh"
+            ).start()
+
+        def _apply_refresh(
+            self,
+            body: dict | None,
+            models: list[dict[str, Any]] | None,
+            listening: bool,
+        ) -> None:
             if body is None:
+                if listening:
+                    self._consecutive_failures += 1
+                    if self._consecutive_failures < 4:
+                        # Server is running/listening on port, just temporarily busy or loading
+                        self._online = True
+                        self.title = "P…"
+                        self.status_item.title = (
+                            f"Status: busy / loading ({self._host}:{self._port})"
+                        )
+                        self.memory_item.title = "Memory: (busy)"
+                        if self._embedded:
+                            self.serve_item.title = f"Serving on {self._host}:{self._port}"
+                        return
+
                 self._online = False
+                self._consecutive_failures = 0
                 self._loaded = set()
                 self.title = "P·"
                 self.status_item.title = f"Status: offline ({self._host}:{self._port})"
@@ -323,6 +381,7 @@ def run_menubar(
                 self._placeholder(self.loaded_menu, "(offline)")
                 return
 
+            self._consecutive_failures = 0
             self._online = True
             loaded_list = [str(x) for x in (body.get("loaded") or [])]
             self._loaded = set(loaded_list)
@@ -330,37 +389,51 @@ def run_menubar(
             mem = body.get("memory")
             if isinstance(mem, dict) and mem.get("pressure"):
                 pressure = str(mem["pressure"])
-            # Title hint: P / P! / P!! for ok / elevated / critical
-            if pressure == "critical":
-                self.title = "P!!"
-            elif pressure == "elevated":
-                self.title = "P!"
+
+            status_str = str(body.get("status") or "ok")
+            loading_name = body.get("loading")
+            activity_str = body.get("activity")
+
+            if loading_name or status_str == "loading":
+                short_name = str(loading_name or "model").split("/")[-1]
+                self.title = "P…"
+                if activity_str:
+                    self.status_item.title = f"Status: {activity_str} ({short_name})"
+                else:
+                    self.status_item.title = f"Status: loading {short_name}…"
             else:
-                self.title = "P"
-            self.status_item.title = (
-                f"Status: ok · v{body.get('version', '?')} · "
-                f"{body.get('packages', 0)} packages"
-            )
+                # Title hint: P / P! / P!! for ok / elevated / critical
+                if pressure == "critical":
+                    self.title = "P!!"
+                elif pressure == "elevated":
+                    self.title = "P!"
+                else:
+                    self.title = "P"
+                self.status_item.title = (
+                    f"Status: ok · v{body.get('version', '?')} · "
+                    f"{body.get('packages', 0)} packages"
+                )
+
             self._refresh_memory(body)
             if self._embedded:
                 self.serve_item.title = f"Serving on {self._host}:{self._port}"
             else:
                 self.serve_item.title = "Stop pantry serve"
 
-            models = _models(self._host, self._port)
-            self._clear_submenu(self.models_menu)
-            if not models:
-                self._placeholder(self.models_menu, "(none ready)")
-            else:
-                for m in models:
-                    alias = str(m.get("id") or "?")
-                    package_id = str(m.get("package_id") or m.get("owned_by") or alias)
-                    is_loaded = package_id in self._loaded
-                    self.models_menu.add(
-                        self._model_submenu(
-                            alias=alias, package_id=package_id, loaded=is_loaded
+            if models is not None:
+                self._clear_submenu(self.models_menu)
+                if not models:
+                    self._placeholder(self.models_menu, "(none ready)")
+                else:
+                    for m in models:
+                        alias = str(m.get("id") or "?")
+                        package_id = str(m.get("package_id") or m.get("owned_by") or alias)
+                        is_loaded = package_id in self._loaded
+                        self.models_menu.add(
+                            self._model_submenu(
+                                alias=alias, package_id=package_id, loaded=is_loaded
+                            )
                         )
-                    )
 
             self._clear_submenu(self.loaded_menu)
             if not loaded_list:

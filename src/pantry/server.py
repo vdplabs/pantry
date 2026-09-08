@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import threading
 import time
 import uuid
 from collections.abc import AsyncIterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -108,6 +110,29 @@ class Service:
         self.store = store
         self.scheduler = Scheduler()
         self.runtimes = RuntimeHub(store, worker_isolation=worker_isolation)
+        self._current_loading: str | None = None
+        self._current_activity: str | None = None
+        self._lock = threading.Lock()
+
+    def set_loading(self, model_or_package_id: str | None, activity: str | None = None) -> None:
+        with self._lock:
+            self._current_loading = model_or_package_id
+            self._current_activity = activity
+
+    def get_loading_info(self) -> dict[str, str | None]:
+        with self._lock:
+            return {
+                "loading": self._current_loading,
+                "activity": self._current_activity,
+            }
+
+    @contextmanager
+    def tracking_load(self, model_or_package_id: str, activity: str = "Loading model…"):
+        self.set_loading(model_or_package_id, activity)
+        try:
+            yield
+        finally:
+            self.set_loading(None, None)
 
     def packages(self) -> list[PackageManifest]:
         return self.store.list_manifests()
@@ -163,12 +188,17 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         }
 
     @app.get("/v1/health")
-    def health() -> dict[str, Any]:
+    async def health() -> dict[str, Any]:
         state = store.read_state()
         mem = memory_snapshot(apply_limits=False)
         cas_stats = store.cas.get_stats()
+        loading_info = svc.get_loading_info()
+        is_loading = loading_info.get("loading") is not None
         return {
             "ok": True,
+            "status": "loading" if is_loading else "ok",
+            "loading": loading_info.get("loading"),
+            "activity": loading_info.get("activity"),
             "name": "pantry",
             "version": __version__,
             "packages": len(store.list_manifests()),
@@ -308,15 +338,16 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         usage_info: dict[str, int] = {}
 
         async def _complete() -> str:
-            return await runtime.complete(
-                pkg,
-                req.messages,
-                max_tokens=req.effective_max_tokens(),
-                temperature=req.temperature,
-                prefer_speculative=want_spec,
-                usage=usage_info,
-                tools=req.tools,
-            )
+            with svc.tracking_load(pkg.id, "Generating chat response…"):
+                return await runtime.complete(
+                    pkg,
+                    req.messages,
+                    max_tokens=req.effective_max_tokens(),
+                    temperature=req.temperature,
+                    prefer_speculative=want_spec,
+                    usage=usage_info,
+                    tools=req.tools,
+                )
 
         if not req.stream:
             text = await svc.scheduler.run(req.priority, _complete, modality="text")
@@ -356,16 +387,17 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
             async def _locked_stream() -> AsyncIterator[str]:
                 async with svc.scheduler.hold(req.priority, modality="text"):
-                    async for chunk in runtime.stream(
-                        pkg,
-                        req.messages,
-                        max_tokens=req.effective_max_tokens(),
-                        temperature=req.temperature,
-                        prefer_speculative=want_spec,
-                        usage=stream_usage,
-                        tools=req.tools,
-                    ):
-                        yield chunk
+                    with svc.tracking_load(pkg.id, "Streaming chat response…"):
+                        async for chunk in runtime.stream(
+                            pkg,
+                            req.messages,
+                            max_tokens=req.effective_max_tokens(),
+                            temperature=req.temperature,
+                            prefer_speculative=want_spec,
+                            usage=stream_usage,
+                            tools=req.tools,
+                        ):
+                            yield chunk
 
             async for piece in _locked_stream():
                 if not piece:
@@ -489,15 +521,16 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
         if not complete_req.stream:
             async def _complete() -> str:
-                return await runtime.complete(
-                    pkg,
-                    complete_req.messages,
-                    max_tokens=complete_req.effective_max_tokens(),
-                    temperature=complete_req.temperature,
-                    prefer_speculative=want_spec,
-                    usage=usage_info,
-                    tools=complete_req.tools,
-                )
+                with svc.tracking_load(pkg.id, "Generating chat response…"):
+                    return await runtime.complete(
+                        pkg,
+                        complete_req.messages,
+                        max_tokens=complete_req.effective_max_tokens(),
+                        temperature=complete_req.temperature,
+                        prefer_speculative=want_spec,
+                        usage=usage_info,
+                        tools=complete_req.tools,
+                    )
 
             text = await svc.scheduler.run(complete_req.priority, _complete, modality="text")
             usage = usage_info if usage_info else _estimate_usage(pkg, complete_req.messages, text)
@@ -531,16 +564,17 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
             async def _locked_stream() -> AsyncIterator[str]:
                 async with svc.scheduler.hold(complete_req.priority, modality="text"):
-                    async for chunk in runtime.stream(
-                        pkg,
-                        complete_req.messages,
-                        max_tokens=complete_req.effective_max_tokens(),
-                        temperature=complete_req.temperature,
-                        prefer_speculative=want_spec,
-                        usage=stream_usage,
-                        tools=complete_req.tools,
-                    ):
-                        yield chunk
+                    with svc.tracking_load(pkg.id, "Streaming chat response…"):
+                        async for chunk in runtime.stream(
+                            pkg,
+                            complete_req.messages,
+                            max_tokens=complete_req.effective_max_tokens(),
+                            temperature=complete_req.temperature,
+                            prefer_speculative=want_spec,
+                            usage=stream_usage,
+                            tools=complete_req.tools,
+                        ):
+                            yield chunk
 
             seq = 0
             async for piece in _locked_stream():
@@ -693,18 +727,19 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     loop.call_soon_threadsafe(queue.put_nowait, ("step", step_payload))
 
                 def _worker_fn() -> list[dict]:
-                    return runtime.generate(
-                        pkg,
-                        prompt=req.prompt,
-                        size=req.size,
-                        n=req.n,
-                        response_format=req.response_format,
-                        seed=req.seed,
-                        num_inference_steps=req.steps,
-                        guidance=req.guidance,
-                        negative_prompt=req.negative_prompt,
-                        step_callback=_on_step,
-                    )
+                    with svc.tracking_load(pkg.id, "Generating image / loading weights…"):
+                        return runtime.generate(
+                            pkg,
+                            prompt=req.prompt,
+                            size=req.size,
+                            n=req.n,
+                            response_format=req.response_format,
+                            seed=req.seed,
+                            num_inference_steps=req.steps,
+                            guidance=req.guidance,
+                            negative_prompt=req.negative_prompt,
+                            step_callback=_on_step,
+                        )
 
                 async def _worker_task() -> None:
                     try:
@@ -755,19 +790,22 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
             return StreamingResponse(_stream_generator(), media_type="text/event-stream")
 
+        def _gen_fn() -> list[dict]:
+            with svc.tracking_load(pkg.id, "Generating image / loading weights…"):
+                return runtime.generate(
+                    pkg,
+                    prompt=req.prompt,
+                    size=req.size,
+                    n=req.n,
+                    response_format=req.response_format,
+                    seed=req.seed,
+                    num_inference_steps=req.steps,
+                    guidance=req.guidance,
+                    negative_prompt=req.negative_prompt,
+                )
+
         async def _gen() -> list[dict]:
-            return await asyncio.to_thread(
-                runtime.generate,
-                pkg,
-                prompt=req.prompt,
-                size=req.size,
-                n=req.n,
-                response_format=req.response_format,
-                seed=req.seed,
-                num_inference_steps=req.steps,
-                guidance=req.guidance,
-                negative_prompt=req.negative_prompt,
-            )
+            return await asyncio.to_thread(_gen_fn)
 
         try:
             data = await svc.scheduler.run(req.priority, _gen, modality="image")
@@ -823,14 +861,17 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
         runtime = music_runtime_for(pkg, store)
 
+        def _audio_fn() -> list[dict]:
+            with svc.tracking_load(pkg.id, "Generating music / loading weights…"):
+                return runtime.generate(
+                    pkg,
+                    prompt=req.prompt,
+                    duration_seconds=req.duration_seconds,
+                    response_format=req.response_format,
+                )
+
         async def _gen() -> list[dict]:
-            return await asyncio.to_thread(
-                runtime.generate,
-                pkg,
-                prompt=req.prompt,
-                duration_seconds=req.duration_seconds,
-                response_format=req.response_format,
-            )
+            return await asyncio.to_thread(_audio_fn)
 
         data = await svc.scheduler.run(req.priority, _gen, modality="audio")
 

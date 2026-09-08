@@ -8,6 +8,29 @@ def test_health(client):
     assert body["ok"] is True
     assert body["name"] == "pantry"
     assert body["packages"] >= 7
+    assert body["status"] == "ok"
+
+
+def test_health_loading_status(client):
+    r = client.get("/v1/health")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["status"] == "ok"
+    assert body["loading"] is None
+
+    svc = client.app.state.svc
+    with svc.tracking_load("mlx-musicgen-small", "Loading music model…"):
+        r2 = client.get("/v1/health")
+        assert r2.status_code == 200
+        body2 = r2.json()
+        assert body2["status"] == "loading"
+        assert body2["loading"] == "mlx-musicgen-small"
+        assert body2["activity"] == "Loading music model…"
+
+    r3 = client.get("/v1/health")
+    assert r3.status_code == 200
+    assert r3.json()["status"] == "ok"
+    assert r3.json()["loading"] is None
 
 
 def test_models_lists_public_packages(client):

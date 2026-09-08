@@ -26,7 +26,11 @@ class CasIndex:
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
+        self._stats_cache: tuple[float, dict[str, Any]] | None = None
         self._init_db()
+
+    def invalidate_stats_cache(self) -> None:
+        self._stats_cache = None
 
     def _connect(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path, timeout=30.0)
@@ -85,6 +89,7 @@ class CasIndex:
             )
 
     def add_or_update_chunk(self, sha256: str, byte_size: int) -> None:
+        self.invalidate_stats_cache()
         now = time.time()
         with self._connect() as conn:
             conn.execute(
@@ -126,6 +131,7 @@ class CasIndex:
         refs: list[tuple[str, str, int, int]],  # (sha256, file_path, offset, length)
         recipe_path: str | None = None,
     ) -> None:
+        self.invalidate_stats_cache()
         now = time.time()
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE;")
@@ -173,6 +179,7 @@ class CasIndex:
             conn.commit()
 
     def remove_package(self, package_id: str) -> None:
+        self.invalidate_stats_cache()
         with self._connect() as conn:
             conn.execute("BEGIN IMMEDIATE;")
             cur = conn.execute(
@@ -206,10 +213,16 @@ class CasIndex:
             ]
 
     def remove_chunk(self, sha256: str) -> None:
+        self.invalidate_stats_cache()
         with self._connect() as conn:
             conn.execute("DELETE FROM chunks WHERE sha256 = ?;", (sha256,))
 
-    def get_stats(self) -> dict[str, Any]:
+    def get_stats(self, force: bool = False, max_age: float = 30.0) -> dict[str, Any]:
+        now = time.time()
+        if not force and self._stats_cache is not None:
+            cached_at, stats = self._stats_cache
+            if now - cached_at < max_age:
+                return dict(stats)
         with self._connect() as conn:
             cur = conn.execute(
                 "SELECT COUNT(*) as count, COALESCE(SUM(byte_size), 0) as total_bytes FROM chunks;"
@@ -230,7 +243,7 @@ class CasIndex:
             dedup_saved = max(0, apparent_bytes - physical_bytes)
             ratio = (apparent_bytes / physical_bytes) if physical_bytes > 0 else 1.0
 
-            return {
+            stats = {
                 "total_packages": total_packages,
                 "apparent_size_bytes": apparent_bytes,
                 "physical_size_bytes": physical_bytes,
@@ -238,6 +251,8 @@ class CasIndex:
                 "dedup_ratio": round(ratio, 2),
                 "total_chunks": total_chunks,
             }
+            self._stats_cache = (now, stats)
+            return dict(stats)
 
 
 class CasManager:
@@ -383,8 +398,8 @@ class CasManager:
 
         return pruned_count, reclaimed_bytes
 
-    def get_stats(self) -> dict[str, Any]:
-        stats = self.index.get_stats()
+    def get_stats(self, force: bool = False) -> dict[str, Any]:
+        stats = self.index.get_stats(force=force)
         stats["cas_enabled"] = True
         stats["data_root"] = str(self.cas_dir.parent)
         return stats
