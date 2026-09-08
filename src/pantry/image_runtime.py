@@ -588,7 +588,19 @@ class MFluxImageRuntime:
                 # to the requested target resolution using high-quality Lanczos filtering.
                 if (diff_width, diff_height) != (target_width, target_height):
                     from PIL import Image
-                    img = img.resize((target_width, target_height), resample=Image.Resampling.LANCZOS)
+
+                    if hasattr(img, "image") and hasattr(img.image, "resize"):
+                        img.image = img.image.resize(
+                            (target_width, target_height),
+                            resample=Image.Resampling.LANCZOS,
+                        )
+                        img.width = target_width
+                        img.height = target_height
+                    elif hasattr(img, "resize"):
+                        img = img.resize(
+                            (target_width, target_height),
+                            resample=Image.Resampling.LANCZOS,
+                        )
                     out_width, out_height = target_width, target_height
                 else:
                     out_width, out_height = diff_width, diff_height

@@ -607,5 +607,73 @@ def test_parse_size_table():
         assert (w, h) == (exp_w, exp_h), f"Failed for {size_str}: expected ({exp_w}, {exp_h}), got ({w}, {h})"
 
 
+def test_mflux_image_runtime_generated_image_resize(tmp_path, monkeypatch):
+    """Verify that MFluxImageRuntime handles mflux GeneratedImage objects (no .resize) during upscaling."""
+    from PIL import Image
+
+    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 0.0)
+    monkeypatch.setattr("pantry.image_runtime._host_ram_gb", lambda: 16.0)
+    monkeypatch.setattr("pantry.image_runtime._enable_mflux_low_ram", lambda *_a, **_k: None)
+
+    store = PackageStore(tmp_path / "home")
+    store.ensure()
+    man = PackageManifest(
+        id="vdplabs.z-image-turbo.standard.v1",
+        family="z-image",
+        modalities=["image_gen"],
+        ram_gb_min=10.0,
+        bits_approx=4.0,
+        quant_method="mflux-4bit",
+        runtime={"primary": "mflux", "hf_repo": "test/z-image"},
+    )
+
+    class DummyGeneratedImage:
+        """Simulates mflux.utils.generated_image.GeneratedImage which wraps .image and has .save()."""
+        def __init__(self, pil_image):
+            self.image = pil_image
+            self.width = pil_image.width
+            self.height = pil_image.height
+
+        def save(self, path):
+            self.image.save(path)
+
+    class MockModel:
+        def __init__(self):
+            self.text_encoder = object()
+            self.transformer = object()
+            self.vae = object()
+
+        def generate_image(self, **kwargs):
+            # Model generated at diffusion resolution (e.g. 1024x1024)
+            raw = Image.new("RGB", (kwargs.get("width", 1024), kwargs.get("height", 1024)), color="green")
+            return DummyGeneratedImage(raw)
+
+    with (
+        patch.dict(
+            "sys.modules",
+            {
+                "mflux": MagicMock(),
+                "mflux.models.common.config.model_config": MagicMock(),
+                "mflux.models.z_image.variants.z_image": MagicMock(ZImage=lambda **_k: MockModel()),
+                "mflux.models.z_image.latent_creator.z_image_latent_creator": MagicMock(),
+                "mflux.models.common.vae.vae_util": MagicMock(),
+                "mlx.core": MagicMock(),
+            },
+        )
+    ):
+        rt = MFluxImageRuntime(store)
+        # Request 2048x2048 which exceeds 16GB RAM budget (1024x1024 cap) -> triggers Lanczos upscaling
+        res = rt.generate(man, prompt="upscale prompt", size="2048x2048", num_inference_steps=4)
+
+    assert len(res) == 1
+    assert res[0]["width"] == 2048
+    assert res[0]["height"] == 2048
+    out_file = Path(res[0]["path"])
+    assert out_file.is_file()
+    saved = Image.open(out_file)
+    assert saved.size == (2048, 2048)
+
+
+
 
 
