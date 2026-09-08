@@ -206,6 +206,18 @@ class AudioGenerateRequest(BaseModel):
     priority: str = "interactive"
 
 
+class VideoGenerateRequest(BaseModel):
+    model: str
+    prompt: str = Field(..., min_length=1)
+    width: int = Field(default=512, ge=128, le=1920)
+    height: int = Field(default=512, ge=128, le=1920)
+    frames: int = Field(default=24, ge=8, le=128)
+    fps: int = Field(default=24, ge=8, le=60)
+    response_format: str = "b64_json"  # b64_json | url | shm
+    priority: str = "interactive"
+    seed: int | None = None
+
+
 class EmbeddingRequest(BaseModel):
     model: str
     input: str | list[str]

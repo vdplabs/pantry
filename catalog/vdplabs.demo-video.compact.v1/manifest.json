@@ -1,0 +1,35 @@
+{
+  "id": "vdplabs.demo-video.compact.v1",
+  "family": "demo-video",
+  "role": "video",
+  "params_b": 0,
+  "quality_tier": "compact",
+  "quant_method": "none",
+  "bits_approx": null,
+  "ram_gb_min": 1,
+  "ram_gb_comfortable": 2.0,
+  "modalities": ["video"],
+  "context_max": 0,
+  "license": "mit",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": ["video-compact", "video", "ltx-video", "echo-video"],
+  "runtime": {
+    "primary": "echo_video",
+    "adapters": [],
+    "draft_package_id": null,
+    "ane_prefill": false,
+    "mlc_artifact": null,
+    "hf_repo": null,
+    "hf_revision": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-video-smoke-2026.09",
+    "score": 0.5,
+    "notes": "Echo video runtime — fast animated H.264 MP4 for /v1/video/generations wiring."
+  },
+  "blobs": [],
+  "system_preamble": "",
+  "listable": false
+}

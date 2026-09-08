@@ -37,6 +37,7 @@ from pantry.schemas import (
     StoragePruneResponse,
     StorageStatsResponse,
     UnloadBody,
+    VideoGenerateRequest,
 )
 from pantry.store import PackageStore
 from pantry.template import apply_chat_template
@@ -67,6 +68,11 @@ def _is_image_package(pkg: PackageManifest) -> bool:
 def _is_music_package(pkg: PackageManifest) -> bool:
     mods = {m.lower() for m in pkg.modalities}
     return "music" in mods or (pkg.role or "").lower() in {"music", "audio_gen"}
+
+
+def _is_video_package(pkg: PackageManifest) -> bool:
+    mods = {m.lower() for m in pkg.modalities}
+    return "video" in mods or (pkg.role or "").lower() in {"video", "video_gen"}
 
 
 def _is_stt_package(pkg: PackageManifest) -> bool:
@@ -181,6 +187,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "embeddings": "/v1/embeddings",
             "images": "/v1/images/generations",
             "audio": "/v1/audio/generations",
+            "video": "/v1/video/generations",
             "memory": "/v1/memory",
             "resolve": "/v1/resolve",
             "shm": "/v1/shm",
@@ -887,6 +894,75 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                         prefix="aud",
                         metadata={
                             "sample_rate": item.get("sample_rate"),
+                            "duration_seconds": item.get("duration_seconds"),
+                        },
+                    )
+                    item["shm"] = desc.to_dict()
+                    if (req.response_format or "").lower() == "shm":
+                        item.pop("b64_json", None)
+
+        return {
+            "created": int(time.time()),
+            "model": req.model,
+            "package_id": pkg.id,
+            "data": data,
+        }
+
+    @app.post("/v1/video/generations")
+    async def video_generations(
+        req: VideoGenerateRequest, request: Request
+    ) -> dict[str, Any]:
+        pkg = svc.resolve_model(req.model)
+        if not _is_video_package(pkg):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"package {pkg.id} is not a video model "
+                    f"(modalities={pkg.modalities})"
+                ),
+            )
+        if not store.weights_ready(pkg):
+            raise HTTPException(
+                status_code=409,
+                detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
+            )
+        from pantry.video_runtime import video_runtime_for
+
+        runtime = video_runtime_for(pkg, store)
+
+        def _video_fn() -> list[dict]:
+            with svc.tracking_load(pkg.id, "Generating video / rendering frames…"):
+                return runtime.generate(
+                    pkg,
+                    prompt=req.prompt,
+                    width=req.width,
+                    height=req.height,
+                    frames=req.frames,
+                    fps=req.fps,
+                    seed=req.seed,
+                    response_format=req.response_format,
+                )
+
+        async def _gen() -> list[dict]:
+            return await asyncio.to_thread(_video_fn)
+
+        data = await svc.scheduler.run(req.priority, _gen, modality="video")
+
+        want_shm = (req.response_format or "").lower() == "shm" or request.headers.get("x-pantry-transport", "").lower() == "shm"
+        if want_shm:
+            for item in data:
+                vid_path = Path(item["path"]) if "path" in item else None
+                if vid_path and vid_path.is_file():
+                    raw_bytes = vid_path.read_bytes()
+                    desc = store.shm.allocate(
+                        raw_bytes,
+                        format="mp4",
+                        prefix="vid",
+                        metadata={
+                            "width": item.get("width"),
+                            "height": item.get("height"),
+                            "frames": item.get("frames"),
+                            "fps": item.get("fps"),
                             "duration_seconds": item.get("duration_seconds"),
                         },
                     )
