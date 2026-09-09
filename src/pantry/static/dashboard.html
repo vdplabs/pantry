@@ -19,7 +19,7 @@
       --accent-orange: #d29922;
       --accent-red: #f85149;
       --glass: rgba(255, 255, 255, 0.04);
-      --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      --font: "Segoe UI", "Avenir", -apple-system,  BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
       --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
     }
 
@@ -34,6 +34,10 @@
       padding: 18px;
       min-height: 100vh;
       -webkit-font-smoothing: antialiased;
+    }
+
+    button, input, select  {
+      font-family: "Segoe UI", "Avenir", -apple-system,  BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     }
 
     /* Outer Window Frame matching macOS */
@@ -57,6 +61,13 @@
       padding: 12px 18px;
       background: rgba(255, 255, 255, 0.02);
       border-bottom: 1px solid var(--card-border);
+      gap: 12px;
+    }
+    .header-chip-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
     }
     /* Main Navigation Tabs */
     .main-nav {
@@ -122,6 +133,13 @@
       background: rgba(255, 255, 255, 0.07);
       color: var(--text-muted);
       border: 1px solid rgba(255, 255, 255, 0.06);
+      white-space: nowrap;
+    }
+    .chip.error-pulse {
+      background: rgba(248, 81, 73, 0.18);
+      border-color: rgba(248, 81, 73, 0.4);
+      color: #ff8b85;
+      font-weight: 600;
     }
 
     .interval-controls {
@@ -211,6 +229,7 @@
       overflow: hidden;
       position: relative;
     }
+    .sparkline-box.small { height: 34px; margin-bottom: 6px; }
     canvas.sparkline {
       width: 100%;
       height: 100%;
@@ -292,6 +311,39 @@
       color: var(--text);
     }
 
+    /* GPU multi-device blocks */
+    .gpu-device {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .gpu-device:last-child { border-bottom: none; padding-bottom: 0; }
+    .gpu-device:first-child { padding-top: 0; }
+    .gpu-device-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-bottom: 4px;
+    }
+    .gpu-device-name {
+      font-size: 11.5px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .gpu-device-util {
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 12px;
+      color: var(--accent-purple);
+    }
+    .gpu-pills {
+      grid-template-columns: repeat(3, 1fr);
+      margin-bottom: 6px;
+    }
+    .gpu-pills .metric-pill { padding: 4px 7px; }
+    .gpu-pills .num.temp-ok { color: var(--accent-green); }
+    .gpu-pills .num.temp-warn { color: var(--accent-orange); }
+    .gpu-pills .num.temp-hot { color: var(--accent-red); }
+
     /* Model Cards in Memory */
     .model-item {
       display: flex;
@@ -303,17 +355,20 @@
       border-radius: 7px;
       margin-bottom: 6px;
       transition: background 0.15s;
+      gap: 8px;
     }
     .model-item:hover { background: rgba(255, 255, 255, 0.05); }
     .model-info {
       display: flex;
       align-items: center;
       gap: 9px;
+      min-width: 0;
     }
     .model-icon {
       font-size: 15px;
       width: 22px;
       text-align: center;
+      flex-shrink: 0;
     }
     .model-name {
       font-size: 12px;
@@ -323,6 +378,27 @@
     .model-sub {
       font-size: 10.5px;
       color: var(--text-muted);
+    }
+    .tag-row {
+      display: flex;
+      gap: 4px;
+      flex-wrap: wrap;
+      margin-top: 4px;
+    }
+    .mini-tag {
+      font-size: 9px;
+      font-weight: 600;
+      padding: 1px 5px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      font-family: var(--mono);
+    }
+    .idle-countdown {
+      font-size: 9.5px;
+      color: var(--accent-orange);
+      margin-top: 3px;
     }
 
     /* Buttons */
@@ -336,6 +412,7 @@
       border-radius: 5px;
       cursor: pointer;
       transition: all 0.15s;
+      flex-shrink: 0;
     }
     .btn-action:hover {
       background: rgba(255, 255, 255, 0.14);
@@ -373,6 +450,29 @@
       font-family: var(--mono);
       font-size: 12px;
       font-weight: 700;
+      color: var(--text);
+    }
+
+    /* Request queue slots */
+    .queue-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .queue-slot {
+      flex: 1;
+      text-align: center;
+      padding: 6px 4px;
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+    }
+    .queue-slot .lbl {
+      font-size: 9px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.3px;
+    }
+    .queue-slot .num {
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 13px;
       color: var(--text);
     }
 
@@ -514,22 +614,23 @@
     .bottom-grid {
       padding: 0 16px 16px 16px;
       display: grid;
-      grid-template-columns: 1.15fr 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 14px;
     }
     @media (max-width: 860px) {
       .bottom-grid { grid-template-columns: 1fr !important; }
     }
-    .event-list {
-      max-height: 110px;
+    .event-list, .request-table {
+      max-height: 220px;
       overflow-y: auto;
       font-family: var(--mono);
       font-size: 11px;
       display: flex;
-      flex-direction: column-reverse;
+      flex-direction: column;
       gap: 5px;
       padding-right: 4px;
     }
+    .event-list { flex-direction: column-reverse; max-height: 220px; }
     .event-entry {
       padding: 4px 8px;
       border-radius: 5px;
@@ -548,6 +649,25 @@
       color: var(--text);
       word-break: break-word;
     }
+
+    .request-row {
+      display: grid;
+      grid-template-columns: 50px 1fr 62px 56px 42px;
+      gap: 6px;
+      align-items: center;
+      padding: 5px 8px;
+      border-radius: 5px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      font-size: 10.5px;
+    }
+    .request-row .req-time { color: var(--accent-blue); }
+    .request-row .req-model { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .request-row .req-tok { color: var(--text-muted); text-align: right; }
+    .request-row .req-dur { color: var(--text-muted); text-align: right; }
+    .request-row .req-status { text-align: right; font-weight: 700; }
+    .request-row .req-status.ok { color: var(--accent-green); }
+    .request-row .req-status.err { color: var(--accent-red); }
 
     /* Playground Sub-Navigation */
     .pg-container {
@@ -763,7 +883,13 @@
 <div class="window-container">
   <!-- Navigation Toolbar -->
    <div class="toolbar">
-      <div class="chip" id="chip-device">Detecting...</div>
+      <div class="header-chip-row">
+        <div class="chip" id="chip-device">Detecting...</div>
+        <div class="chip" id="chip-version" style="display:none;">v0.0.0</div>
+        <div class="chip" id="chip-uptime" style="display:none;">Uptime —</div>
+        <div class="chip" id="chip-streams" style="display:none;">0 active streams</div>
+        <div class="chip" id="chip-errors" style="display:none;">0 errors</div>
+      </div>
       <div class="chip" id="header-status-pill">● Online · 127.0.0.1:18787</div>
     </div>
   <div class="toolbar">
@@ -780,9 +906,8 @@
           <span>⚡</span> Playground
           <span class="tab-badge">Multi-Modal</span>
         </button>
-        <button class="main-tab-btn" data-tab="playground" id="tab-btn-playground">
+        <button class="main-tab-btn" id="tab-btn-activity">
           <span>📜</span> Activity Log
-
         </button>
       </div>
 
@@ -857,26 +982,21 @@
         </div>
       </div>
 
-      <!-- 3. GPU Utilization -->
+      <!-- 3. GPU Utilization (multi-device aware) -->
       <div class="card">
         <div class="card-header">
           <div class="card-title"><span>🎮</span> GPU Utilization</div>
-          <div class="card-value" style="color: var(--accent-purple);" id="gpu-util">0.0%</div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="chip" id="gpu-count-chip">1 device</span>
+            <span class="card-value" style="color: var(--accent-purple);" id="gpu-util">0.0%</span>
+          </div>
         </div>
-        <div class="sparkline-box">
-          <canvas class="sparkline" id="spark-gpu"></canvas>
+        <div id="gpu-devices-container">
+          <!-- populated per-device by renderGpuDevices() -->
         </div>
-        <div class="row-meta">
-          <span>Device</span>
-          <span class="val" id="gpu-name">Apple Silicon</span>
-        </div>
-        <div class="row-meta">
-          <span>Architecture</span>
-          <span class="val" id="gpu-arch">Unified Shader</span>
-        </div>
-        <div class="row-meta">
-          <span>Allocated VRAM</span>
-          <span class="val" id="gpu-vram">0 B</span>
+        <div class="row-meta" id="gpu-efficiency-row" style="display: none;">
+          <span>Efficiency</span>
+          <span class="val" style="color: var(--accent-green);" id="gpu-efficiency">— tok/W</span>
         </div>
       </div>
 
@@ -992,6 +1112,15 @@
           </div>
         </div>
 
+        <div id="queue-section" style="display: none;">
+          <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Request queue</div>
+          <div class="queue-row">
+            <div class="queue-slot"><div class="lbl">Active</div><div class="num" id="queue-active">0</div></div>
+            <div class="queue-slot"><div class="lbl">Queued</div><div class="num" id="queue-queued">0</div></div>
+            <div class="queue-slot"><div class="lbl">Max</div><div class="num" id="queue-max">—</div></div>
+          </div>
+        </div>
+
         <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px;">
           <span>Context Fill:</span>
           <span style="font-family: var(--mono); font-weight: 600;" id="ctx-summary">0 / 32,768 (0%)</span>
@@ -1001,6 +1130,15 @@
         </div>
         <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 10px;">
           Est. KV cache: <span id="kv-cache" style="color: var(--text); font-family: var(--mono);">0 B</span>
+        </div>
+
+        <div id="percentiles-section" style="display: none;">
+          <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Latency percentiles (session)</div>
+          <div class="metrics-pills">
+            <div class="metric-pill"><div class="lbl">p50 TPS</div><div class="num" id="pct-p50">—</div></div>
+            <div class="metric-pill"><div class="lbl">p95 TPS</div><div class="num" id="pct-p95">—</div></div>
+            <div class="metric-pill"><div class="lbl">p99 TTFT</div><div class="num" id="pct-ttft-p99">—</div></div>
+          </div>
         </div>
 
         <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Decode throughput (t/s)</div>
@@ -1024,25 +1162,8 @@
     </div>
   </div>
 
-  <!-- Quick Test Playground & Live Activity Log -->
+  <!-- Live Event Log & Request Log -->
   <div class="bottom-grid">
-    <!-- Quick Test Playground -->
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title"><span>⚡</span> Quick Test Runner</div>
-        <button onclick="switchMainTab('playground')" class="btn-action" style="font-size: 10.5px; cursor: pointer;">Open Full Playground ↗</button>
-      </div>
-      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
-        Send a test prompt directly to Pantry to benchmark token throughput, memory footprint, and model loading behavior.
-      </div>
-      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-        <input type="text" id="test-prompt" value="Write a one-sentence haiku about speed." 
-               style="flex: 1; background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); border-radius: 6px; padding: 7px 10px; color: var(--text); font-size: 12px; outline: none;" />
-        <button id="btn-run-test" class="btn-action load" style="padding: 7px 14px; font-size: 12px;">Run Test</button>
-      </div>
-      <div id="test-output-box" style="display: none; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 11px; color: #a5d6ff; max-height: 100px; overflow-y: auto; white-space: pre-wrap;"></div>
-    </div>
-
     <!-- Live Event Log -->
     <div class="card">
       <div class="card-header">
@@ -1051,6 +1172,17 @@
       </div>
       <div class="event-list" id="event-list">
         <div style="color: var(--text-muted); font-size: 11px; text-align: center; padding: 12px 0;">No events logged yet</div>
+      </div>
+    </div>
+
+    <!-- Request Log -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span>🧾</span> Request Log</div>
+        <span class="chip" style="font-size: 10px;" id="request-count-badge">0 requests</span>
+      </div>
+      <div class="request-table" id="request-log-list">
+        <div style="color: var(--text-muted); font-size: 11px; text-align: center; padding: 12px 0;">No requests logged yet</div>
       </div>
     </div>
   </div>
@@ -1362,13 +1494,67 @@
 </div> <!-- /window-container -->
 
 <script>
+  /*
+    ============================================================================
+    OPTIONAL STATS FIELDS — this dashboard renders every section below only if
+    the field is present, and hides it gracefully if it's missing. Add these
+    to /v1/monitor/stats at your own pace; nothing breaks in the meantime.
+
+    data.server = {
+      version: "0.4.2",            // shown as a header chip
+      uptime_human: "2h 14m",      // shown as a header chip
+      active_streams: 2,           // open SSE/WS connections, header chip
+      pid: 4821                    // not yet rendered, reserved for later
+    }
+
+    data.errors = {
+      recent_count: 0              // failed requests in the last ~5 min
+    }
+
+    // GPU is now an array so multi-GPU (2x/4x Nvidia) boxes render one card
+    // per device. A single object is still accepted for backward compat.
+    data.gpu = [
+      {
+        id: 0, name: "RTX 4090", device_type: "cuda",
+        architecture: "Ada Lovelace",
+        utilization_percent: 42.0,
+        temperature_c: 68,           // drives the temp color (green/orange/red)
+        power_watts: 210,            // drives the tok/W efficiency line
+        clock_mhz: 2520,
+        vram_used_human: "12.1 GB", vram_total_human: "24 GB",
+        history: [ /* optional, else tracked client-side */ ]
+      }
+    ]
+
+    data.inference.queue = {
+      active: 1, queued: 0, max_concurrency: 4
+    }
+    data.inference.latency_percentiles = {
+      decode_tps_p50: 38.2, decode_tps_p95: 22.1, ttft_ms_p99: 640
+    }
+
+    // per resident model, added fields:
+    data.ai_models.resident_models[i] += {
+      quantization: "Q4_K_M", runtime: "mlx", context_length: 32768,
+      idle_unload_seconds: 240      // countdown to auto-unload, if enabled
+    }
+
+    data.requests = [               // most-recent-first, cap ~20 server-side
+      { time: "14:02:11", model: "chat-standard",
+        tokens_in: 128, tokens_out: 64, duration_ms: 820, status: 200 }
+    ]
+    ============================================================================
+  */
+
   let pollInterval = 1000;
   let pollTimer = null;
   let isPaused = false;
   let lastStats = null;
+  let lastGpuPowerW = 0;
 
   const netHistory = [];
   const throughputHistory = [];
+  const gpuHistories = {};
 
   // Initialize Canvas sparklines
   function drawSparkline(canvasId, values, color, fillColor) {
@@ -1417,6 +1603,85 @@
     ctx.stroke();
   }
 
+  function formatDuration(sec) {
+    if (sec == null) return '—';
+    sec = Math.max(0, Math.round(sec));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  }
+
+  function tempClass(tempC) {
+    if (tempC == null) return '';
+    if (tempC >= 85) return 'temp-hot';
+    if (tempC >= 70) return 'temp-warn';
+    return 'temp-ok';
+  }
+
+  // Renders one card block per GPU device. Accepts either an array (multi-GPU)
+  // or a single object (legacy). Returns aggregate stats for use elsewhere.
+  function renderGpuDevices(gpuData) {
+    let devices = [];
+    if (Array.isArray(gpuData)) devices = gpuData;
+    else if (gpuData) devices = [gpuData];
+
+    const container = document.getElementById('gpu-devices-container');
+    const countChip = document.getElementById('gpu-count-chip');
+    if (!container) return { avgUtil: 0, totalPowerW: 0 };
+
+    if (countChip) countChip.textContent = `${devices.length} device${devices.length === 1 ? '' : 's'}`;
+
+    if (devices.length === 0) {
+      container.innerHTML = '<div style="padding: 10px; color: var(--text-muted); text-align: center; font-size: 11px;">No GPU detected</div>';
+      return { avgUtil: 0, totalPowerW: 0 };
+    }
+
+    container.innerHTML = devices.map((d, i) => {
+      const id = d.id != null ? d.id : i;
+      const util = d.utilization_percent ?? 0;
+      const hasTemp = d.temperature_c != null;
+      const hasPower = d.power_watts != null;
+      const hasClock = d.clock_mhz != null;
+      const label = d.name || (d.device_type === 'cuda' ? 'CUDA Device' : 'Apple Silicon');
+      return `
+        <div class="gpu-device">
+          <div class="gpu-device-header">
+            <span class="gpu-device-name">${label}${devices.length > 1 ? ` · #${id}` : ''}</span>
+            <span class="gpu-device-util">${util.toFixed ? util.toFixed(1) : util}%</span>
+          </div>
+          <div class="sparkline-box small"><canvas class="sparkline" id="spark-gpu-${id}"></canvas></div>
+          <div class="metrics-pills gpu-pills">
+            <div class="metric-pill"><div class="lbl">Temp</div><div class="num ${tempClass(d.temperature_c)}">${hasTemp ? d.temperature_c.toFixed(0) + '°C' : '—'}</div></div>
+            <div class="metric-pill"><div class="lbl">Power</div><div class="num">${hasPower ? d.power_watts.toFixed(0) + ' W' : '—'}</div></div>
+            <div class="metric-pill"><div class="lbl">Clock</div><div class="num">${hasClock ? d.clock_mhz + ' MHz' : '—'}</div></div>
+          </div>
+          <div class="row-meta"><span>VRAM</span><span class="val">${d.vram_used_human || '0 B'} / ${d.vram_total_human || '—'}</span></div>
+          <div class="row-meta"><span>Architecture</span><span class="val">${d.architecture || '—'}</span></div>
+        </div>
+      `;
+    }).join('');
+
+    let totalPowerW = 0;
+    let utilSum = 0;
+    devices.forEach((d, i) => {
+      const id = d.id != null ? d.id : i;
+      if (!gpuHistories[id]) gpuHistories[id] = [];
+      let hist;
+      if (d.history && d.history.length) {
+        hist = d.history;
+      } else {
+        gpuHistories[id].push(d.utilization_percent ?? 0);
+        if (gpuHistories[id].length > 30) gpuHistories[id].shift();
+        hist = gpuHistories[id];
+      }
+      drawSparkline(`spark-gpu-${id}`, hist, '#bc8cff', 'rgba(188, 140, 255, 0.12)');
+      if (d.power_watts != null) totalPowerW += d.power_watts;
+      utilSum += (d.utilization_percent ?? 0);
+    });
+
+    return { avgUtil: devices.length ? utilSum / devices.length : 0, totalPowerW };
+  }
+
   let activeStatsController = null;
   async function fetchStats() {
     if (isPaused) return;
@@ -1451,6 +1716,34 @@
     // Device & Toolbar
     if (data.device) {
       document.getElementById('chip-device').textContent = data.device.name;
+    }
+
+    // Server identity chips (optional)
+    if (data.server) {
+      const vChip = document.getElementById('chip-version');
+      const uChip = document.getElementById('chip-uptime');
+      const sChip = document.getElementById('chip-streams');
+      if (data.server.version) {
+        vChip.style.display = 'inline-block';
+        vChip.textContent = `v${data.server.version}`;
+      }
+      if (data.server.uptime_human) {
+        uChip.style.display = 'inline-block';
+        uChip.textContent = `Up ${data.server.uptime_human}`;
+      }
+      if (data.server.active_streams != null) {
+        sChip.style.display = 'inline-block';
+        sChip.textContent = `${data.server.active_streams} active stream${data.server.active_streams === 1 ? '' : 's'}`;
+      }
+    }
+
+    // Error rate chip (optional)
+    if (data.errors) {
+      const eChip = document.getElementById('chip-errors');
+      const count = data.errors.recent_count ?? 0;
+      eChip.style.display = 'inline-block';
+      eChip.textContent = `${count} error${count === 1 ? '' : 's'} (5m)`;
+      eChip.className = count > 0 ? 'chip error-pulse' : 'chip';
     }
 
     // Live Activity Banner & Header Status
@@ -1509,14 +1802,10 @@
       drawSparkline('spark-net', netHistory, '#3fb950', 'rgba(63, 185, 80, 0.10)');
     }
 
-    // GPU
-    if (data.gpu) {
-      document.getElementById('gpu-util').textContent = `${data.gpu.utilization_percent}%`;
-      document.getElementById('gpu-name').textContent = data.device?.name || 'Apple Silicon';
-      document.getElementById('gpu-arch').textContent = data.device?.architecture || 'Unified Shader';
-      document.getElementById('gpu-vram').textContent = data.gpu.allocated_vram_human || '0 B';
-      drawSparkline('spark-gpu', data.gpu.history || [], '#bc8cff', 'rgba(188, 140, 255, 0.12)');
-    }
+    // GPU (multi-device aware)
+    const gpuStats = renderGpuDevices(data.gpu);
+    document.getElementById('gpu-util').textContent = `${gpuStats.avgUtil.toFixed(1)}%`;
+    lastGpuPowerW = gpuStats.totalPowerW;
 
     // Disk
     if (data.disk) {
@@ -1576,12 +1865,18 @@
           const dotStyle = m.is_loading ? '' : 'style="background: var(--accent-green);"';
           const busyBadge = m.is_loading ? '<span class="badge-busy">BUSY</span>' : '';
           const subText = m.is_loading ? `${m.status} · ${(m.elapsed_seconds || 0).toFixed(1)}s` : `Resident in RAM · ~${m.resident_human}`;
+          const ctxLabel = m.context_length ? `ctx ${m.context_length.toLocaleString ? m.context_length.toLocaleString() : m.context_length}` : null;
+          const tags = [m.quantization, m.runtime, ctxLabel].filter(Boolean);
+          const tagsHtml = tags.length ? `<div class="tag-row">${tags.map(t => `<span class="mini-tag">${t}</span>`).join('')}</div>` : '';
+          const idleHtml = (!m.is_loading && m.idle_unload_seconds != null) ? `<div class="idle-countdown">⏳ auto-unload in ${formatDuration(m.idle_unload_seconds)}</div>` : '';
           item.innerHTML = `
             <div class="model-info">
               <span class="model-icon">${icon}</span>
               <div>
                 <div class="model-name"><span class="${dotClass}" ${dotStyle}></span> ${m.title || m.id}${busyBadge}</div>
                 <div class="model-sub">${subText}</div>
+                ${tagsHtml}
+                ${idleHtml}
               </div>
             </div>
             <button class="btn-action unload" onclick="unloadModel('${m.id}')">Unload</button>
@@ -1597,6 +1892,9 @@
           const dotClass = m.is_loading ? 'dot pulse-orange' : 'dot';
           const dotStyle = m.is_loading ? '' : 'style="background: var(--text-dim);"';
           const subText = m.is_loading ? `${m.status} · ${(m.elapsed_seconds || 0).toFixed(1)}s` : `Not loaded · ${m.resident_human}`;
+          const ctxLabel = m.context_length ? `ctx ${m.context_length.toLocaleString ? m.context_length.toLocaleString() : m.context_length}` : null;
+          const tags = [m.quantization, m.runtime, ctxLabel].filter(Boolean);
+          const tagsHtml = tags.length ? `<div class="tag-row">${tags.map(t => `<span class="mini-tag">${t}</span>`).join('')}</div>` : '';
           const actionBtn = m.is_loading
             ? '<span class="chip warn-pulse" style="font-size: 10px;">Loading...</span>'
             : `<button class="btn-action load" onclick="loadModel('${m.id}')">⚡ Load</button>`;
@@ -1606,6 +1904,7 @@
               <div>
                 <div class="model-name"><span class="${dotClass}" ${dotStyle}></span> ${m.title || m.id}</div>
                 <div class="model-sub">${subText}</div>
+                ${tagsHtml}
               </div>
             </div>
             ${actionBtn}
@@ -1626,6 +1925,38 @@
       document.getElementById('ctx-summary').textContent = `${(ctx.active_tokens || 0).toLocaleString()} / ${(ctx.max_tokens || 32768).toLocaleString()} (${ctx.percent || 0}%)`;
       document.getElementById('ctx-progress').style.width = `${Math.min(100, ctx.percent || 0)}%`;
       document.getElementById('kv-cache').textContent = inf.kv_cache_human || '0 B';
+
+      // Request queue (optional)
+      const queueSection = document.getElementById('queue-section');
+      if (inf.queue) {
+        queueSection.style.display = 'block';
+        document.getElementById('queue-active').textContent = inf.queue.active ?? 0;
+        document.getElementById('queue-queued').textContent = inf.queue.queued ?? 0;
+        document.getElementById('queue-max').textContent = inf.queue.max_concurrency ?? '—';
+      } else {
+        queueSection.style.display = 'none';
+      }
+
+      // Latency percentiles (optional)
+      const pctSection = document.getElementById('percentiles-section');
+      if (inf.latency_percentiles) {
+        const lp = inf.latency_percentiles;
+        pctSection.style.display = 'block';
+        document.getElementById('pct-p50').textContent = lp.decode_tps_p50 != null ? `${lp.decode_tps_p50} t/s` : '—';
+        document.getElementById('pct-p95').textContent = lp.decode_tps_p95 != null ? `${lp.decode_tps_p95} t/s` : '—';
+        document.getElementById('pct-ttft-p99').textContent = lp.ttft_ms_p99 != null ? `${lp.ttft_ms_p99} ms` : '—';
+      } else {
+        pctSection.style.display = 'none';
+      }
+
+      // Efficiency: tokens per watt, derived from GPU power + decode tps (optional)
+      const effRow = document.getElementById('gpu-efficiency-row');
+      if (lastGpuPowerW > 0 && inf.decode_tps) {
+        effRow.style.display = 'flex';
+        document.getElementById('gpu-efficiency').textContent = `${(inf.decode_tps / lastGpuPowerW).toFixed(2)} tok/W`;
+      } else {
+        effRow.style.display = 'none';
+      }
 
       drawSparkline('spark-throughput', inf.decode_history || [], '#3fb950', 'rgba(63, 185, 80, 0.12)');
 
@@ -1651,6 +1982,28 @@
           entry.innerHTML = `<span class="event-time">[${ev.time || ''}]</span><span class="event-msg">${ev.message || ''}</span>`;
           elList.appendChild(entry);
         });
+      }
+    }
+
+    // Request Log (optional)
+    if (data.requests && data.requests.length) {
+      const rl = document.getElementById('request-log-list');
+      const badge = document.getElementById('request-count-badge');
+      if (badge) badge.textContent = `${data.requests.length} requests`;
+      if (rl) {
+        rl.innerHTML = data.requests.map(r => {
+          const status = r.status != null ? r.status : 'OK';
+          const isErr = typeof status === 'number' && status >= 400;
+          return `
+            <div class="request-row">
+              <span class="req-time">${r.time || ''}</span>
+              <span class="req-model">${r.model || ''}</span>
+              <span class="req-tok">${(r.tokens_in ?? 0)}→${(r.tokens_out ?? 0)}</span>
+              <span class="req-dur">${r.duration_ms != null ? r.duration_ms + 'ms' : '—'}</span>
+              <span class="req-status ${isErr ? 'err' : 'ok'}">${status}</span>
+            </div>
+          `;
+        }).join('');
       }
     }
   }
@@ -1739,6 +2092,14 @@
 
   tabBtnMonitor.addEventListener('click', () => switchMainTab('monitor'));
   tabBtnPlayground.addEventListener('click', () => switchMainTab('playground'));
+  const tabBtnActivity = document.getElementById('tab-btn-activity');
+  if (tabBtnActivity) {
+    tabBtnActivity.addEventListener('click', () => {
+      switchMainTab('monitor');
+      const el = document.getElementById('event-list');
+      if (el) el.scrollIntoView({ behavior: 'smooth' });
+    });
+  }
 
   // Sub-tab switching in Playground (Chat, Image, Audio, Transcribe)
   document.querySelectorAll('.pg-subnav-btn').forEach(btn => {
@@ -2153,53 +2514,6 @@
       navigator.clipboard.writeText(sttOutput.textContent);
       btnSttCopy.textContent = '✅ Copied!';
       setTimeout(() => { btnSttCopy.textContent = '📋 Copy Transcript'; }, 2000);
-    });
-  }
-
-  // Quick Test Runner (inside System Monitor tab) - Fixed with explicit model parameter
-  const btnRunTest = document.getElementById('btn-run-test');
-  const testInput = document.getElementById('test-prompt');
-  const testOutput = document.getElementById('test-output-box');
-
-  if (btnRunTest && testInput && testOutput) {
-    btnRunTest.addEventListener('click', async () => {
-      const promptText = testInput.value.trim();
-      if (!promptText) return;
-      btnRunTest.disabled = true;
-      btnRunTest.textContent = 'Generating...';
-      testOutput.style.display = 'block';
-      testOutput.textContent = 'Sending prompt to Pantry...\n';
-
-      const startTime = performance.now();
-      try {
-        const res = await fetch('/v1/chat/completions', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'chat-standard',
-            messages: [{ role: 'user', content: promptText }],
-            max_tokens: 64,
-            temperature: 0.7
-          })
-        });
-
-        const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
-        if (!res.ok) {
-          const errText = await res.text();
-          testOutput.textContent = `Error (${res.status}): ${errText}`;
-        } else {
-          const json = await res.json();
-          const reply = json.choices?.[0]?.message?.content || JSON.stringify(json, null, 2);
-          const tps = json.usage?.completion_tokens ? (json.usage.completion_tokens / elapsed).toFixed(1) : 'N/A';
-          testOutput.textContent = `[Completed in ${elapsed}s | ${tps} t/s]\n${reply}`;
-        }
-      } catch (err) {
-        testOutput.textContent = `Request failed: ${err.message}`;
-      } finally {
-        btnRunTest.disabled = false;
-        btnRunTest.textContent = 'Run Test';
-        fetchStats();
-      }
     });
   }
 

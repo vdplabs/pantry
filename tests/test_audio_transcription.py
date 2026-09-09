@@ -240,6 +240,8 @@ def test_cli_transcribe_local(tmp_path):
             str(wav),
             "--model",
             "transcribe-compact",
+            "--port",
+            "59999",
             "--home",
             str(home),
             "--format",

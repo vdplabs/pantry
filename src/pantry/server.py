@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import os
 import threading
 import time
 import uuid
@@ -23,7 +24,7 @@ from pantry.pull import PullError, pull_package
 from pantry.resolve import ResolveError, find_by_model_string, resolve
 from pantry.runtime import RuntimeHub
 from pantry.scheduler import Scheduler
-from pantry.telemetry import TelemetryCollector, TokenMetricsTracker
+from pantry.telemetry import RequestLogTracker, TelemetryCollector, TokenMetricsTracker
 from pantry.schemas import (
     AudioGenerateRequest,
     CapabilityRequest,
@@ -117,6 +118,10 @@ class Service:
         self.store = store
         self.scheduler = Scheduler()
         self.runtimes = RuntimeHub(store, worker_isolation=worker_isolation)
+        self.active_streams: int = 0
+        self._model_last_used: dict[str, float] = {}
+        self._idle_timeout_seconds: float = float(os.environ.get("PANTRY_IDLE_TIMEOUT", "300"))
+        self._start_time: float = time.time()
         self._current_loading: str | None = None
         self._current_activity: str | None = None
         self._loading_start_time: float | None = None
@@ -124,6 +129,18 @@ class Service:
             {"time": time.strftime("%H:%M:%S"), "message": f"Daemon started (v{__version__}) on 127.0.0.1:18787"}
         ]
         self._lock = threading.Lock()
+
+    def touch_model(self, model_id: str) -> None:
+        with self._lock:
+            self._model_last_used[model_id] = time.time()
+
+    def get_idle_countdown(self, model_id: str) -> float | None:
+        with self._lock:
+            if self._idle_timeout_seconds <= 0:
+                return None
+            last_used = self._model_last_used.get(model_id, self._start_time)
+            elapsed = time.time() - last_used
+            return max(0.0, round(self._idle_timeout_seconds - elapsed, 1))
 
     def log_event(self, message: str) -> None:
         with self._lock:
@@ -378,6 +395,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         if pkg is None:
             raise HTTPException(status_code=404, detail=f"unknown package: {req.package_id}")
         target_id = pkg.id
+        svc.touch_model(target_id)
         store.mark_loaded(target_id, pin=req.pin)
         svc.log_event(f"Loaded model into memory: {target_id}")
         return {
@@ -416,6 +434,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
     @app.post("/v1/chat/completions")
     async def chat_completions(req: CompleteRequest) -> Any:
         pkg = svc.resolve_model(req.model)
+        svc.touch_model(pkg.id)
         if not _is_text_package(pkg):
             raise HTTPException(
                 status_code=400,
@@ -457,42 +476,61 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
         if not req.stream:
             t0 = time.time()
-            text = await svc.scheduler.run(req.priority, _complete, modality="text")
-            duration_s = max(0.01, time.time() - t0)
-            tool_calls = _parse_tool_calls(text) if req.tools else None
-            message_obj: dict[str, Any] = {
-                "role": "assistant",
-                "content": None if tool_calls else text,
-            }
-            if tool_calls:
-                message_obj["tool_calls"] = tool_calls
-            finish_reason = "tool_calls" if tool_calls else "stop"
+            try:
+                text = await svc.scheduler.run(req.priority, _complete, modality="text")
+                duration_s = max(0.01, time.time() - t0)
+                tool_calls = _parse_tool_calls(text) if req.tools else None
+                message_obj: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": None if tool_calls else text,
+                }
+                if tool_calls:
+                    message_obj["tool_calls"] = tool_calls
+                finish_reason = "tool_calls" if tool_calls else "stop"
 
-            usage = usage_info if usage_info else _estimate_usage(pkg, req.messages, text)
-            TokenMetricsTracker.get().record_completion(
-                prompt_tokens=usage.get("prompt_tokens", 0),
-                completion_tokens=usage.get("completion_tokens", 0),
-                decode_duration_s=duration_s,
-                context_limit=getattr(pkg, "context_max", 4096),
-                model_params_b=getattr(pkg, "params_b", 3.0),
-            )
-            return {
-                "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
-                "object": "chat.completion",
-                "created": int(time.time()),
-                "model": req.model,
-                "package_id": pkg.id,
-                "speculative": speculative,
-                "draft_package_id": draft_id,
-                "choices": [
-                    {
-                        "index": 0,
-                        "message": message_obj,
-                        "finish_reason": finish_reason,
-                    }
-                ],
-                "usage": usage,
-            }
+                usage = usage_info if usage_info else _estimate_usage(pkg, req.messages, text)
+                TokenMetricsTracker.get().record_completion(
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    decode_duration_s=duration_s,
+                    context_limit=getattr(pkg, "context_max", 4096),
+                    model_params_b=getattr(pkg, "params_b", 3.0),
+                )
+                RequestLogTracker.get().record_request(
+                    model=req.model,
+                    tokens_in=usage.get("prompt_tokens", 0),
+                    tokens_out=usage.get("completion_tokens", 0),
+                    duration_ms=int(duration_s * 1000),
+                    status=200,
+                )
+                return {
+                    "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
+                    "object": "chat.completion",
+                    "created": int(time.time()),
+                    "model": req.model,
+                    "package_id": pkg.id,
+                    "speculative": speculative,
+                    "draft_package_id": draft_id,
+                    "choices": [
+                        {
+                            "index": 0,
+                            "message": message_obj,
+                            "finish_reason": finish_reason,
+                        }
+                    ],
+                    "usage": usage,
+                }
+            except Exception as exc:
+                dur_ms = int(max(0.01, time.time() - t0) * 1000)
+                st = getattr(exc, "status_code", 500)
+                RequestLogTracker.get().record_request(
+                    model=req.model,
+                    tokens_in=0,
+                    tokens_out=0,
+                    duration_ms=dur_ms,
+                    status=st,
+                )
+                raise
 
         async def event_stream() -> AsyncIterator[bytes]:
             cid = f"chatcmpl-{uuid.uuid4().hex[:12]}"
@@ -500,6 +538,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             t_stream_start = time.time()
             assembled: list[str] = []
             stream_usage: dict[str, int] = {}
+            svc.active_streams += 1
 
             async def _locked_stream() -> AsyncIterator[str]:
                 async with svc.scheduler.hold(req.priority, modality="text"):
@@ -515,48 +554,69 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                         ):
                             yield chunk
 
-            async for piece in _locked_stream():
-                if not piece:
-                    continue
-                assembled.append(piece)
-                payload = {
+            try:
+                async for piece in _locked_stream():
+                    if not piece:
+                        continue
+                    assembled.append(piece)
+                    payload = {
+                        "id": cid,
+                        "object": "chat.completion.chunk",
+                        "created": created,
+                        "model": req.model,
+                        "choices": [
+                            {
+                                "index": 0,
+                                "delta": {"content": piece},
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+                    yield f"data: {json.dumps(payload)}\n\n".encode()
+
+                full_text = "".join(assembled)
+                tool_calls = _parse_tool_calls(full_text) if req.tools else None
+                finish_reason = "tool_calls" if tool_calls else "stop"
+
+                usage = stream_usage if stream_usage else _estimate_usage(pkg, req.messages, full_text)
+                duration_s = max(0.01, time.time() - t_stream_start)
+                TokenMetricsTracker.get().record_completion(
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    decode_duration_s=duration_s,
+                    context_limit=getattr(pkg, "context_max", 4096),
+                    model_params_b=getattr(pkg, "params_b", 3.0),
+                )
+                RequestLogTracker.get().record_request(
+                    model=req.model,
+                    tokens_in=usage.get("prompt_tokens", 0),
+                    tokens_out=usage.get("completion_tokens", 0),
+                    duration_ms=int(duration_s * 1000),
+                    status=200,
+                )
+                done = {
                     "id": cid,
                     "object": "chat.completion.chunk",
                     "created": created,
                     "model": req.model,
-                    "choices": [
-                        {
-                            "index": 0,
-                            "delta": {"content": piece},
-                            "finish_reason": None,
-                        }
-                    ],
+                    "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
+                    "usage": usage,
                 }
-                yield f"data: {json.dumps(payload)}\n\n".encode()
-
-            full_text = "".join(assembled)
-            tool_calls = _parse_tool_calls(full_text) if req.tools else None
-            finish_reason = "tool_calls" if tool_calls else "stop"
-
-            usage = stream_usage if stream_usage else _estimate_usage(pkg, req.messages, full_text)
-            duration_s = max(0.01, time.time() - t_stream_start)
-            TokenMetricsTracker.get().record_completion(
-                prompt_tokens=usage.get("prompt_tokens", 0),
-                completion_tokens=usage.get("completion_tokens", 0),
-                decode_duration_s=duration_s,
-                context_limit=getattr(pkg, "context_max", 4096),
-                model_params_b=getattr(pkg, "params_b", 3.0),
-            )
-            done = {
-                "id": cid,
-                "object": "chat.completion.chunk",
-                "created": created,
-                "model": req.model,
-                "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
-                "usage": usage,
-            }
-            yield f"data: {json.dumps(done)}\n\n".encode()
-            yield b"data: [DONE]\n\n"
+                yield f"data: {json.dumps(done)}\n\n".encode()
+                yield b"data: [DONE]\n\n"
+            except Exception as exc:
+                dur_ms = int(max(0.01, time.time() - t_stream_start) * 1000)
+                st = getattr(exc, "status_code", 500)
+                RequestLogTracker.get().record_request(
+                    model=req.model,
+                    tokens_in=0,
+                    tokens_out=0,
+                    duration_ms=dur_ms,
+                    status=st,
+                )
+                raise
+            finally:
+                svc.active_streams = max(0, svc.active_streams - 1)
 
         return StreamingResponse(event_stream(), media_type="text/event-stream")
 
@@ -685,6 +745,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         async def responses_event_stream() -> AsyncIterator[bytes]:
             assembled: list[str] = []
             stream_usage: dict[str, int] = {}
+            t_stream_start = time.time()
+            svc.active_streams += 1
 
             async def _locked_stream() -> AsyncIterator[str]:
                 async with svc.scheduler.hold(complete_req.priority, modality="text"):
@@ -700,61 +762,83 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                         ):
                             yield chunk
 
-            seq = 0
-            async for piece in _locked_stream():
-                if not piece:
-                    continue
-                assembled.append(piece)
-                seq += 1
-                payload = {
-                    "type": "response.output_text.delta",
-                    "delta": piece,
-                    "sequence_number": seq,
+            try:
+                seq = 0
+                async for piece in _locked_stream():
+                    if not piece:
+                        continue
+                    assembled.append(piece)
+                    seq += 1
+                    payload = {
+                        "type": "response.output_text.delta",
+                        "delta": piece,
+                        "sequence_number": seq,
+                        "item_id": msg_id,
+                        "output_index": 0,
+                        "content_index": 0,
+                        "choices": [{"index": 0, "delta": {"content": piece}}],
+                    }
+                    yield f"event: response.output_text.delta\ndata: {json.dumps(payload)}\n\n".encode()
+
+                full_text = "".join(assembled)
+                usage = stream_usage if stream_usage else _estimate_usage(pkg, complete_req.messages, full_text)
+                dur_ms = int(max(0.01, time.time() - t_stream_start) * 1000)
+                RequestLogTracker.get().record_request(
+                    model=complete_req.model,
+                    tokens_in=usage.get("prompt_tokens", 0),
+                    tokens_out=usage.get("completion_tokens", 0),
+                    duration_ms=dur_ms,
+                    status=200,
+                )
+
+                done_payload = {
+                    "type": "response.output_text.done",
+                    "text": full_text,
                     "item_id": msg_id,
                     "output_index": 0,
                     "content_index": 0,
-                    "choices": [{"index": 0, "delta": {"content": piece}}],
                 }
-                yield f"event: response.output_text.delta\ndata: {json.dumps(payload)}\n\n".encode()
+                yield f"event: response.output_text.done\ndata: {json.dumps(done_payload)}\n\n".encode()
 
-            full_text = "".join(assembled)
-            usage = stream_usage if stream_usage else _estimate_usage(pkg, complete_req.messages, full_text)
-
-            done_payload = {
-                "type": "response.output_text.done",
-                "text": full_text,
-                "item_id": msg_id,
-                "output_index": 0,
-                "content_index": 0,
-            }
-            yield f"event: response.output_text.done\ndata: {json.dumps(done_payload)}\n\n".encode()
-
-            completed_payload = {
-                "type": "response.completed",
-                "response": {
-                    "id": resp_id,
-                    "object": "response",
-                    "created_at": created,
-                    "status": "completed",
-                    "model": complete_req.model,
-                    "output": [
-                        {
-                            "id": msg_id,
-                            "type": "message",
-                            "role": "assistant",
-                            "content": [
-                                {
-                                    "type": "output_text",
-                                    "text": full_text,
-                                }
-                            ],
-                        }
-                    ],
-                    "usage": usage,
-                },
-            }
-            yield f"event: response.completed\ndata: {json.dumps(completed_payload)}\n\n".encode()
-            yield b"data: [DONE]\n\n"
+                completed_payload = {
+                    "type": "response.completed",
+                    "response": {
+                        "id": resp_id,
+                        "object": "response",
+                        "created_at": created,
+                        "status": "completed",
+                        "model": complete_req.model,
+                        "output": [
+                            {
+                                "id": msg_id,
+                                "type": "message",
+                                "role": "assistant",
+                                "content": [
+                                    {
+                                        "type": "output_text",
+                                        "text": full_text,
+                                    }
+                                ],
+                            }
+                        ],
+                        "usage": usage,
+                    },
+                }
+                yield f"event: response.completed\ndata: {json.dumps(completed_payload)}\n\n".encode()
+                yield b"data: [DONE]\n\n"
+            except Exception as exc:
+                dur_ms = int(max(0.01, time.time() - t_stream_start) * 1000)
+                st = getattr(exc, "status_code", 500)
+                RequestLogTracker.get().record_request(
+                    model=complete_req.model,
+                    tokens_in=0,
+                    tokens_out=0,
+                    duration_ms=dur_ms,
+                    status=st,
+                )
+                raise
+            finally:
+                svc.active_streams = max(0, svc.active_streams - 1)
 
         return StreamingResponse(responses_event_stream(), media_type="text/event-stream")
 
@@ -806,6 +890,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         req: ImageGenerateRequest, request: Request
     ) -> Any:
         pkg = svc.resolve_model(req.model)
+        svc.touch_model(pkg.id)
         if not _is_image_package(pkg):
             raise HTTPException(
                 status_code=400,
@@ -828,6 +913,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             async def _stream_generator() -> AsyncIterator[str]:
                 queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
                 loop = asyncio.get_running_loop()
+                t_stream_start = time.time()
+                svc.active_streams += 1
 
                 def _on_step(step: int, total: int, preview_bytes: bytes | None, width: int, height: int) -> None:
                     step_payload: dict[str, Any] = {
@@ -891,26 +978,45 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     except Exception as exc:
                         await queue.put(("error", str(exc)))
 
-                task = asyncio.create_task(_worker_task())
-                while True:
-                    kind, payload = await queue.get()
-                    if kind == "step":
-                        yield f"event: step\ndata: {json.dumps(payload)}\n\n"
-                    elif kind == "done":
-                        done_payload = {
-                            "type": "done",
-                            "created": int(time.time()),
-                            "model": req.model,
-                            "package_id": pkg.id,
-                            "data": payload,
-                        }
-                        yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
-                        break
-                    elif kind == "error":
-                        err_payload = {"type": "error", "error": payload}
-                        yield f"event: error\ndata: {json.dumps(err_payload)}\n\n"
-                        break
-                await task
+                try:
+                    task = asyncio.create_task(_worker_task())
+                    while True:
+                        kind, payload = await queue.get()
+                        if kind == "step":
+                            yield f"event: step\ndata: {json.dumps(payload)}\n\n"
+                        elif kind == "done":
+                            dur_ms = int(max(0.01, time.time() - t_stream_start) * 1000)
+                            RequestLogTracker.get().record_request(
+                                model=req.model,
+                                tokens_in=0,
+                                tokens_out=0,
+                                duration_ms=dur_ms,
+                                status=200,
+                            )
+                            done_payload = {
+                                "type": "done",
+                                "created": int(time.time()),
+                                "model": req.model,
+                                "package_id": pkg.id,
+                                "data": payload,
+                            }
+                            yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
+                            break
+                        elif kind == "error":
+                            dur_ms = int(max(0.01, time.time() - t_stream_start) * 1000)
+                            RequestLogTracker.get().record_request(
+                                model=req.model,
+                                tokens_in=0,
+                                tokens_out=0,
+                                duration_ms=dur_ms,
+                                status=500,
+                            )
+                            err_payload = {"type": "error", "error": payload}
+                            yield f"event: error\ndata: {json.dumps(err_payload)}\n\n"
+                            break
+                    await task
+                finally:
+                    svc.active_streams = max(0, svc.active_streams - 1)
 
             return StreamingResponse(_stream_generator(), media_type="text/event-stream")
 
@@ -931,12 +1037,40 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         async def _gen() -> list[dict]:
             return await asyncio.to_thread(_gen_fn)
 
+        t0 = time.time()
         try:
             data = await svc.scheduler.run(req.priority, _gen, modality="image")
+            dur_ms = int(max(0.01, time.time() - t0) * 1000)
+            RequestLogTracker.get().record_request(
+                model=req.model,
+                tokens_in=0,
+                tokens_out=0,
+                duration_ms=dur_ms,
+                status=200,
+            )
         except RuntimeError as e:
             # Preflight / Metal hints — surface as 503 so Sink shows the message
             # instead of a bare ASGI 500.
+            dur_ms = int(max(0.01, time.time() - t0) * 1000)
+            RequestLogTracker.get().record_request(
+                model=req.model,
+                tokens_in=0,
+                tokens_out=0,
+                duration_ms=dur_ms,
+                status=503,
+            )
             raise HTTPException(status_code=503, detail=str(e)) from e
+        except Exception as exc:
+            dur_ms = int(max(0.01, time.time() - t0) * 1000)
+            st = getattr(exc, "status_code", 500)
+            RequestLogTracker.get().record_request(
+                model=req.model,
+                tokens_in=0,
+                tokens_out=0,
+                duration_ms=dur_ms,
+                status=st,
+            )
+            raise
 
         if want_shm:
             for item in data:

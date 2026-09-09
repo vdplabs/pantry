@@ -442,6 +442,8 @@ def test_cli_image_local(tmp_path):
             "a tranquil forest",
             "--model",
             "image-compact",
+            "--port",
+            "59999",
             "--home",
             str(home),
             "--output",

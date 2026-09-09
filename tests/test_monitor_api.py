@@ -5,7 +5,7 @@ from starlette.testclient import TestClient
 from pantry.config import bundled_catalog_dir
 from pantry.server import create_app
 from pantry.store import PackageStore
-from pantry.telemetry import TokenMetricsTracker
+from pantry.telemetry import RequestLogTracker, TokenMetricsTracker
 
 
 def test_dashboard_endpoint(tmp_path):
@@ -64,7 +64,11 @@ def test_monitor_stats_api(tmp_path):
     assert "used_bytes" in data["memory"]
 
     assert "gpu" in data
-    assert "utilization_percent" in data["gpu"]
+    assert isinstance(data["gpu"], list)
+    assert len(data["gpu"]) > 0
+    assert "utilization_percent" in data["gpu"][0]
+    assert "name" in data["gpu"][0]
+    assert "vram_used_human" in data["gpu"][0]
 
     assert "network" in data
     assert "download_human_sec" in data["network"]
@@ -78,6 +82,22 @@ def test_monitor_stats_api(tmp_path):
     assert "inference" in data
     assert "session" in data["inference"]
     assert "cumulative" in data["inference"]
+    assert "queue" in data["inference"]
+    assert "active" in data["inference"]["queue"]
+    assert "queued" in data["inference"]["queue"]
+    assert "max_concurrency" in data["inference"]["queue"]
+    assert "latency_percentiles" in data["inference"]
+
+    assert "server" in data
+    assert "version" in data["server"]
+    assert "uptime_human" in data["server"]
+    assert "active_streams" in data["server"]
+
+    assert "errors" in data
+    assert "recent_count" in data["errors"]
+
+    assert "requests" in data
+    assert isinstance(data["requests"], list)
 
 
 def test_token_metrics_tracker_and_reset(tmp_path):
@@ -100,6 +120,8 @@ def test_token_metrics_tracker_and_reset(tmp_path):
     assert stats["session"]["requests"] == 1
     assert stats["decode_tps"] == 20.0  # 50 / 2.5
     assert stats["prefill_tps"] == 300.0  # 150 / 0.5
+    assert stats["latency_percentiles"]["decode_tps_p50"] == 20.0
+    assert stats["latency_percentiles"]["ttft_ms_p99"] == 500.0
 
     store = PackageStore(tmp_path)
     app = create_app(store)
@@ -114,6 +136,7 @@ def test_token_metrics_tracker_and_reset(tmp_path):
     assert reset_stats["session"]["total_tokens"] == 0
     # Cumulative should persist across session resets
     assert reset_stats["cumulative"]["total_tokens"] == 200
+    assert reset_stats["latency_percentiles"]["decode_tps_p50"] is None
 
 
 def test_monitor_stats_with_loaded_models(tmp_path):
@@ -140,10 +163,58 @@ def test_monitor_stats_with_loaded_models(tmp_path):
     assert resident[0]["title"] in ["z-image-turbo", "z-image", pkg_id]
     assert resident[0]["modality"] == "image_gen"
     assert "resident_human" in resident[0]
+    assert "quantization" in resident[0]
+    assert "runtime" in resident[0]
+    assert "context_length" in resident[0]
+    assert resident[0]["idle_unload_seconds"] is not None
 
     available = ai_models.get("available_models", [])
     assert len(available) > 0
     assert available[0]["title"] is not None
+    assert "quantization" in available[0]
+    assert "runtime" in available[0]
+    assert "context_length" in available[0]
+    assert available[0]["idle_unload_seconds"] is None
+
+
+def test_request_log_tracker_and_errors(tmp_path):
+    tracker = RequestLogTracker.get()
+    tracker.clear()
+
+    tracker.record_request(
+        model="chat-default",
+        tokens_in=10,
+        tokens_out=25,
+        duration_ms=120,
+        status=200,
+    )
+    tracker.record_request(
+        model="image-turbo",
+        tokens_in=0,
+        tokens_out=0,
+        duration_ms=850,
+        status=500,
+    )
+
+    reqs = tracker.get_requests()
+    assert len(reqs) == 2
+    assert reqs[0]["model"] == "image-turbo"
+    assert reqs[0]["status"] == 500
+    assert reqs[1]["model"] == "chat-default"
+    assert reqs[1]["status"] == 200
+
+    assert tracker.recent_error_count(300.0) == 1
+
+    store = PackageStore(tmp_path)
+    app = create_app(store)
+    client = TestClient(app)
+
+    resp = client.get("/v1/monitor/stats")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["errors"]["recent_count"] >= 1
+    assert len(data["requests"]) >= 2
+    assert data["requests"][0]["model"] == "image-turbo"
 
 
 def test_monitor_activity_and_loading_lifecycle(tmp_path):
