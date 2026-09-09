@@ -55,12 +55,23 @@ Options:
 * **Network Throughput**: Live download ($\downarrow$) and upload ($\uparrow$) rates computed dynamically across polling intervals.
 * **Content-Addressed Storage (CAS)**: Total stored weight bytes, deduplicated blob footprint, and storage reduction ratio.
 
-### AI Resident Models Management
-* Lists all models currently resident in memory.
+### Live Operation & Model Loading Tracking (Beyond SINK)
+* **Live Activity Banner**: Displays an animated glowing banner whenever a model is loading or generating (e.g. `Generating image / loading weights... (vdplabs.z-image-turbo.standard.v1)`).
+* **Live Elapsed Timer**: Visual counter tracking the exact seconds spent preparing weights or computing inferences.
+* **Model State Badges**: Model entries visually indicate busy loading states with pulsing badges, elapsed loading counters, and active backend tags (Apple Silicon Metal / NVIDIA CUDA).
+* **Activity & Lifecycle Event Log**: Real-time ticker logging daemon start, model loads, model unloads, inference completions, and memory cache purges.
+
+### AI Resident Models Management & Pre-Warming
+* Lists all models currently resident in memory as well as catalog models available on standby.
 * Displays model parameters, runtime backend (`mlx` or `cuda`), resident RAM footprint, and maximum context window.
+* **1-Click Pre-Warming (⚡ Load)**: Pre-load any standby model into RAM/VRAM before invoking inference requests via `POST /v1/load`.
 * **1-Click Unload**: Eject specific models from memory immediately via `POST /v1/unload`.
 * **Unload All**: Free all warm models from GPU and host RAM.
 * **Purge Pool**: Clear dormant Metal / CUDA caches and force Python garbage collection without ejecting model weights.
+
+### Quick Inference Playground
+* Directly embedded into the monitor dashboard to test and benchmark models in real-time.
+* Send test prompts, observe live token throughput sparklines, verify context fill progress, and benchmark latency directly from the browser.
 
 ### Inference & Token Telemetry
 * **Decode Throughput**: Real-time tokens per second (TPS) with live Canvas sparkline.

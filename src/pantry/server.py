@@ -119,18 +119,58 @@ class Service:
         self.runtimes = RuntimeHub(store, worker_isolation=worker_isolation)
         self._current_loading: str | None = None
         self._current_activity: str | None = None
+        self._loading_start_time: float | None = None
+        self._recent_events: list[dict[str, Any]] = [
+            {"time": time.strftime("%H:%M:%S"), "message": f"Daemon started (v{__version__}) on 127.0.0.1:18787"}
+        ]
         self._lock = threading.Lock()
+
+    def log_event(self, message: str) -> None:
+        with self._lock:
+            self._recent_events.append({
+                "time": time.strftime("%H:%M:%S"),
+                "timestamp": time.time(),
+                "message": message,
+            })
+            if len(self._recent_events) > 30:
+                self._recent_events.pop(0)
 
     def set_loading(self, model_or_package_id: str | None, activity: str | None = None) -> None:
         with self._lock:
+            prev_loading = self._current_loading
             self._current_loading = model_or_package_id
             self._current_activity = activity
+            if model_or_package_id is not None:
+                self._loading_start_time = time.time()
+                act_str = activity or "Loading weights"
+                self._recent_events.append({
+                    "time": time.strftime("%H:%M:%S"),
+                    "timestamp": time.time(),
+                    "message": f"Started: {act_str} ({model_or_package_id})",
+                })
+            else:
+                if self._loading_start_time is not None:
+                    dur = round(time.time() - self._loading_start_time, 2)
+                    target = f" for {prev_loading}" if prev_loading else ""
+                    self._recent_events.append({
+                        "time": time.strftime("%H:%M:%S"),
+                        "timestamp": time.time(),
+                        "message": f"Finished operation ({dur}s){target}",
+                    })
+                self._loading_start_time = None
+            if len(self._recent_events) > 30:
+                self._recent_events.pop(0)
 
-    def get_loading_info(self) -> dict[str, str | None]:
+    def get_loading_info(self) -> dict[str, Any]:
         with self._lock:
+            elapsed = 0.0
+            if self._loading_start_time is not None:
+                elapsed = round(time.time() - self._loading_start_time, 1)
             return {
                 "loading": self._current_loading,
                 "activity": self._current_activity,
+                "elapsed_seconds": elapsed,
+                "events": list(self._recent_events),
             }
 
     @contextmanager
@@ -176,7 +216,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         allow_headers=["*"],
     )
 
-    telemetry = TelemetryCollector(store)
+    telemetry = TelemetryCollector(store, svc=svc)
     dashboard_path = Path(__file__).parent / "static" / "dashboard.html"
 
     @app.get("/dashboard", response_class=HTMLResponse)
@@ -288,7 +328,9 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
     @app.post("/v1/memory/clear")
     def memory_clear() -> dict[str, Any]:
-        return clear_metal_cache()
+        res = clear_metal_cache()
+        svc.log_event("Purged unused memory pool caches (Metal / CUDA / GC)")
+        return res
 
     @app.get("/v1/models")
     def models(
@@ -329,6 +371,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             raise HTTPException(status_code=404, detail=f"unknown package: {req.package_id}")
         target_id = pkg.id
         store.mark_loaded(target_id, pin=req.pin)
+        svc.log_event(f"Loaded model into memory: {target_id}")
         return {
             "ok": True,
             "loaded": store.read_state().get("loaded", []),
@@ -338,7 +381,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
     @app.post("/v1/unload")
     def unload(req: UnloadBody = UnloadBody()) -> dict[str, Any]:
-        target_id = req.package_id
+        target_id = req.package_id or req.id
         if target_id:
             pkg = store.load_manifest(target_id)
             if pkg is None:
@@ -349,10 +392,12 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             if pkg is not None:
                 target_id = pkg.id
             store.mark_unloaded(target_id)
+            svc.log_event(f"Unloaded model from memory: {target_id}")
         else:
             state = store.read_state()
             for pid in list(state.get("loaded", [])):
                 store.mark_unloaded(pid)
+            svc.log_event("Unloaded all models from memory")
         svc.runtimes.unload(target_id)
         return {
             "ok": True,

@@ -149,8 +149,9 @@ class TelemetryCollector:
     _gpu_history: list[float] = [0.0] * 20
     _lock = threading.Lock()
 
-    def __init__(self, store: PackageStore) -> None:
+    def __init__(self, store: PackageStore, svc: Any = None) -> None:
         self.store = store
+        self.svc = svc
         self.tokens = TokenMetricsTracker.get()
 
     def sample(self) -> dict[str, Any]:
@@ -170,6 +171,28 @@ class TelemetryCollector:
                 state = self.store.read_state()
             except Exception:
                 state = {}
+
+            loading_info: dict[str, Any] = {}
+            if self.svc and hasattr(self.svc, "get_loading_info"):
+                try:
+                    loading_info = self.svc.get_loading_info()
+                except Exception:
+                    loading_info = {}
+
+            loading_id = loading_info.get("loading")
+            activity_text = loading_info.get("activity")
+            elapsed_s = loading_info.get("elapsed_seconds", 0.0)
+            events = loading_info.get("events", [])
+            is_busy = bool(loading_id or activity_text)
+
+            activity_data = {
+                "is_busy": is_busy,
+                "loading": loading_id,
+                "loading_title": loading_id,
+                "activity": activity_text,
+                "elapsed_seconds": elapsed_s,
+                "events": events,
+            }
 
             try:
                 cpu_stats = self._sample_cpu()
@@ -244,7 +267,7 @@ class TelemetryCollector:
                 }
 
             try:
-                models_in_memory = self._sample_models_in_memory(state)
+                models_in_memory = self._sample_models_in_memory(state, loading_info)
             except Exception:
                 models_in_memory = {
                     "total_resident_bytes": 0,
@@ -254,6 +277,14 @@ class TelemetryCollector:
                     "resident_models": [],
                     "available_models": [],
                 }
+
+            if loading_id:
+                try:
+                    manifests = self.store.list_manifests()
+                    by_id = {m.id: m for m in manifests}
+                    activity_data["loading_title"] = _model_title(by_id.get(loading_id), loading_id)
+                except Exception:
+                    activity_data["loading_title"] = loading_id
 
             try:
                 token_stats = self.tokens.stats()
@@ -289,6 +320,7 @@ class TelemetryCollector:
                 "network": net_stats,
                 "disk": disk_stats,
                 "ai_models": models_in_memory,
+                "activity": activity_data,
                 "inference": token_stats,
             }
 
@@ -468,8 +500,12 @@ class TelemetryCollector:
             "cas_saved_human": _fmt_bytes(cas_stats.get("dedup_saved_bytes", 0)),
         }
 
-    def _sample_models_in_memory(self, state: dict[str, Any]) -> dict[str, Any]:
+    def _sample_models_in_memory(self, state: dict[str, Any], loading_info: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
+            loading_id = (loading_info or {}).get("loading")
+            activity_text = (loading_info or {}).get("activity")
+            elapsed_s = (loading_info or {}).get("elapsed_seconds", 0.0)
+
             loaded_ids: list[str] = state.get("loaded", [])
             try:
                 manifests = self.store.list_manifests()
@@ -491,6 +527,11 @@ class TelemetryCollector:
                 resident_bytes = _model_ram_bytes(man, default_gb=2.0)
                 total_resident += resident_bytes
 
+                is_curr_loading = bool(loading_id and (pkg_id == loading_id or pkg_id.startswith(loading_id) or loading_id.startswith(pkg_id)))
+                status_label = "Resident in RAM"
+                if is_curr_loading:
+                    status_label = activity_text or "Loading weights…"
+
                 active_items.append({
                     "id": pkg_id,
                     "title": title,
@@ -498,7 +539,9 @@ class TelemetryCollector:
                     "role": role,
                     "resident_bytes": resident_bytes,
                     "resident_human": _fmt_bytes(resident_bytes) or "0 B",
-                    "status": "Resident in RAM",
+                    "status": status_label,
+                    "is_loading": is_curr_loading,
+                    "elapsed_seconds": elapsed_s if is_curr_loading else 0.0,
                 })
 
             available_items = []
@@ -510,6 +553,12 @@ class TelemetryCollector:
                     if getattr(man, "modalities", None):
                         modality = str(man.modalities[0])
                     role = str(getattr(man, "role", "chat") or "chat")
+
+                    is_curr_loading = bool(loading_id and (man.id == loading_id or man.id.startswith(loading_id) or loading_id.startswith(man.id)))
+                    status_label = "Standby"
+                    if is_curr_loading:
+                        status_label = activity_text or "Loading weights…"
+
                     available_items.append({
                         "id": man.id,
                         "title": title,
@@ -517,7 +566,9 @@ class TelemetryCollector:
                         "role": role,
                         "resident_bytes": est_b,
                         "resident_human": f"~{_fmt_bytes(est_b) or '0 B'}",
-                        "status": "Not loaded",
+                        "status": status_label,
+                        "is_loading": is_curr_loading,
+                        "elapsed_seconds": elapsed_s if is_curr_loading else 0.0,
                     })
 
             mem_snap = memory_snapshot(apply_limits=False)
@@ -525,13 +576,16 @@ class TelemetryCollector:
             if total_resident == 0 and mem_snap.get("active_bytes", 0) > 0 and len(loaded_ids) > 0:
                 total_resident = mem_snap.get("active_bytes", 0)
 
+            # Sort currently loading models first so they are never truncated by the slice limit
+            available_items.sort(key=lambda m: not m.get("is_loading", False))
+
             return {
                 "total_resident_bytes": total_resident,
                 "total_resident_human": _fmt_bytes(total_resident) or "0 B",
                 "cache_pool_bytes": cache_pool_bytes,
                 "cache_pool_human": _fmt_bytes(cache_pool_bytes) or "0 B",
                 "resident_models": active_items,
-                "available_models": available_items[:4],
+                "available_models": available_items[:8],
             }
         except Exception:
             return {

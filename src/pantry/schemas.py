@@ -213,6 +213,15 @@ class LoadBody(BaseModel):
 
 class UnloadBody(BaseModel):
     package_id: str | None = None
+    id: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_id(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("package_id") and data.get("id"):
+                data["package_id"] = data["id"]
+        return data
 
 
 class ImageGenerateRequest(BaseModel):

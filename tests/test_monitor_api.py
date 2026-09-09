@@ -140,3 +140,69 @@ def test_monitor_stats_with_loaded_models(tmp_path):
     assert len(available) > 0
     assert available[0]["title"] is not None
 
+
+def test_monitor_activity_and_loading_lifecycle(tmp_path):
+    store = PackageStore(tmp_path)
+    store.seed_from_catalog(bundled_catalog_dir())
+    pkg_id = "vdplabs.z-image-turbo.standard.v1"
+
+    app = create_app(store)
+    client = TestClient(app)
+    svc = app.state.svc
+
+    # 1. Initial idle state
+    resp = client.get("/v1/monitor/stats")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "activity" in data
+    assert data["activity"]["is_busy"] is False
+
+    # 2. Simulate active operation loading weights
+    with svc.tracking_load(pkg_id, "Generating image / loading weights..."):
+        resp = client.get("/v1/monitor/stats")
+        assert resp.status_code == 200
+        busy_data = resp.json()
+        act = busy_data["activity"]
+        assert act["is_busy"] is True
+        assert act["loading"] == pkg_id
+        assert "Generating image" in act["activity"]
+        assert act["elapsed_seconds"] >= 0.0
+
+        # Check AI model loading indicator
+        aim = busy_data["ai_models"]
+        all_models = aim.get("resident_models", []) + aim.get("available_models", [])
+        matching = [m for m in all_models if m["id"] == pkg_id]
+        assert len(matching) > 0
+        assert matching[0]["is_loading"] is True
+        assert "Generating image" in matching[0]["status"]
+
+    # 3. Post-load state - event recorded in history
+    resp = client.get("/v1/monitor/stats")
+    data = resp.json()
+    assert data["activity"]["is_busy"] is False
+    events = data["activity"]["events"]
+    assert len(events) >= 2
+    assert any("Started" in ev["message"] and pkg_id in ev["message"] for ev in events)
+    assert any("Finished" in ev["message"] and pkg_id in ev["message"] for ev in events)
+
+    # 4. Interactive load via POST /v1/load with package_id
+    load_resp = client.post("/v1/load", json={"package_id": pkg_id})
+    assert load_resp.status_code == 200
+    assert load_resp.json()["ok"] is True
+
+    # 5. Interactive unload via POST /v1/unload with { "id": ... }
+    unload_resp = client.post("/v1/unload", json={"id": pkg_id})
+    assert unload_resp.status_code == 200
+    assert unload_resp.json()["ok"] is True
+
+    # 6. Memory purge via POST /v1/memory/clear
+    purge_resp = client.post("/v1/memory/clear")
+    assert purge_resp.status_code == 200
+
+    # Verify all logged events
+    resp = client.get("/v1/monitor/stats")
+    events = resp.json()["activity"]["events"]
+    assert any("Loaded model into memory" in ev["message"] for ev in events)
+    assert any("Unloaded model from memory" in ev["message"] for ev in events)
+    assert any("Purged unused memory pool" in ev["message"] for ev in events)
+

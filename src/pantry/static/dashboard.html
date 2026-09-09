@@ -370,6 +370,155 @@
       border-radius: 4px;
       transition: width 0.3s;
     }
+
+    /* Live Activity Banner */
+    .activity-banner {
+      margin: 14px 16px 0 16px;
+      padding: 11px 16px;
+      border-radius: 10px;
+      background: linear-gradient(90deg, rgba(210, 153, 34, 0.16), rgba(188, 140, 255, 0.16));
+      border: 1px solid rgba(210, 153, 34, 0.45);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      animation: pulseGlow 2.5s infinite ease-in-out;
+      box-shadow: 0 4px 20px rgba(210, 153, 34, 0.15);
+    }
+    @keyframes pulseGlow {
+      0%, 100% { border-color: rgba(210, 153, 34, 0.35); box-shadow: 0 0 12px rgba(210, 153, 34, 0.1); }
+      50% { border-color: rgba(210, 153, 34, 0.75); box-shadow: 0 0 24px rgba(210, 153, 34, 0.28); }
+    }
+    .activity-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .activity-spinner {
+      width: 18px;
+      height: 18px;
+      border: 2.5px solid rgba(210, 153, 34, 0.25);
+      border-top-color: var(--accent-orange);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .activity-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: #ffe194;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .activity-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      margin-top: 1px;
+    }
+    .activity-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .activity-badge {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--accent-orange);
+      font-family: var(--mono);
+    }
+    .activity-badge.engine {
+      color: var(--accent-purple);
+      background: rgba(188, 140, 255, 0.15);
+      border-color: rgba(188, 140, 255, 0.3);
+    }
+
+    /* Model items enhancements */
+    .model-item.active-loading {
+      border: 1px solid rgba(210, 153, 34, 0.6) !important;
+      background: rgba(210, 153, 34, 0.1) !important;
+      box-shadow: 0 0 16px rgba(210, 153, 34, 0.18);
+    }
+    .btn-action.load {
+      background: rgba(56, 139, 253, 0.16);
+      border-color: rgba(56, 139, 253, 0.4);
+      color: #79b8ff;
+    }
+    .btn-action.load:hover {
+      background: rgba(56, 139, 253, 0.3);
+      color: #fff;
+    }
+    .dot.pulse-orange {
+      background: var(--accent-orange);
+      box-shadow: 0 0 8px var(--accent-orange);
+      animation: blink 1s infinite alternate;
+    }
+    @keyframes blink {
+      from { opacity: 0.4; }
+      to { opacity: 1; }
+    }
+    .badge-busy {
+      font-size: 9.5px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: rgba(210, 153, 34, 0.25);
+      color: var(--accent-orange);
+      margin-left: 6px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+    }
+    .chip.warn-pulse {
+      background: rgba(210, 153, 34, 0.2);
+      border-color: rgba(210, 153, 34, 0.4);
+      color: var(--accent-orange);
+      animation: blink 1.2s infinite alternate;
+      font-weight: 600;
+    }
+
+    /* Bottom Grid & Live Event Log */
+    .bottom-grid {
+      padding: 0 16px 16px 16px;
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 860px) {
+      .bottom-grid { grid-template-columns: 1fr !important; }
+    }
+    .event-list {
+      max-height: 110px;
+      overflow-y: auto;
+      font-family: var(--mono);
+      font-size: 11px;
+      display: flex;
+      flex-direction: column-reverse;
+      gap: 5px;
+      padding-right: 4px;
+    }
+    .event-entry {
+      padding: 4px 8px;
+      border-radius: 5px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.03);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .event-entry .event-time {
+      color: var(--accent-blue);
+      font-weight: 600;
+      min-width: 55px;
+    }
+    .event-entry .event-msg {
+      color: var(--text);
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
@@ -387,7 +536,7 @@
         <span>⊞</span> System Monitor
       </div>
       <div class="chip" id="chip-device">Detecting...</div>
-      <div class="chip" id="chip-port">127.0.0.1:18787</div>
+      <div class="chip" id="header-status-pill">● Online · 127.0.0.1:18787</div>
     </div>
 
     <div class="interval-controls">
@@ -397,6 +546,21 @@
       <button class="btn-interval" data-interval="5000">5.0s</button>
       <button class="btn-icon" id="btn-pause" title="Pause / Resume">⏸</button>
       <button class="btn-icon" id="btn-copy" title="Copy Telemetry JSON">📋</button>
+    </div>
+  </div>
+
+  <!-- Live Operation Activity Banner (Displays dynamically when loading/generating) -->
+  <div id="live-activity-banner" class="activity-banner" style="display: none;">
+    <div class="activity-left">
+      <div class="activity-spinner"></div>
+      <div>
+        <div class="activity-title" id="act-operation">Loading weights into Metal memory...</div>
+        <div class="activity-sub" id="act-model">vdplabs.z-image-turbo.standard.v1</div>
+      </div>
+    </div>
+    <div class="activity-right">
+      <span class="activity-badge" id="act-elapsed">0.0s elapsed</span>
+      <span class="activity-badge engine" id="act-engine">Apple Silicon Metal</span>
     </div>
   </div>
 
@@ -607,6 +771,37 @@
       </div>
     </div>
   </div>
+
+  <!-- Quick Test Playground & Live Activity Log -->
+  <div class="bottom-grid">
+    <!-- Quick Test Playground -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span>⚡</span> Quick Inference Playground</div>
+        <span class="chip">Live Test</span>
+      </div>
+      <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
+        Send a test prompt directly to Pantry to benchmark token throughput, memory footprint, and model loading behavior.
+      </div>
+      <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+        <input type="text" id="test-prompt" value="Write a one-sentence haiku about speed." 
+               style="flex: 1; background: rgba(0,0,0,0.4); border: 1px solid var(--card-border); border-radius: 6px; padding: 7px 10px; color: var(--text); font-size: 12px; outline: none;" />
+        <button id="btn-run-test" class="btn-action load" style="padding: 7px 14px; font-size: 12px;">Run Test</button>
+      </div>
+      <div id="test-output-box" style="display: none; background: rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 11px; color: #a5d6ff; max-height: 100px; overflow-y: auto; white-space: pre-wrap;"></div>
+    </div>
+
+    <!-- Live Event Log -->
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title"><span>📜</span> Activity & Lifecycle Log</div>
+        <span class="chip" style="font-size: 10px;" id="event-count-badge">0 events</span>
+      </div>
+      <div class="event-list" id="event-list">
+        <div style="color: var(--text-muted); font-size: 11px; text-align: center; padding: 12px 0;">No events logged yet</div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -682,6 +877,31 @@
     // Device & Toolbar
     if (data.device) {
       document.getElementById('chip-device').textContent = data.device.name;
+    }
+
+    // Live Activity Banner & Header Status
+    const headerPill = document.getElementById('header-status-pill');
+    const actBanner = document.getElementById('live-activity-banner');
+    if (data.activity && data.activity.is_busy) {
+      if (headerPill) {
+        headerPill.textContent = `⚡ Working (${(data.activity.elapsed_seconds || 0).toFixed(1)}s)`;
+        headerPill.className = 'chip warn-pulse';
+      }
+      if (actBanner) {
+        actBanner.style.display = 'flex';
+        document.getElementById('act-operation').textContent = data.activity.activity || 'Loading weights / preparing model...';
+        document.getElementById('act-model').textContent = data.activity.loading_title || data.activity.loading || 'Active Operation';
+        document.getElementById('act-elapsed').textContent = `${(data.activity.elapsed_seconds || 0).toFixed(1)}s elapsed`;
+        document.getElementById('act-engine').textContent = (data.device?.name || 'Inference Engine') + (data.gpu?.device_type === 'cuda' ? ' (CUDA)' : ' (Metal)');
+      }
+    } else {
+      if (headerPill) {
+        headerPill.textContent = 'Live Monitoring';
+        headerPill.className = 'chip';
+      }
+      if (actBanner) {
+        actBanner.style.display = 'none';
+      }
     }
 
     // CPU
@@ -776,14 +996,18 @@
       } else {
         resident.forEach(m => {
           const item = document.createElement('div');
-          item.className = 'model-item';
+          item.className = 'model-item' + (m.is_loading ? ' active-loading' : '');
           const icon = m.modality === 'image_gen' ? '🎨' : (m.modality === 'video' ? '🎬' : (m.modality === 'music' ? '🎵' : '💬'));
+          const dotClass = m.is_loading ? 'dot pulse-orange' : 'dot';
+          const dotStyle = m.is_loading ? '' : 'style="background: var(--accent-green);"';
+          const busyBadge = m.is_loading ? '<span class="badge-busy">BUSY</span>' : '';
+          const subText = m.is_loading ? `${m.status} · ${(m.elapsed_seconds || 0).toFixed(1)}s` : `Resident in RAM · ~${m.resident_human}`;
           item.innerHTML = `
             <div class="model-info">
               <span class="model-icon">${icon}</span>
               <div>
-                <div class="model-name"><span class="dot" style="background: var(--accent-green);"></span> ${m.title || m.id}</div>
-                <div class="model-sub">Resident in RAM · ~${m.resident_human}</div>
+                <div class="model-name"><span class="${dotClass}" ${dotStyle}></span> ${m.title || m.id}${busyBadge}</div>
+                <div class="model-sub">${subText}</div>
               </div>
             </div>
             <button class="btn-action unload" onclick="unloadModel('${m.id}')">Unload</button>
@@ -793,18 +1017,24 @@
 
         available.forEach(m => {
           const item = document.createElement('div');
-          item.className = 'model-item';
-          item.style.opacity = '0.65';
+          item.className = 'model-item' + (m.is_loading ? ' active-loading' : '');
+          if (!m.is_loading) item.style.opacity = '0.75';
           const icon = m.modality === 'image_gen' ? '✏️' : (m.modality === 'video' ? '📽️' : (m.modality === 'music' ? '🎧' : '💭'));
+          const dotClass = m.is_loading ? 'dot pulse-orange' : 'dot';
+          const dotStyle = m.is_loading ? '' : 'style="background: var(--text-dim);"';
+          const subText = m.is_loading ? `${m.status} · ${(m.elapsed_seconds || 0).toFixed(1)}s` : `Not loaded · ${m.resident_human}`;
+          const actionBtn = m.is_loading
+            ? '<span class="chip warn-pulse" style="font-size: 10px;">Loading...</span>'
+            : `<button class="btn-action load" onclick="loadModel('${m.id}')">⚡ Load</button>`;
           item.innerHTML = `
             <div class="model-info">
               <span class="model-icon">${icon}</span>
               <div>
-                <div class="model-name"><span class="dot" style="background: var(--text-dim);"></span> ${m.title || m.id}</div>
-                <div class="model-sub">Not loaded · ${m.resident_human}</div>
+                <div class="model-name"><span class="${dotClass}" ${dotStyle}></span> ${m.title || m.id}</div>
+                <div class="model-sub">${subText}</div>
               </div>
             </div>
-            <span class="chip" style="font-size: 10px;">Standby</span>
+            ${actionBtn}
           `;
           container.appendChild(item);
         });
@@ -833,15 +1063,44 @@
       document.getElementById('tok-cumul-total').textContent = `${(c.total_tokens || 0).toLocaleString()} tokens`;
       document.getElementById('tok-cumul-meta').textContent = `P: ${(c.prompt_tokens || 0).toLocaleString()} · C: ${(c.completion_tokens || 0).toLocaleString()} · ${c.requests || 0} reqs`;
     }
+
+    // Activity & Lifecycle Log
+    if (data.activity && data.activity.events) {
+      const elList = document.getElementById('event-list');
+      const elCount = document.getElementById('event-count-badge');
+      if (elList && data.activity.events.length > 0) {
+        if (elCount) elCount.textContent = `${data.activity.events.length} events`;
+        elList.innerHTML = '';
+        data.activity.events.forEach(ev => {
+          const entry = document.createElement('div');
+          entry.className = 'event-entry';
+          entry.innerHTML = `<span class="event-time">[${ev.time || ''}]</span><span class="event-msg">${ev.message || ''}</span>`;
+          elList.appendChild(entry);
+        });
+      }
+    }
   }
 
   // Interactive Actions
+  async function loadModel(packageId) {
+    try {
+      const res = await fetch('/v1/load', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ package_id: packageId, id: packageId })
+      });
+      if (res.ok) fetchStats();
+    } catch (err) {
+      console.error('Failed to load model', err);
+    }
+  }
+
   async function unloadModel(packageId) {
     try {
       const res = await fetch('/v1/unload', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: packageId })
+        body: JSON.stringify({ package_id: packageId, id: packageId })
       });
       if (res.ok) fetchStats();
     } catch (err) {
@@ -879,6 +1138,52 @@
       console.error('Failed to reset session', err);
     }
   });
+
+  // Quick Inference Playground
+  const btnRunTest = document.getElementById('btn-run-test');
+  const testInput = document.getElementById('test-prompt');
+  const testOutput = document.getElementById('test-output-box');
+
+  if (btnRunTest && testInput && testOutput) {
+    btnRunTest.addEventListener('click', async () => {
+      const promptText = testInput.value.trim();
+      if (!promptText) return;
+      btnRunTest.disabled = true;
+      btnRunTest.textContent = 'Generating...';
+      testOutput.style.display = 'block';
+      testOutput.textContent = 'Sending prompt to Pantry...\n';
+
+      const startTime = performance.now();
+      try {
+        const res = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: promptText }],
+            max_tokens: 64,
+            temperature: 0.7
+          })
+        });
+
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+        if (!res.ok) {
+          const errText = await res.text();
+          testOutput.textContent = `Error (${res.status}): ${errText}`;
+        } else {
+          const json = await res.json();
+          const reply = json.choices?.[0]?.message?.content || JSON.stringify(json, null, 2);
+          const tps = json.usage?.completion_tokens ? (json.usage.completion_tokens / elapsed).toFixed(1) : 'N/A';
+          testOutput.textContent = `[Completed in ${elapsed}s | ${tps} t/s]\n${reply}`;
+        }
+      } catch (err) {
+        testOutput.textContent = `Request failed: ${err.message}`;
+      } finally {
+        btnRunTest.disabled = false;
+        btnRunTest.textContent = 'Run Test';
+        fetchStats();
+      }
+    });
+  }
 
   // Interval Buttons
   document.querySelectorAll('.btn-interval').forEach(btn => {
