@@ -1742,6 +1742,7 @@
               <div id="pg-chat-stats-pill" class="chip">Idle</div>
             </div>
 
+            <div id="pg-chat-metrics-bar" class="metrics-pills" style="display: none; margin-bottom: 8px;">
               <div class="metric-pill">
                 <div class="lbl">Latency</div>
                 <div class="num" id="pg-chat-latency">0 ms</div>
@@ -2816,6 +2817,15 @@
       const el = document.getElementById(`tab-view-${v}`);
       if (el) el.style.display = (v === tab) ? 'block' : 'none';
     });
+
+    // Always reset scroll to top on tab switch
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    const mainWrapper = document.querySelector('.main-wrapper');
+    if (mainWrapper) mainWrapper.scrollTop = 0;
+    const contentBody = document.querySelector('.content-body');
+    if (contentBody) contentBody.scrollTop = 0;
 
     // Update view header
     const titleEl = document.getElementById('current-view-title');
