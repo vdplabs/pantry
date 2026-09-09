@@ -353,10 +353,14 @@ def find_by_model_string(
         "chat-compact": (QualityTier.compact, "text"),
         "chat-extreme": (QualityTier.extreme, "text"),
         "chat-fast": (QualityTier.standard, "text"),
+        "default": (QualityTier.standard, "text"),
+        "chat": (QualityTier.standard, "text"),
         "image-compact": (QualityTier.compact, "image_gen"),
         "image-standard": (QualityTier.standard, "image_gen"),
+        "image": (QualityTier.standard, "image_gen"),
         "music-compact": (QualityTier.compact, "music"),
         "music-standard": (QualityTier.standard, "music"),
+        "music": (QualityTier.standard, "music"),
         "embed-compact": (QualityTier.compact, "embed"),
         "embed-standard": (QualityTier.standard, "embed"),
         "whisper-1": (QualityTier.compact, "stt"),
@@ -364,8 +368,10 @@ def find_by_model_string(
         "whisper-standard": (QualityTier.standard, "stt"),
         "transcribe-compact": (QualityTier.compact, "stt"),
         "transcribe-standard": (QualityTier.standard, "stt"),
+        "transcribe": (QualityTier.compact, "stt"),
         "video-compact": (QualityTier.compact, "video"),
         "video-standard": (QualityTier.standard, "video"),
+        "video": (QualityTier.standard, "video"),
     }
     if key in soft:
         tier, modality_key = soft[key]

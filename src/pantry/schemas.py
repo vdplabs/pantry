@@ -183,7 +183,7 @@ def normalize_message_content(content: str | list[Any] | None) -> str:
 
 
 class CompleteRequest(BaseModel):
-    model: str
+    model: str = "chat-standard"
     messages: list[ChatMessage]
     stream: bool = False
     temperature: float | None = None
@@ -225,7 +225,7 @@ class UnloadBody(BaseModel):
 
 
 class ImageGenerateRequest(BaseModel):
-    model: str
+    model: str = "image-standard"
     prompt: str = Field(..., min_length=1)
     n: int = Field(default=1, ge=1, le=4)
     size: str | None = "1024x1024"
@@ -239,7 +239,7 @@ class ImageGenerateRequest(BaseModel):
 
 
 class AudioGenerateRequest(BaseModel):
-    model: str
+    model: str = "music-standard"
     prompt: str = Field(..., min_length=1)
     duration_seconds: float = Field(default=2.0, ge=0.25, le=30.0)
     response_format: str = "b64_json"  # b64_json | url
@@ -247,7 +247,7 @@ class AudioGenerateRequest(BaseModel):
 
 
 class VideoGenerateRequest(BaseModel):
-    model: str
+    model: str = "video-standard"
     prompt: str = Field(..., min_length=1)
     negative_prompt: str | None = None
     width: int = Field(default=512, ge=128, le=1920)

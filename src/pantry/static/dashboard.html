@@ -58,19 +58,48 @@
       background: rgba(255, 255, 255, 0.02);
       border-bottom: 1px solid var(--card-border);
     }
-    .traffic-lights {
+    /* Main Navigation Tabs */
+    .main-nav {
       display: flex;
-      gap: 7px;
-      margin-right: 14px;
+      align-items: center;
+      gap: 5px;
+      background: rgba(0, 0, 0, 0.45);
+      padding: 3px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      margin-left: 6px;
     }
-    .traffic-light {
-      width: 11px;
-      height: 11px;
-      border-radius: 50%;
+    .main-tab-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 13px;
+      border-radius: 6px;
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
     }
-    .tl-red { background: #ff5f56; border: 1px solid #e0443e; }
-    .tl-yellow { background: #ffbd2e; border: 1px solid #dea123; }
-    .tl-green { background: #27c93f; border: 1px solid #1aab29; }
+    .main-tab-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.07);
+    }
+    .main-tab-btn.active {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.14);
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    }
+    .main-tab-btn .tab-badge {
+      font-size: 9.5px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: rgba(56, 139, 253, 0.25);
+      color: #79b8ff;
+    }
 
     .title-area {
       display: flex;
@@ -519,27 +548,240 @@
       color: var(--text);
       word-break: break-word;
     }
+
+    /* Playground Sub-Navigation */
+    .pg-container {
+      padding: 16px;
+    }
+    .pg-subnav {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      border-bottom: 1px solid var(--card-border);
+      padding-bottom: 12px;
+      overflow-x: auto;
+    }
+    .pg-subnav-btn {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+    }
+    .pg-subnav-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text);
+    }
+    .pg-subnav-btn.active {
+      background: linear-gradient(135deg, rgba(56, 139, 253, 0.2), rgba(188, 140, 255, 0.15));
+      border-color: rgba(56, 139, 253, 0.5);
+      color: #fff;
+      box-shadow: 0 0 12px rgba(56, 139, 253, 0.2);
+    }
+
+    /* Playground Split Grid */
+    .pg-split {
+      display: grid;
+      grid-template-columns: 1.15fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 900px) {
+      .pg-split { grid-template-columns: 1fr !important; }
+    }
+
+    /* Form Styles */
+    .form-group {
+      margin-bottom: 14px;
+    }
+    .form-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .form-input, .form-textarea, .form-select {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid var(--card-border);
+      border-radius: 7px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 12.5px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus, .form-textarea:focus, .form-select:focus {
+      border-color: var(--accent-blue);
+      box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.15);
+    }
+    .form-textarea {
+      resize: vertical;
+      line-height: 1.45;
+    }
+    .form-select {
+      appearance: none;
+      background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b949e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      background-size: 14px;
+      padding-right: 32px;
+    }
+    .form-row {
+      display: flex;
+      gap: 12px;
+    }
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .slider-val {
+      font-family: var(--mono);
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--accent-blue);
+    }
+    .form-range {
+      width: 100%;
+      accent-color: var(--accent-blue);
+      cursor: pointer;
+    }
+
+    /* Preset prompt chips */
+    .pg-presets {
+      display: flex;
+      gap: 5px;
+    }
+    .btn-preset {
+      font-size: 10px;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-preset:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--text);
+    }
+
+    /* Primary Run Buttons */
+    .btn-run-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 18px;
+      border-radius: 7px;
+      background: linear-gradient(90deg, #1f6feb, #388bfd);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 8px rgba(31, 111, 235, 0.3);
+    }
+    .btn-run-primary:hover {
+      filter: brightness(1.1);
+      box-shadow: 0 4px 14px rgba(31, 111, 235, 0.45);
+    }
+    .btn-run-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      filter: grayscale(0.5);
+    }
+
+    /* Playground Output Panels */
+    .pg-output-box {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 200px;
+      max-height: 480px;
+      overflow-y: auto;
+      font-family: inherit;
+      font-size: 13px;
+      line-height: 1.6;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .pg-media-box {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 8px;
+      padding: 16px;
+      min-height: 240px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    .pg-empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--text-muted);
+      text-align: center;
+      padding: 30px 20px;
+      font-size: 12.5px;
+    }
+    .pg-empty-state span {
+      font-size: 32px;
+      opacity: 0.7;
+    }
+    .pg-image-preview {
+      max-width: 100%;
+      max-height: 420px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+      object-fit: contain;
+    }
   </style>
 </head>
 <body>
 
 <div class="window-container">
-  <!-- Window Titlebar -->
+  <!-- Navigation Toolbar -->
   <div class="toolbar">
     <div class="title-area">
-      <div class="traffic-lights">
-        <div class="traffic-light tl-red"></div>
-        <div class="traffic-light tl-yellow"></div>
-        <div class="traffic-light tl-green"></div>
-      </div>
       <div class="window-title">
-        <span>⊞</span> System Monitor
+        <span style="color: var(--accent-blue); font-size: 16px;">🥫</span> Pantry
+      </div>
+      <!-- Tab Switcher -->
+      <div class="main-nav">
+        <button class="main-tab-btn active" data-tab="monitor" id="tab-btn-monitor">
+          <span>📊</span> System Monitor
+        </button>
+        <button class="main-tab-btn" data-tab="playground" id="tab-btn-playground">
+          <span>⚡</span> Playground
+          <span class="tab-badge">Multi-Modal</span>
+        </button>
       </div>
       <div class="chip" id="chip-device">Detecting...</div>
       <div class="chip" id="header-status-pill">● Online · 127.0.0.1:18787</div>
     </div>
 
-    <div class="interval-controls">
+    <div class="interval-controls" id="monitor-interval-controls">
       <button class="btn-interval" data-interval="500">0.5s</button>
       <button class="btn-interval active" data-interval="1000">1.0s</button>
       <button class="btn-interval" data-interval="2000">2.0s</button>
@@ -548,6 +790,9 @@
       <button class="btn-icon" id="btn-copy" title="Copy Telemetry JSON">📋</button>
     </div>
   </div>
+
+  <!-- VIEW 1: SYSTEM MONITOR -->
+  <div id="tab-view-monitor" class="tab-view">
 
   <!-- Live Operation Activity Banner (Displays dynamically when loading/generating) -->
   <div id="live-activity-banner" class="activity-banner" style="display: none;">
@@ -777,8 +1022,8 @@
     <!-- Quick Test Playground -->
     <div class="card">
       <div class="card-header">
-        <div class="card-title"><span>⚡</span> Quick Inference Playground</div>
-        <span class="chip">Live Test</span>
+        <div class="card-title"><span>⚡</span> Quick Test Runner</div>
+        <button onclick="switchMainTab('playground')" class="btn-action" style="font-size: 10.5px; cursor: pointer;">Open Full Playground ↗</button>
       </div>
       <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 8px;">
         Send a test prompt directly to Pantry to benchmark token throughput, memory footprint, and model loading behavior.
@@ -802,7 +1047,312 @@
       </div>
     </div>
   </div>
-</div>
+  </div> <!-- /tab-view-monitor -->
+
+  <!-- VIEW 2: MULTI-MODAL PLAYGROUND -->
+  <div id="tab-view-playground" class="tab-view" style="display: none;">
+    <div class="pg-container">
+      <!-- Playground Modality Tabs -->
+      <div class="pg-subnav">
+        <button class="pg-subnav-btn active" data-modality="chat" id="subtab-btn-chat">
+          <span>💬</span> Chat & Language
+        </button>
+        <button class="pg-subnav-btn" data-modality="image" id="subtab-btn-image">
+          <span>🎨</span> Image Studio
+        </button>
+        <button class="pg-subnav-btn" data-modality="audio" id="subtab-btn-audio">
+          <span>🎵</span> Music & Audio
+        </button>
+        <button class="pg-subnav-btn" data-modality="transcribe" id="subtab-btn-transcribe">
+          <span>🎙️</span> Speech-to-Text
+        </button>
+      </div>
+
+      <!-- MODALITY 1: CHAT & LANGUAGE -->
+      <div id="pg-panel-chat" class="pg-panel active">
+        <div class="pg-split">
+          <!-- Left: Controls -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>💬</span> Generation Controls</div>
+              <span class="chip">POST /v1/chat/completions</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Model Target</label>
+              <select id="pg-chat-model" class="form-select">
+                <option value="chat-standard">chat-standard (Default)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">System Prompt</label>
+              <input type="text" id="pg-chat-system" class="form-input" value="You are a helpful and concise AI assistant." />
+            </div>
+
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label class="form-label" style="margin-bottom: 0;">User Message / Prompt</label>
+                <div class="pg-presets">
+                  <button class="btn-preset" data-text="Write a one-sentence haiku about speed.">Haiku</button>
+                  <button class="btn-preset" data-text="Explain quantum computing in three clear bullet points.">Quantum</button>
+                  <button class="btn-preset" data-text="Write a fast Python function to check for prime numbers.">Python</button>
+                </div>
+              </div>
+              <textarea id="pg-chat-prompt" class="form-textarea" rows="4">Write a one-sentence haiku about speed.</textarea>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group" style="flex: 1;">
+                <div class="slider-header">
+                  <label class="form-label">Temperature</label>
+                  <span id="pg-temp-val" class="slider-val">0.7</span>
+                </div>
+                <input type="range" id="pg-chat-temp" class="form-range" min="0" max="1.5" step="0.05" value="0.7" />
+              </div>
+
+              <div class="form-group" style="flex: 1;">
+                <div class="slider-header">
+                  <label class="form-label">Max Tokens</label>
+                  <span id="pg-tokens-val" class="slider-val">128</span>
+                </div>
+                <input type="range" id="pg-chat-max-tokens" class="form-range" min="16" max="2048" step="16" value="128" />
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 12px; align-items: center; margin-top: 10px;">
+              <button id="btn-pg-chat-run" class="btn-run-primary">
+                <span>▶</span> Run Inference
+              </button>
+              <label style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text-muted); cursor: pointer;">
+                <input type="checkbox" id="pg-chat-stream" checked /> Stream response
+              </label>
+            </div>
+          </div>
+
+          <!-- Right: Output -->
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>📝</span> Model Response</div>
+              <div id="pg-chat-stats-pill" class="chip">Idle</div>
+            </div>
+
+            <div id="pg-chat-metrics-bar" class="metrics-pills" style="display: none; margin-bottom: 8px;">
+              <div class="metric-pill">
+                <div class="lbl">Latency</div>
+                <div class="num" id="pg-chat-latency">0 ms</div>
+              </div>
+              <div class="metric-pill">
+                <div class="lbl">Decode TPS</div>
+                <div class="num" style="color: var(--accent-green);" id="pg-chat-tps">0.0 t/s</div>
+              </div>
+              <div class="metric-pill">
+                <div class="lbl">Tokens</div>
+                <div class="num" id="pg-chat-token-counts">0 / 0</div>
+              </div>
+            </div>
+
+            <div id="pg-chat-output-text" class="pg-output-box">
+              <div class="pg-empty-state">
+                <span>💬</span>
+                <div>Click <strong>Run Inference</strong> to test text generation. Responses and streaming tokens will appear here.</div>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+              <button id="btn-pg-chat-copy" class="btn-action" style="display: none;">📋 Copy Response</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODALITY 2: IMAGE GENERATION -->
+      <div id="pg-panel-image" class="pg-panel" style="display: none;">
+        <div class="pg-split">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>🎨</span> Image Studio</div>
+              <span class="chip">POST /v1/images/generations</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Model Target</label>
+              <select id="pg-img-model" class="form-select">
+                <option value="image-standard">image-standard (Default)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                <label class="form-label" style="margin-bottom: 0;">Prompt</label>
+                <div class="pg-presets">
+                  <button class="btn-preset" data-text="A cozy glass greenhouse in a misty mountain forest at sunrise, photorealistic 8k, volumetric rays.">Forest</button>
+                  <button class="btn-preset" data-text="A futuristic cybernetic espresso machine with holographic brass gauges, cinematic studio lighting.">Cyber</button>
+                </div>
+              </div>
+              <textarea id="pg-img-prompt" class="form-textarea" rows="3">A cozy glass greenhouse in a misty mountain forest at sunrise, photorealistic 8k, volumetric rays.</textarea>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Negative Prompt (Optional)</label>
+              <input type="text" id="pg-img-negative" class="form-input" placeholder="blurry, distorted, low quality, artifacts" />
+            </div>
+
+            <div class="form-row">
+              <div class="form-group" style="flex: 1;">
+                <label class="form-label">Resolution</label>
+                <select id="pg-img-size" class="form-select">
+                  <option value="1024x1024" selected>1024 × 1024</option>
+                  <option value="768x768">768 × 768</option>
+                  <option value="512x512">512 × 512</option>
+                </select>
+              </div>
+
+              <div class="form-group" style="flex: 1;">
+                <div class="slider-header">
+                  <label class="form-label">Inference Steps</label>
+                  <span id="pg-steps-val" class="slider-val">4</span>
+                </div>
+                <input type="range" id="pg-img-steps" class="form-range" min="1" max="25" step="1" value="4" />
+              </div>
+            </div>
+
+            <button id="btn-pg-img-run" class="btn-run-primary" style="background: linear-gradient(90deg, #8957e5, #bc8cff); margin-top: 10px;">
+              <span>🎨</span> Generate Image
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>🖼️</span> Generated Visual</div>
+              <span id="pg-img-meta" class="chip">Idle</span>
+            </div>
+
+            <div id="pg-img-display-box" class="pg-media-box">
+              <div class="pg-empty-state" id="pg-img-placeholder">
+                <span>🎨</span>
+                <div>Click <strong>Generate Image</strong> to render high-resolution visuals through Metal or CUDA.</div>
+              </div>
+              <img id="pg-img-result" class="pg-image-preview" style="display: none;" alt="Generated output" />
+            </div>
+
+            <div id="pg-img-actions" style="display: none; justify-content: space-between; align-items: center; margin-top: 10px;">
+              <span id="pg-img-time" style="font-size: 11px; color: var(--text-muted); font-family: var(--mono);">0.0s</span>
+              <a id="btn-pg-img-dl" class="btn-action load" download="generated-image.png" style="text-decoration: none;">⬇ Download PNG</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODALITY 3: MUSIC & AUDIO -->
+      <div id="pg-panel-audio" class="pg-panel" style="display: none;">
+        <div class="pg-split">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>🎵</span> Music & Sound Studio</div>
+              <span class="chip">POST /v1/audio/generations</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Model Target</label>
+              <select id="pg-audio-model" class="form-select">
+                <option value="music-standard">music-standard (Default)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Music Prompt</label>
+              <textarea id="pg-audio-prompt" class="form-textarea" rows="3">Upbeat electronic synthwave groove with energetic 80s drums and melodic bass synth.</textarea>
+            </div>
+
+            <div class="form-group">
+              <div class="slider-header">
+                <label class="form-label">Duration (seconds)</label>
+                <span id="pg-dur-val" class="slider-val">3.0s</span>
+              </div>
+              <input type="range" id="pg-audio-duration" class="form-range" min="1.0" max="10.0" step="0.5" value="3.0" />
+            </div>
+
+            <button id="btn-pg-audio-run" class="btn-run-primary" style="background: linear-gradient(90deg, #d29922, #f0883e); margin-top: 10px;">
+              <span>🎵</span> Synthesize Music
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>🎧</span> Audio Playback</div>
+              <span id="pg-audio-meta" class="chip">Idle</span>
+            </div>
+
+            <div id="pg-audio-display-box" class="pg-media-box" style="flex-direction: column; gap: 14px;">
+              <div class="pg-empty-state" id="pg-audio-placeholder">
+                <span>🎵</span>
+                <div>Click <strong>Synthesize Music</strong> to compose audio tracks. An in-browser HTML5 player will load here.</div>
+              </div>
+              <audio id="pg-audio-player" controls style="width: 100%; display: none;"></audio>
+            </div>
+
+            <div id="pg-audio-actions" style="display: none; justify-content: space-between; align-items: center; margin-top: 10px;">
+              <span id="pg-audio-time" style="font-size: 11px; color: var(--text-muted); font-family: var(--mono);">0.0s</span>
+              <a id="btn-pg-audio-dl" class="btn-action load" download="synthesized-track.wav" style="text-decoration: none;">⬇ Download WAV</a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- MODALITY 4: TRANSCRIPTION (STT) -->
+      <div id="pg-panel-transcribe" class="pg-panel" style="display: none;">
+        <div class="pg-split">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>🎙️</span> Speech-to-Text Studio</div>
+              <span class="chip">POST /v1/audio/transcriptions</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Model Target</label>
+              <select id="pg-stt-model" class="form-select">
+                <option value="whisper-1">whisper-1 (Default)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Audio File</label>
+              <input type="file" id="pg-stt-file" accept="audio/*" class="form-input" style="padding: 6px;" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Language (Optional)</label>
+              <input type="text" id="pg-stt-lang" class="form-input" placeholder="e.g. en, fr, es, de (auto-detect if empty)" />
+            </div>
+
+            <button id="btn-pg-stt-run" class="btn-run-primary" style="background: linear-gradient(90deg, #238636, #2ea043); margin-top: 10px;">
+              <span>🎙️</span> Transcribe Audio
+            </button>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title"><span>📜</span> Transcription Result</div>
+              <span id="pg-stt-meta" class="chip">Idle</span>
+            </div>
+
+            <div id="pg-stt-output-text" class="pg-output-box">
+              <div class="pg-empty-state">
+                <span>🎙️</span>
+                <div>Select an audio file and click <strong>Transcribe Audio</strong> to extract spoken text.</div>
+              </div>
+            </div>
+
+            <div style="display: flex; justify-content: flex-end; margin-top: 8px;">
+              <button id="btn-pg-stt-copy" class="btn-action" style="display: none;">📋 Copy Transcript</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div> <!-- /tab-view-playground -->
+</div> <!-- /window-container -->
 
 <script>
   let pollInterval = 1000;
@@ -1139,7 +1689,445 @@
     }
   });
 
-  // Quick Inference Playground
+  // Top-level Tab Switching (System Monitor vs Playground)
+  const tabBtnMonitor = document.getElementById('tab-btn-monitor');
+  const tabBtnPlayground = document.getElementById('tab-btn-playground');
+  const tabViewMonitor = document.getElementById('tab-view-monitor');
+  const tabViewPlayground = document.getElementById('tab-view-playground');
+  const monitorControls = document.getElementById('monitor-interval-controls');
+
+  function switchMainTab(tab) {
+    if (tab === 'playground') {
+      tabBtnMonitor.classList.remove('active');
+      tabBtnPlayground.classList.add('active');
+      tabViewMonitor.style.display = 'none';
+      tabViewPlayground.style.display = 'block';
+      if (monitorControls) monitorControls.style.opacity = '0.4';
+      fetchPlaygroundModels();
+    } else {
+      tabBtnPlayground.classList.remove('active');
+      tabBtnMonitor.classList.add('active');
+      tabViewPlayground.style.display = 'none';
+      tabViewMonitor.style.display = 'block';
+      if (monitorControls) monitorControls.style.opacity = '1';
+    }
+  }
+
+  tabBtnMonitor.addEventListener('click', () => switchMainTab('monitor'));
+  tabBtnPlayground.addEventListener('click', () => switchMainTab('playground'));
+
+  // Sub-tab switching in Playground (Chat, Image, Audio, Transcribe)
+  document.querySelectorAll('.pg-subnav-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.pg-subnav-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.pg-panel').forEach(p => p.style.display = 'none');
+      btn.classList.add('active');
+      const modality = btn.getAttribute('data-modality');
+      const panel = document.getElementById(`pg-panel-${modality}`);
+      if (panel) panel.style.display = 'block';
+    });
+  });
+
+  // Preset buttons
+  document.querySelectorAll('.btn-preset').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const card = btn.closest('.card');
+      const textarea = card ? card.querySelector('textarea') : null;
+      if (textarea) textarea.value = btn.getAttribute('data-text') || '';
+    });
+  });
+
+  // Sliders value display
+  const tempSlider = document.getElementById('pg-chat-temp');
+  if (tempSlider) tempSlider.addEventListener('input', e => { document.getElementById('pg-temp-val').textContent = e.target.value; });
+  const tokSlider = document.getElementById('pg-chat-max-tokens');
+  if (tokSlider) tokSlider.addEventListener('input', e => { document.getElementById('pg-tokens-val').textContent = e.target.value; });
+  const stepsSlider = document.getElementById('pg-img-steps');
+  if (stepsSlider) stepsSlider.addEventListener('input', e => { document.getElementById('pg-steps-val').textContent = e.target.value; });
+  const durSlider = document.getElementById('pg-audio-duration');
+  if (durSlider) durSlider.addEventListener('input', e => { document.getElementById('pg-dur-val').textContent = `${e.target.value}s`; });
+
+  // Dynamic Models Population
+  let modelsLoaded = false;
+  async function fetchPlaygroundModels() {
+    if (modelsLoaded) return;
+    try {
+      const res = await fetch('/v1/models?all_ids=1');
+      if (!res.ok) return;
+      const json = await res.json();
+      const models = json.data || [];
+      modelsLoaded = true;
+
+      const chatSelect = document.getElementById('pg-chat-model');
+      const imgSelect = document.getElementById('pg-img-model');
+      const audioSelect = document.getElementById('pg-audio-model');
+      const sttSelect = document.getElementById('pg-stt-model');
+
+      const textModels = models.filter(m => (m.modalities || []).includes('text'));
+      const imageModels = models.filter(m => (m.modalities || []).includes('image_gen'));
+      const musicModels = models.filter(m => (m.modalities || []).includes('music'));
+      const sttModels = models.filter(m => (m.modalities || []).includes('stt'));
+
+      function fillSelect(select, list, defaultAlias) {
+        if (!select || list.length === 0) return;
+        select.innerHTML = '';
+        list.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          const status = m.weights_ready ? '⚡ Ready' : 'Standby';
+          opt.textContent = `${m.id} (${status}${m.runtime ? ` · ${m.runtime}` : ''})`;
+          select.appendChild(opt);
+        });
+        if (defaultAlias) {
+          const found = Array.from(select.options).find(o => o.value === defaultAlias || o.value.includes(defaultAlias));
+          if (found) select.value = found.value;
+        }
+      }
+
+      fillSelect(chatSelect, textModels, 'chat-standard');
+      fillSelect(imgSelect, imageModels, 'z-image-turbo');
+      fillSelect(audioSelect, musicModels, 'music-standard');
+      fillSelect(sttSelect, sttModels, 'whisper-tiny');
+    } catch (err) {
+      console.warn('Could not populate models list', err);
+    }
+  }
+
+  // 1. CHAT INFERENCE RUNNER
+  const btnChatRun = document.getElementById('btn-pg-chat-run');
+  const chatOutput = document.getElementById('pg-chat-output-text');
+  const chatPill = document.getElementById('pg-chat-stats-pill');
+  const chatMetricsBar = document.getElementById('pg-chat-metrics-bar');
+  const btnChatCopy = document.getElementById('btn-pg-chat-copy');
+
+  if (btnChatRun) {
+    btnChatRun.addEventListener('click', async () => {
+      const model = document.getElementById('pg-chat-model').value || 'chat-standard';
+      const prompt = document.getElementById('pg-chat-prompt').value.trim();
+      const system = document.getElementById('pg-chat-system').value.trim();
+      const temp = parseFloat(document.getElementById('pg-chat-temp').value);
+      const maxTokens = parseInt(document.getElementById('pg-chat-max-tokens').value, 10);
+      const stream = document.getElementById('pg-chat-stream').checked;
+
+      if (!prompt) return;
+
+      btnChatRun.disabled = true;
+      btnChatRun.innerHTML = '<span>⏳</span> Generating...';
+      chatPill.textContent = 'Active Inference';
+      chatPill.className = 'chip warn-pulse';
+      chatMetricsBar.style.display = 'none';
+      btnChatCopy.style.display = 'none';
+      chatOutput.textContent = '';
+
+      const messages = [];
+      if (system) messages.push({ role: 'system', content: system });
+      messages.push({ role: 'user', content: prompt });
+
+      const startTime = performance.now();
+      let firstTokenTime = null;
+      let tokenCount = 0;
+
+      try {
+        const res = await fetch('/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: model,
+            messages: messages,
+            temperature: temp,
+            max_tokens: maxTokens,
+            stream: stream
+          })
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          chatOutput.textContent = `Error (${res.status}): ${errText}`;
+          chatPill.textContent = 'Error';
+          chatPill.className = 'chip';
+          return;
+        }
+
+        if (stream) {
+          const reader = res.body.getReader();
+          const decoder = new TextDecoder('utf-8');
+          let buffer = '';
+
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+
+            for (const line of lines) {
+              const trimmed = line.trim();
+              if (!trimmed || trimmed === 'data: [DONE]') continue;
+              if (trimmed.startsWith('data: ')) {
+                try {
+                  const chunk = JSON.parse(trimmed.slice(6));
+                  const delta = chunk.choices?.[0]?.delta?.content || '';
+                  if (delta) {
+                    if (!firstTokenTime) firstTokenTime = performance.now();
+                    chatOutput.textContent += delta;
+                    tokenCount++;
+                    chatOutput.scrollTop = chatOutput.scrollHeight;
+                  }
+                } catch (e) {}
+              }
+            }
+          }
+        } else {
+          const json = await res.json();
+          chatOutput.textContent = json.choices?.[0]?.message?.content || JSON.stringify(json, null, 2);
+          tokenCount = json.usage?.completion_tokens || 0;
+        }
+
+        const totalTime = ((performance.now() - startTime) / 1000).toFixed(2);
+        const ttft = firstTokenTime ? Math.round(firstTokenTime - startTime) : Math.round(totalTime * 1000);
+        const tps = totalTime > 0 ? (tokenCount / totalTime).toFixed(1) : 'N/A';
+
+        document.getElementById('pg-chat-latency').textContent = `${Math.round(totalTime * 1000)} ms (TTFT: ${ttft}ms)`;
+        document.getElementById('pg-chat-tps').textContent = `${tps} t/s`;
+        document.getElementById('pg-chat-token-counts').textContent = `${tokenCount} gen`;
+        chatMetricsBar.style.display = 'grid';
+        btnChatCopy.style.display = 'block';
+
+        chatPill.textContent = `Done (${totalTime}s)`;
+        chatPill.className = 'chip';
+      } catch (err) {
+        chatOutput.textContent = `Request failed: ${err.message}`;
+        chatPill.textContent = 'Failed';
+      } finally {
+        btnChatRun.disabled = false;
+        btnChatRun.innerHTML = '<span>▶</span> Run Inference';
+        fetchStats();
+      }
+    });
+
+    btnChatCopy.addEventListener('click', () => {
+      navigator.clipboard.writeText(chatOutput.textContent);
+      btnChatCopy.textContent = '✅ Copied!';
+      setTimeout(() => { btnChatCopy.textContent = '📋 Copy Response'; }, 2000);
+    });
+  }
+
+  // 2. IMAGE STUDIO RUNNER
+  const btnImgRun = document.getElementById('btn-pg-img-run');
+  const imgPlaceholder = document.getElementById('pg-img-placeholder');
+  const imgResult = document.getElementById('pg-img-result');
+  const imgActions = document.getElementById('pg-img-actions');
+  const imgMeta = document.getElementById('pg-img-meta');
+  const btnImgDl = document.getElementById('btn-pg-img-dl');
+
+  if (btnImgRun) {
+    btnImgRun.addEventListener('click', async () => {
+      const model = document.getElementById('pg-img-model').value || 'image-standard';
+      const prompt = document.getElementById('pg-img-prompt').value.trim();
+      const negative = document.getElementById('pg-img-negative').value.trim() || undefined;
+      const size = document.getElementById('pg-img-size').value || '1024x1024';
+      const steps = parseInt(document.getElementById('pg-img-steps').value, 10) || 4;
+
+      if (!prompt) return;
+
+      btnImgRun.disabled = true;
+      btnImgRun.innerHTML = '<span>⏳</span> Rendering Image...';
+      imgMeta.textContent = 'Generating...';
+      imgMeta.className = 'chip warn-pulse';
+      imgPlaceholder.style.display = 'flex';
+      imgPlaceholder.innerHTML = '<span>🎨</span><div>Rendering latent diffusion steps... (Metal/CUDA)</div>';
+      imgResult.style.display = 'none';
+      imgActions.style.display = 'none';
+
+      const startTime = performance.now();
+      try {
+        const res = await fetch('/v1/images/generations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: model,
+            prompt: prompt,
+            negative_prompt: negative,
+            size: size,
+            steps: steps,
+            response_format: 'b64_json'
+          })
+        });
+
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+        if (!res.ok) {
+          const errText = await res.text();
+          imgPlaceholder.innerHTML = `<span>⚠️</span><div style="color: #ff8b85;">Generation error (${res.status}): ${errText}</div>`;
+          imgMeta.textContent = 'Error';
+          imgMeta.className = 'chip';
+          return;
+        }
+
+        const json = await res.json();
+        const b64 = json.data?.[0]?.b64_json;
+        if (b64) {
+          imgPlaceholder.style.display = 'none';
+          imgResult.src = `data:image/png;base64,${b64}`;
+          imgResult.style.display = 'block';
+          btnImgDl.href = imgResult.src;
+          document.getElementById('pg-img-time').textContent = `Rendered in ${elapsed}s · ${size} · ${steps} steps`;
+          imgActions.style.display = 'flex';
+          imgMeta.textContent = `Completed (${elapsed}s)`;
+          imgMeta.className = 'chip';
+        } else {
+          imgPlaceholder.innerHTML = '<span>⚠️</span><div>No image payload returned.</div>';
+        }
+      } catch (err) {
+        imgPlaceholder.innerHTML = `<span>⚠️</span><div>Failed: ${err.message}</div>`;
+      } finally {
+        btnImgRun.disabled = false;
+        btnImgRun.innerHTML = '<span>🎨</span> Generate Image';
+        fetchStats();
+      }
+    });
+  }
+
+  // 3. MUSIC & AUDIO RUNNER
+  const btnAudioRun = document.getElementById('btn-pg-audio-run');
+  const audioPlaceholder = document.getElementById('pg-audio-placeholder');
+  const audioPlayer = document.getElementById('pg-audio-player');
+  const audioActions = document.getElementById('pg-audio-actions');
+  const audioMeta = document.getElementById('pg-audio-meta');
+  const btnAudioDl = document.getElementById('btn-pg-audio-dl');
+
+  if (btnAudioRun) {
+    btnAudioRun.addEventListener('click', async () => {
+      const model = document.getElementById('pg-audio-model').value || 'music-standard';
+      const prompt = document.getElementById('pg-audio-prompt').value.trim();
+      const dur = parseFloat(document.getElementById('pg-audio-duration').value) || 3.0;
+
+      if (!prompt) return;
+
+      btnAudioRun.disabled = true;
+      btnAudioRun.innerHTML = '<span>⏳</span> Synthesizing...';
+      audioMeta.textContent = 'Composing...';
+      audioMeta.className = 'chip warn-pulse';
+      audioPlaceholder.style.display = 'flex';
+      audioPlaceholder.innerHTML = '<span>🎵</span><div>Synthesizing audio tokens & waveform...</div>';
+      audioPlayer.style.display = 'none';
+      audioActions.style.display = 'none';
+
+      const startTime = performance.now();
+      try {
+        const res = await fetch('/v1/audio/generations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: model,
+            prompt: prompt,
+            duration_seconds: dur,
+            response_format: 'b64_json'
+          })
+        });
+
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+        if (!res.ok) {
+          const errText = await res.text();
+          audioPlaceholder.innerHTML = `<span>⚠️</span><div style="color: #ff8b85;">Audio error (${res.status}): ${errText}</div>`;
+          audioMeta.textContent = 'Error';
+          audioMeta.className = 'chip';
+          return;
+        }
+
+        const json = await res.json();
+        const b64 = json.data?.[0]?.b64_json;
+        if (b64) {
+          audioPlaceholder.style.display = 'none';
+          audioPlayer.src = `data:audio/wav;base64,${b64}`;
+          audioPlayer.style.display = 'block';
+          audioPlayer.play().catch(() => {});
+          btnAudioDl.href = audioPlayer.src;
+          document.getElementById('pg-audio-time').textContent = `Composed ${dur}s in ${elapsed}s · 32 kHz WAV`;
+          audioActions.style.display = 'flex';
+          audioMeta.textContent = `Completed (${elapsed}s)`;
+          audioMeta.className = 'chip';
+        } else {
+          audioPlaceholder.innerHTML = '<span>⚠️</span><div>No audio payload returned.</div>';
+        }
+      } catch (err) {
+        audioPlaceholder.innerHTML = `<span>⚠️</span><div>Failed: ${err.message}</div>`;
+      } finally {
+        btnAudioRun.disabled = false;
+        btnAudioRun.innerHTML = '<span>🎵</span> Synthesize Music';
+        fetchStats();
+      }
+    });
+  }
+
+  // 4. TRANSCRIPTION (STT) RUNNER
+  const btnSttRun = document.getElementById('btn-pg-stt-run');
+  const sttOutput = document.getElementById('pg-stt-output-text');
+  const sttMeta = document.getElementById('pg-stt-meta');
+  const btnSttCopy = document.getElementById('btn-pg-stt-copy');
+
+  if (btnSttRun) {
+    btnSttRun.addEventListener('click', async () => {
+      const model = document.getElementById('pg-stt-model').value || 'whisper-1';
+      const fileInput = document.getElementById('pg-stt-file');
+      const lang = document.getElementById('pg-stt-lang').value.trim();
+
+      if (!fileInput.files || fileInput.files.length === 0) {
+        alert('Please select an audio file to transcribe.');
+        return;
+      }
+
+      btnSttRun.disabled = true;
+      btnSttRun.innerHTML = '<span>⏳</span> Transcribing...';
+      sttMeta.textContent = 'Processing...';
+      sttMeta.className = 'chip warn-pulse';
+      btnSttCopy.style.display = 'none';
+      sttOutput.textContent = 'Transcribing audio speech tokens...\n';
+
+      const formData = new FormData();
+      formData.append('file', fileInput.files[0]);
+      formData.append('model', model);
+      if (lang) formData.append('language', lang);
+
+      const startTime = performance.now();
+      try {
+        const res = await fetch('/v1/audio/transcriptions', {
+          method: 'POST',
+          body: formData
+        });
+
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+        if (!res.ok) {
+          const errText = await res.text();
+          sttOutput.textContent = `Error (${res.status}): ${errText}`;
+          sttMeta.textContent = 'Error';
+          sttMeta.className = 'chip';
+          return;
+        }
+
+        const json = await res.json();
+        const text = json.text || JSON.stringify(json, null, 2);
+        sttOutput.textContent = text;
+        sttMeta.textContent = `Transcribed (${elapsed}s)`;
+        sttMeta.className = 'chip';
+        btnSttCopy.style.display = 'block';
+      } catch (err) {
+        sttOutput.textContent = `Request failed: ${err.message}`;
+        sttMeta.textContent = 'Failed';
+      } finally {
+        btnSttRun.disabled = false;
+        btnSttRun.innerHTML = '<span>🎙️</span> Transcribe Audio';
+        fetchStats();
+      }
+    });
+
+    btnSttCopy.addEventListener('click', () => {
+      navigator.clipboard.writeText(sttOutput.textContent);
+      btnSttCopy.textContent = '✅ Copied!';
+      setTimeout(() => { btnSttCopy.textContent = '📋 Copy Transcript'; }, 2000);
+    });
+  }
+
+  // Quick Test Runner (inside System Monitor tab) - Fixed with explicit model parameter
   const btnRunTest = document.getElementById('btn-run-test');
   const testInput = document.getElementById('test-prompt');
   const testOutput = document.getElementById('test-output-box');
@@ -1159,6 +2147,7 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            model: 'chat-standard',
             messages: [{ role: 'user', content: promptText }],
             max_tokens: 64,
             temperature: 0.7
@@ -1217,6 +2206,7 @@
 
   fetchStats();
   restartPolling();
+  fetchPlaygroundModels();
 </script>
 
 </body>

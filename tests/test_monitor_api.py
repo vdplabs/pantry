@@ -20,6 +20,11 @@ def test_dashboard_endpoint(tmp_path):
     assert "Pantry · System Monitor" in resp.text
     assert "CPU Activity" in resp.text
     assert "AI Models in Memory" in resp.text
+    assert "Playground" in resp.text
+    assert "Image Studio" in resp.text
+    assert "Music & Audio" in resp.text
+    assert "Speech-to-Text" in resp.text
+    assert "traffic-lights" not in resp.text
 
     # 2. GET / with text/html Accept header returns dashboard HTML
     resp_root_html = client.get("/", headers={"Accept": "text/html,application/xhtml+xml"})

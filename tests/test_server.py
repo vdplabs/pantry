@@ -111,6 +111,18 @@ def test_chat_completions_openai_content_shapes(client):
     assert "parts ok" in r.json()["choices"][0]["message"]["content"]
 
 
+def test_chat_completions_omitted_model(client):
+    r = client.post(
+        "/v1/chat/completions",
+        json={
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": False,
+        },
+    )
+    # Default model applies without 422 Unprocessable Entity
+    assert r.status_code != 422
+
+
 def test_cors_preflight(client):
     r = client.options(
         "/v1/health",
