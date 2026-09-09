@@ -1,54 +1,93 @@
-# Unified memory watchdog
+# Multi-Backend Memory Watchdog
 
-On Apple Silicon, MLX keeps Metal heaps and a free **cache** that can linger after unload. pantry applies soft caps at `serve` start and exposes live heap stats so you can see pressure before the machine swaps.
+Pantry provides active memory monitoring and telemetry across **Apple Silicon Unified Memory** and **NVIDIA CUDA VRAM**. It exposes real-time heap and buffer statistics, protects systems against out-of-memory thrashing via soft caps, and dynamically calculates safe context window limits and KV cache footprints.
 
-## What you see
+---
 
-| Field | Meaning |
-| --- | --- |
-| `active_bytes` | Currently allocated Metal / MLX heap |
-| `peak_bytes` | Peak since process start |
-| `cache_bytes` | Unused pages still held in the MLX free cache |
-| `pressure` | `ok` / `elevated` / `critical` vs recommended working set |
-| `limits` | Cache / memory caps pantry applied |
+## 1. What You See
+
+Depending on whether Pantry is running on macOS or an NVIDIA GPU cluster, the memory watchdog interrogates the appropriate hardware registers:
+
+| Field | Meaning on Apple Silicon | Meaning on NVIDIA CUDA / Linux |
+| --- | --- | --- |
+| `active_bytes` | Currently allocated Metal / MLX heap | Active CUDA allocated bytes (`torch.cuda.memory_allocated()`) |
+| `peak_bytes` | Peak Metal allocation since process start | Peak CUDA memory allocation (`torch.cuda.max_memory_allocated()`) |
+| `cache_bytes` | Unused pages retained in MLX free cache | Reserved but unallocated CUDA cache pages |
+| `vram_free_bytes` | N/A (Unified with host DRAM) | Free VRAM on the primary device (`torch.cuda.mem_get_info()`) |
+| `vram_total_bytes` | N/A (Unified with host DRAM) | Total physical VRAM on the GPU accelerator |
+| `pressure` | `ok` / `elevated` / `critical` vs recommended set | `ok` / `elevated` / `critical` vs total VRAM threshold |
+| `limits` | Cache / memory soft caps applied | Device memory reservation limits |
 
 ```bash
+# Compact memory status
 curl -s http://127.0.0.1:18787/v1/health | jq .memory
+
+# Full memory watchdog snapshot
 curl -s http://127.0.0.1:18787/v1/memory | jq
-pantry status | jq .memory
+
+# Real-time full system telemetry
+curl -s http://127.0.0.1:18787/v1/monitor/stats | jq .memory
 ```
 
-Menu bar (opened by `pantry serve`): **Memory** line + **Unified memory** submenu, with **Clear Metal cache…**.
+On macOS, `pantry serve` opens a menu bar status item: **Memory** line + **Unified memory** submenu, with **Clear Metal cache…**. Title hints: `P` ok · `P!` elevated · `P!!` critical.
 
-Title hints: `P` ok · `P!` elevated · `P!!` critical.
+---
 
-## Protection (soft caps)
+## 2. Dynamic Telemetry Ceiling & Context KV Cache
 
-At serve startup pantry calls MLX:
+In accordance with **Patent Claim 1 and FIG. 2 (Step 204)**, Pantry dynamically calculates available DRAM/VRAM headroom before admitting or resolving models:
 
-- `set_cache_limit` — reclaim free cache above the cap on the next allocation  
-- `set_memory_limit` — guideline for graph evaluation
+```python
+dynamic_ceiling = min(ram_gb_max or float("inf"), get_available_unified_dram())
+```
 
-Defaults (overridable):
+### Context KV Cache Calculation
+As context lengths grow, key-value caches expand substantially. Pantry projects KV cache consumption as:
 
-| Env | Default |
-| --- | --- |
-| `PANTRY_METAL_CACHE_LIMIT_RATIO` | `0.45` of recommended working set |
-| `PANTRY_METAL_MEMORY_LIMIT_RATIO` | `0.85` of recommended working set |
-| `PANTRY_METAL_CACHE_LIMIT_BYTES` | absolute override |
-| `PANTRY_METAL_MEMORY_LIMIT_BYTES` | absolute override |
+$$\text{KV Cache Bytes} = 2 \times n_{\text{layers}} \times n_{\text{heads\_kv}} \times d_{\text{head}} \times 2 \times \text{tokens}$$
+
+If available headroom cannot accommodate both weights and the maximum context window, Pantry computes a safe **usable context window**:
+
+$$\text{usable\_context} = \min\left(\text{context\_max}, \frac{\text{Headroom} - \text{Weights}}{\text{Bytes\_Per\_Token}}\right)$$
+
+This ensures client inference requests never induce system swap or crash the host daemon.
+
+---
+
+## 3. Cross-Platform Cache Reclaim: `POST /v1/memory/clear`
+
+Clearing memory caches forces immediate reclamation of dormant pages across all loaded runtimes:
+1. **Apple Silicon**: Calls `mx.metal.clear_cache()`.
+2. **NVIDIA CUDA**: Calls `torch.cuda.empty_cache()` and `torch.cuda.ipc_collect()`.
+3. **Apple MPS**: Calls `torch.mps.empty_cache()` (if PyTorch MPS is loaded).
+4. **Host Runtime**: Forces Python `gc.collect()`.
 
 ```bash
 curl -s -X POST http://127.0.0.1:18787/v1/memory/clear | jq
 ```
 
-Unload models (`POST /v1/unload` or the menu) then clear cache if the heap stays high.
+---
 
-## Worker Process Isolation (OS-level Metal Reclaim)
+## 4. Protection (Soft Caps on Apple Silicon)
 
-On Apple Silicon, Metal GPU drivers and system allocator pools often retain committed memory within the host process address space even after calling `mx.clear_cache()` and `gc.collect()`.
+At serve startup on Apple Silicon, Pantry calls MLX:
+- `set_cache_limit` — reclaim free cache above the cap on the next allocation  
+- `set_memory_limit` — guideline for graph evaluation
 
-To ensure that GPU driver allocations and MLX heap memory are fully returned to macOS when models are unloaded, pantry supports **Worker Subprocess Isolation**:
+| Environment Variable | Default Value | Description |
+| --- | --- | --- |
+| `PANTRY_METAL_CACHE_LIMIT_RATIO` | `0.45` | Ratio of recommended working set for free cache |
+| `PANTRY_METAL_MEMORY_LIMIT_RATIO` | `0.85` | Ratio of recommended working set for active allocations |
+| `PANTRY_METAL_CACHE_LIMIT_BYTES` | unset | Absolute byte override for cache limit |
+| `PANTRY_METAL_MEMORY_LIMIT_BYTES` | unset | Absolute byte override for memory limit |
+
+---
+
+## 5. Worker Process Isolation (OS-level GPU Reclaim)
+
+On both macOS (Metal drivers) and Linux (CUDA driver runtimes), system allocator pools often retain committed memory within the host process address space even after calling memory clear routines.
+
+To guarantee that GPU driver allocations are fully returned to the operating system when models are unloaded, Pantry supports **Worker Subprocess Isolation**:
 
 ```bash
 pantry serve --worker-isolation
@@ -56,14 +95,18 @@ pantry serve --worker-isolation
 ```
 
 When worker isolation is enabled:
-1. Model loading and MLX graph evaluation run in an isolated subprocess.
+1. Model loading and graph evaluation run in an isolated subprocess.
 2. Unloading all packages (`POST /v1/unload` or `pantry unload`) cleanly terminates the worker process.
-3. The macOS kernel immediately reclaims all GPU driver allocations and heap associated with the terminated worker, while the host server remains lightweight.
+3. The operating system kernel immediately reclaims all GPU driver allocations and heap associated with the terminated worker, while the host server remains lightweight.
 4. Subsequent inference requests automatically spin up a fresh worker on demand.
 
-## API
+---
 
-- `GET /v1/health` → compact `memory` object  
-- `GET /v1/memory` → full snapshot + limits applied at start  
-- `POST /v1/memory/clear` → `mx.clear_cache()` best-effort  
+## 6. Endpoints Summary
+
+- `GET /v1/health`: Compact memory pressure status.
+- `GET /v1/memory`: Full multi-backend memory watchdog snapshot.
+- `POST /v1/memory/clear`: Multi-backend cache reclaim (Metal + CUDA + MPS + GC).
+- `GET /v1/monitor/stats`: Complete hardware and token telemetry, including memory segmentation.
+  
 

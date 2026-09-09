@@ -69,7 +69,7 @@ Conceptual example:
 | `template_family` | Chat packs: `chatml` / `llama3`; generative packs may use `none` |
 | `aliases` | Soft names; first alias is the preferred `/v1/models` id |
 | `listable` | If `false`, hidden from `/v1/models` unless `?demos=1` |
-| `runtime.primary` | `echo` \| `echo_image` \| `mlx` \| … |
+| `runtime.primary` | `echo` \| `echo_image` \| `mlx` \| `cuda` \| … |
 | `runtime.hf_repo` | Hugging Face repo for `pantry pull` (omit for echo*) |
 | `eval` | Optional measured notes; required before advertising extreme packs |
 

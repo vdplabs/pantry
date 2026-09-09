@@ -74,6 +74,21 @@ Inspects chunk deduplication metrics across all stored model weights:
 curl -s http://127.0.0.1:18787/v1/storage | jq
 ```
 
+#### 1.5 Real-Time System Monitor & Token Telemetry: `GET /v1/monitor/stats` & `/dashboard`
+Provides comprehensive telemetry across CPU, GPU (Metal or NVIDIA CUDA), memory segmentation, network rates, active models, and real-time token performance (prefill/decode latency, context fill %, estimated KV cache):
+
+```bash
+# Query full telemetry snapshot
+curl -s http://127.0.0.1:18787/v1/monitor/stats | jq
+
+# Reset session token metrics
+curl -s -X POST http://127.0.0.1:18787/v1/monitor/reset | jq
+
+# Launch interactive Web System Monitor in browser
+pantry dashboard
+# or navigate to http://127.0.0.1:18787/dashboard
+```
+
 ---
 
 ### Step 2: Intent-Based Capability Resolution (`POST /v1/resolve`)

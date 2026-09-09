@@ -4,7 +4,7 @@
 
 # pantry
 
-**pantry** is a local model host for Apple Silicon: one shared library of model packages, a small daemon that loads and runs them, and an OpenAI-compatible HTTP API so any app (or `curl`) can be a client.
+**pantry** is a local and cluster model host for Apple Silicon and NVIDIA DGX / Linux: one shared library of model packages, a small daemon that loads and runs them, and an OpenAI-compatible HTTP API so any app (or `curl`) can be a client.
 
 Clients ask for *capabilities* — chat, fit in 8 GB RAM, prefer speed — and pantry resolves a concrete package, applies the right chat template, and streams tokens. Weights live once on disk; many apps reuse them.
 
@@ -13,10 +13,10 @@ Clients ask for *capabilities* — chat, fit in 8 GB RAM, prefer speed — and
 | | |
 | --- | --- |
 | **Version** | **v0.5.4** — usable alpha (MIT, pip) |
-| **Ships today** | Capability resolve · **shared library** under `PANTRY_HOME`/`PANTRY_DATA` (transparent Hugging Face cache snapshot reuse; one copy on disk) · `pantry serve` OpenAI-compatible HTTP + SSE · MLX chat on Apple Silicon with **exact token usage** · **Host-owned templates** (ChatML/Llama) + stop-token stripping · **Curated speculative decoding** (`chat-fast`, draft/target pairs) · Expanded catalog (Qwen 2.5 0.5B/1.5B/Coder, Llama 3.2 1B/3B, DeepSeek-R1) · Unified-memory / Metal watchdog |
-| **Optional Real Engines** | Speech-to-text (`mlx-whisper` via `/v1/audio/transcriptions`) · Image generation (`mflux` via `/v1/images/generations`) |
+| **Ships today** | Capability resolve · **shared library** under `PANTRY_HOME`/`PANTRY_DATA` (transparent Hugging Face cache snapshot reuse; one copy on disk) · `pantry serve` OpenAI-compatible HTTP + SSE · MLX chat on Apple Silicon with **exact token usage** · **NVIDIA DGX / CUDA Linux support** via PyTorch & Hugging Face · **Interactive Web System Monitor Dashboard** (`/dashboard`) matching SINK with real-time gauges, sparklines, and 1-click unload · **Host-owned templates** (ChatML/Llama) + stop-token stripping · **Curated speculative decoding** (`chat-fast`, draft/target pairs) · Expanded catalog (Qwen 2.5 0.5B/1.5B/Coder, Llama 3.2 1B/3B, DeepSeek-R1) · Multi-backend memory & VRAM watchdog |
+| **Optional Real Engines** | Speech-to-text (`mlx-whisper` via `/v1/audio/transcriptions`) · Image generation (`mflux` via `/v1/images/generations`) · PyTorch CUDA runtime (`transformers` on NVIDIA) |
 | **Scaffolds / Demos** | Music HTTP endpoint (`echo_music` sine scaffold for client wiring) · Embeddings (`echo_embed` scaffold default; MLX runtime available) |
-| **Secondary Features** | Worker subprocess isolation (`--worker-isolation`) · Login LaunchAgent daemon (`pantry service`) · Single-endpoint catalog sync (`pantry catalog update`) · Prompt-injected tool calling |
+| **Secondary Features** | Worker subprocess isolation (`--worker-isolation`) · Login LaunchAgent daemon (`pantry service`) · Single-endpoint catalog sync (`pantry catalog update`) · Prompt-injected tool calling · `pantry dashboard` CLI launcher |
 | **Roadmap (not shipped)** | Real MAGNeT music engine on Apple Silicon · CAS blob layer for weight trees · Multi-publisher catalog federation · Unix domain sockets / Mach zero-copy IPC |
 
 Transparency over hype: clone it, run the tests, chat or generate images with local weights — those paths are real. Scaffolds like `echo_music` are honest placeholders for client integration while real engines are developed.
@@ -53,8 +53,8 @@ Ollama and llama.cpp are excellent. pantry is not a feature-for-feature clone �
 | **Who owns prompt format** | Often client- or model-card dependent | **Host-owned** templates + stop-token stripping so resolve cannot strand clients |
 | **On-disk library** | Per-tool / per-app installs are common; sharing is manual | **One shared library** under `PANTRY_HOME` / `PANTRY_DATA` so apps reuse the same pulled weight trees (blob CAS helpers exist; HF pulls are package dirs today) |
 | **Transport** | Localhost HTTP (OpenAI-compatible) | **Same today** — OpenAI-compatible HTTP on `127.0.0.1`. UDS / Mach / zero-copy IPC is **roadmap**, not claimed as done |
-| **Apple Silicon focus** | Cross-platform; Metal via various backends | **MLX-first** chat + unified-memory / Metal cache watchdog |
-| **Multi-modal** | Varies by project | Chat is real MLX; STT (`mlx-whisper`) and image (`mflux`) have real engines with demo fallbacks; music is an honest echo scaffold until real engines land |
+| **Hardware acceleration** | Cross-platform; Metal via various backends | **MLX-first** on Apple Silicon, **PyTorch/Transformers** on NVIDIA DGX & CUDA Linux + multi-backend memory/VRAM watchdog |
+| **Multi-modal** | Varies by project | Chat is real MLX / CUDA; STT (`mlx-whisper`) and image (`mflux`) have real engines with demo fallbacks; music is an honest echo scaffold until real engines land |
 
 OpenAI HTTP is the **adapter** for adoption. Differentiation is resolve + shared store + Apple-aware planning — not another chat UI.
 
@@ -130,7 +130,9 @@ Default API: `http://127.0.0.1:18787`. Paths: see [Configuration](#configuration
 
 ## Install
 
-Requires Python 3.11+ on Apple Silicon.
+Requires Python 3.11+. Supported on **macOS (Apple Silicon)** and **Linux (NVIDIA DGX, CUDA GPUs, or CPU)**.
+
+### macOS (Apple Silicon)
 
 **Homebrew** ([vdplabs/homebrew-tap](https://github.com/vdplabs/homebrew-tap)):
 
@@ -139,7 +141,7 @@ brew tap vdplabs/tap
 brew install pantry
 ```
 
-**pip (recommended from a clone)** — MLX inference + menu bar (what `pantry serve` expects):
+**pip (recommended from a clone)** — MLX inference + menu bar:
 
 ```bash
 python3.12 -m venv .venv
@@ -154,7 +156,22 @@ Dev tools on top:
 pip install -e ".[mac,dev]"
 ```
 
-Without menu bar extras, `pantry serve` still runs HTTP but prints that the menu bar was skipped.
+### Linux & NVIDIA DGX (CUDA)
+
+For NVIDIA DGX clusters, GPU servers, and Linux workstations:
+
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate
+pip install -e ".[cuda]"
+# With dev tools: pip install -e ".[cuda,dev]"
+```
+
+For generic Linux CPU or vLLM engines:
+
+```bash
+pip install -e ".[linux]"   # or: pip install -e ".[vllm]"
+```
 
 ## Configuration
 
@@ -260,6 +277,7 @@ Capability aliases such as `chat-compact` resolve to a concrete package id on th
 Deeper reference lives under [`Docs/`](Docs/README.md):
 
 - [Architecture](Docs/Architecture.md)
+- [System Monitor](Docs/SystemMonitor.md)
 - [Packages](Docs/Packages.md)
 - [Modalities](Docs/Modalities.md)
 - [Memory](Docs/Memory.md)

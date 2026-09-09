@@ -1,8 +1,10 @@
 # Install
 
-Requires Python 3.11+ on Apple Silicon.
+Requires Python 3.11+. Supported on **macOS (Apple Silicon)** and **Linux (NVIDIA DGX, CUDA GPUs, or CPU)**.
 
-## Homebrew (recommended on macOS)
+## macOS (Apple Silicon)
+
+### Homebrew (recommended on macOS)
 
 ```bash
 brew tap vdplabs/tap
@@ -19,9 +21,9 @@ pantry serve                  # HTTP + menu bar
 
 The formula lives in the separate tap: [vdplabs/homebrew-tap](https://github.com/vdplabs/homebrew-tap) (`brew tap vdplabs/tap`).
 
-## pip (from a clone)
+### pip (macOS Apple Silicon)
 
-One install covers inference **and** the menu bar that `pantry serve` opens by default:
+Installs native Apple Silicon MLX inference and the macOS menu bar:
 
 ```bash
 python3.12 -m venv .venv
@@ -30,34 +32,56 @@ pip install -e ".[mac]"
 # equivalent: pip install -e ".[mlx,menubar]"
 ```
 
-With tests / lint:
+With developer tools and test suites:
 
 ```bash
 pip install -e ".[mac,dev]"
 ```
 
-From GitHub without cloning:
+---
+
+## Linux & NVIDIA DGX (CUDA)
+
+For NVIDIA DGX clusters, GPU workstations, and Linux hosts, Pantry utilizes PyTorch, Hugging Face `transformers`, `accelerate`, and NVML (`pynvml`).
+
+### pip (Linux / NVIDIA CUDA)
 
 ```bash
-pip install "git+https://github.com/vdplabs/pantry.git#egg=pantry[mac]"
-# or:
-pip install "git+https://github.com/vdplabs/pantry.git#egg=pantry[mlx,menubar]"
+python3.12 -m venv .venv
+source .venv/bin/activate
+
+# Install with CUDA acceleration & hardware telemetry
+pip install -e ".[cuda]"
+
+# With developer tools and tests
+pip install -e ".[cuda,dev]"
 ```
 
-If you omit `menubar` / `mac`, `pantry serve` still listens on HTTP but skips the menu bar and tells you to install the extra.
+### pip (Linux / Headless CPU or vLLM)
+
+```bash
+# Standard Linux (psutil + huggingface-hub)
+pip install -e ".[linux]"
+
+# vLLM inference engine extra
+pip install -e ".[vllm]"
+```
+
+---
 
 ## uv
 
 ```bash
+# On macOS (Apple Silicon):
 uv tool install --with mlx --with mlx-lm --with rumps \
+  "git+https://github.com/vdplabs/pantry.git"
+
+# On Linux (NVIDIA CUDA):
+uv tool install --with torch --with transformers --with accelerate --with pynvml \
   "git+https://github.com/vdplabs/pantry.git"
 ```
 
-Or in a project:
-
-```bash
-uv add "pantry[mac] @ git+https://github.com/vdplabs/pantry.git"
-```
+---
 
 ## After install
 
@@ -65,8 +89,9 @@ uv add "pantry[mac] @ git+https://github.com/vdplabs/pantry.git"
 pantry init
 pantry pull vdplabs.qwen25-0.5b.compact.v1      # ~290 MB
 pantry pull vdplabs.qwen25-1.5b.standard.v1     # ~870 MB (draft pair)
-pantry serve                  # HTTP + menu bar
-pantry serve --no-menubar     # HTTP only
+pantry serve                  # HTTP + menu bar (on macOS)
+pantry serve --no-menubar     # HTTP only (default on headless/Linux)
+pantry dashboard              # Opens the Web System Monitor in your browser
 ```
 
 ### External SSD (optional)

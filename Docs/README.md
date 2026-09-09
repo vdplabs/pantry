@@ -2,12 +2,14 @@
 
 | Doc | Contents |
 | --- | --- |
-| [Architecture](Architecture.md) | Process model, store, resolve, runtimes, scheduling |
-| [Packages](Packages.md) | Manifest fields, quality tiers, pull / library layout |
+| [Architecture](Architecture.md) | Cross-platform architecture (macOS Apple Silicon & Linux NVIDIA DGX), store, resolve, runtimes, scheduling |
+| [System Monitor](SystemMonitor.md) | Real-time Web System Monitor dashboard (`/dashboard`), gauges, 1-click unload, and telemetry API |
+| [Packages](Packages.md) | Manifest fields, quality tiers, pull / library layout, MLX / CUDA runtimes |
 | [Modalities](Modalities.md) | text / image_gen / music (+ planned), resolve rules, scaffolds |
-| [Memory](Memory.md) | Unified-memory watchdog, Metal heap stats, cache caps |
-| [API](API.md) | HTTP endpoints and CLI surface |
+| [Memory](Memory.md) | Multi-backend memory watchdog (Apple Silicon Unified Memory + NVIDIA CUDA VRAM), cache caps, dynamic KV cache |
+| [API](API.md) | HTTP endpoints, Web System Monitor, and CLI surface |
 | [Integration](Integration.md) | Client integration guide, workflow walkthrough, and all endpoints |
-| [Launchd](Launchd.md) | Optional login LaunchAgent |
-| [Install](Install.md) | pip / uv / Homebrew install |
-| [Speculative](Speculative.md) | Curated draft/target speculative decoding |
+| [Install](Install.md) | pip / uv / Homebrew installation on macOS and Linux (NVIDIA CUDA) |
+| [Speculative](Speculative.md) | Curated draft/target speculative decoding and roofline acceleration model |
+| [Launchd](Launchd.md) | Optional login LaunchAgent daemon for macOS |
+
