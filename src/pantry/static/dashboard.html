@@ -6,28 +6,30 @@
   <title>Pantry · System Monitor</title>
   <style>
     :root {
-      --bg: #141517;
-      --card-bg: rgba(28, 30, 34, 0.75);
-      --card-border: rgba(255, 255, 255, 0.08);
-      --text: #f0f2f5;
-      --text-muted: #8b929e;
-      --text-dim: #5c6370;
-      --accent-blue: #388bfd;
-      --accent-cyan: #00d2ff;
-      --accent-green: #3fb950;
-      --accent-purple: #bc8cff;
-      --accent-orange: #d29922;
-      --accent-red: #f85149;
-      --glass: rgba(255, 255, 255, 0.04);
-      --font: "Segoe UI", "Avenir", -apple-system,  BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      --bg: #090d16;
+      --card-bg: rgba(13, 21, 38, 0.72);
+      --card-border: rgba(255, 255, 255, 0.06);
+      --card-border-subtle: rgba(255, 255, 255, 0.035);
+      --text: #f8fafc;
+      --text-body: #e2e8f0;
+      --text-muted: #7b8ba1;
+      --text-dim: #4c5a6f;
+      --accent-blue: #609fd4;
+      --accent-steel: #4a7096;
+      --accent-deep: #2c4561;
+      --accent-ice: #9bbfe0;
+      --accent-warn: #d4a96a;
+      --accent-danger: #e06c75;
+      --glass: rgba(255, 255, 255, 0.03);
+      --font:  "Avenir", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
       --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       background: var(--bg);
-      background-image: radial-gradient(circle at 50% 0%, rgba(56, 139, 253, 0.06), transparent 45%);
-      color: var(--text);
+      background-image: radial-gradient(circle at 50% 0%, rgba(96, 159, 212, 0.05), transparent 50%);
+      color: var(--text-body);
       font-family: var(--font);
       font-size: 13px;
       line-height: 1.4;
@@ -38,7 +40,7 @@
     }
 
     button, input, select  {
-      font-family: "Segoe UI", "Avenir", -apple-system,  BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      font-family: var(--font);
     }
 
     /* App Shell — Modern Left Sidebar Layout */
@@ -46,14 +48,14 @@
       display: flex;
       min-height: 100vh;
       width: 100%;
-      background: rgba(20, 22, 26, 0.95);
+      background: #090d16;
     }
 
     /* Left Sidebar Menu */
     .sidebar {
       width: 240px;
       flex-shrink: 0;
-      background: rgba(16, 18, 22, 0.98);
+      background: #070b14;
       backdrop-filter: blur(28px);
       -webkit-backdrop-filter: blur(28px);
       border-right: 1px solid var(--card-border);
@@ -164,11 +166,11 @@
     }
     .sidebar-nav-item:hover {
       color: var(--text);
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.05);
     }
     .sidebar-nav-item.active {
       color: #fff;
-      background: rgba(56, 139, 253, 0.16);
+      background: rgba(96, 159, 212, 0.12);
       font-weight: 600;
     }
     .sidebar-nav-item.active::before {
@@ -195,22 +197,17 @@
     }
     .nav-badge {
       font-size: 9.5px;
-      font-weight: 700;
+      font-weight: 600;
       padding: 1px 6px;
-      border-radius: 10px;
-      background: rgba(56, 139, 253, 0.2);
-      color: #79b8ff;
-      border: 1px solid rgba(56, 139, 253, 0.3);
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.05);
+      color: #94a3b8;
+      border: 1px solid rgba(255, 255, 255, 0.08);
     }
-    .nav-badge.enterprise {
-      background: rgba(188, 140, 255, 0.2);
-      color: #d2a8ff;
-      border-color: rgba(188, 140, 255, 0.35);
-    }
-    .nav-badge.new {
-      background: rgba(63, 185, 80, 0.2);
-      color: #7ee787;
-      border-color: rgba(63, 185, 80, 0.35);
+    .nav-badge.enterprise, .nav-badge.new {
+      background: rgba(96, 159, 212, 0.08);
+      color: #9bbfe0;
+      border-color: rgba(96, 159, 212, 0.2);
     }
 
     /* Collapsed Sidebar State */
@@ -267,7 +264,7 @@
       align-items: center;
       justify-content: space-between;
       padding: 12px 20px;
-      background: rgba(20, 22, 26, 0.7);
+      background: rgba(9, 13, 22, 0.85);
       backdrop-filter: blur(20px);
       -webkit-backdrop-filter: blur(20px);
       border-bottom: 1px solid var(--card-border);
@@ -311,16 +308,16 @@
       font-size: 11px;
       font-weight: 500;
       padding: 2px 8px;
-      border-radius: 12px;
-      background: rgba(255, 255, 255, 0.07);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.04);
       color: var(--text-muted);
       border: 1px solid rgba(255, 255, 255, 0.06);
       white-space: nowrap;
     }
     .chip.error-pulse {
-      background: rgba(248, 81, 73, 0.18);
-      border-color: rgba(248, 81, 73, 0.4);
-      color: #ff8b85;
+      background: rgba(224, 108, 117, 0.12);
+      border-color: rgba(224, 108, 117, 0.3);
+      color: #e06c75;
       font-weight: 600;
     }
 
@@ -353,7 +350,7 @@
     }
     .btn-interval:hover { color: var(--text); }
     .btn-interval.active {
-      background: var(--accent-blue);
+      background: #2b5c8f;
       color: #fff;
     }
     .btn-icon {
@@ -426,10 +423,10 @@
     .card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 10px;
-      padding: 13px 15px;
+      border-radius: 9px;
+      padding: 14px 16px;
       margin-bottom: 0;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
     }
     .card:last-child { margin-bottom: 0; }
     .card-header {
@@ -440,16 +437,17 @@
     }
     .card-title {
       font-size: 12.5px;
-      font-weight: 700;
+      font-weight: 600;
       display: flex;
       align-items: center;
       gap: 6px;
-      color: var(--text);
+      color: #e2e8f0;
     }
     .card-value {
       font-family: var(--mono);
-      font-weight: 700;
-      font-size: 12px;
+      font-weight: 600;
+      font-size: 12.5px;
+      color: #f8fafc;
     }
 
     /* Mini Sparklines */
@@ -457,7 +455,8 @@
       width: 100%;
       height: 48px;
       margin-bottom: 10px;
-      background: rgba(0, 0, 0, 0.2);
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.03);
       border-radius: 6px;
       overflow: hidden;
       position: relative;
@@ -478,7 +477,7 @@
     }
     .core-cell {
       height: 24px;
-      background: rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.03);
       border-radius: 3px;
       overflow: hidden;
       position: relative;
@@ -489,24 +488,24 @@
       bottom: 0;
       left: 0;
       right: 0;
-      background: var(--accent-blue);
+      background: #609fd4;
       transition: height 0.25s ease-out;
     }
-    .core-fill.eff { background: var(--accent-cyan); }
+    .core-fill.eff { background: #3a5b7e; }
 
     /* Segmented Memory Bar */
     .segmented-bar {
-      height: 11px;
-      border-radius: 6px;
-      background: rgba(255, 255, 255, 0.06);
+      height: 10px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.04);
       display: flex;
       overflow: hidden;
       margin: 10px 0 8px;
     }
-    .seg-app { background: var(--accent-blue); }
-    .seg-wired { background: var(--accent-purple); }
-    .seg-comp { background: var(--accent-orange); }
-    .seg-free { background: rgba(255, 255, 255, 0.18); }
+    .seg-app { background: #7ba4c7; }
+    .seg-wired { background: #4a7096; }
+    .seg-comp { background: #2c4561; }
+    .seg-free { background: rgba(255, 255, 255, 0.08); }
 
     .legend-row {
       display: flex;
@@ -541,7 +540,7 @@
     .row-meta .val {
       font-family: var(--mono);
       font-weight: 600;
-      color: var(--text);
+      color: #f8fafc;
     }
 
     /* GPU multi-device blocks */
@@ -559,23 +558,23 @@
     }
     .gpu-device-name {
       font-size: 11.5px;
-      font-weight: 700;
+      font-weight: 600;
       color: var(--text);
     }
     .gpu-device-util {
       font-family: var(--mono);
-      font-weight: 700;
+      font-weight: 600;
       font-size: 12px;
-      color: var(--accent-purple);
+      color: #f8fafc;
     }
     .gpu-pills {
       grid-template-columns: repeat(3, 1fr);
       margin-bottom: 6px;
     }
     .gpu-pills .metric-pill { padding: 4px 7px; }
-    .gpu-pills .num.temp-ok { color: var(--accent-green); }
-    .gpu-pills .num.temp-warn { color: var(--accent-orange); }
-    .gpu-pills .num.temp-hot { color: var(--accent-red); }
+    .gpu-pills .num.temp-ok { color: #f8fafc; }
+    .gpu-pills .num.temp-warn { color: var(--accent-warn); }
+    .gpu-pills .num.temp-hot { color: var(--accent-danger); }
 
     /* Model Cards in Memory */
     #models-container {
@@ -631,24 +630,24 @@
       font-weight: 600;
       padding: 1px 5px;
       border-radius: 4px;
-      background: rgba(255, 255, 255, 0.06);
+      background: rgba(255, 255, 255, 0.05);
       color: var(--text-muted);
-      border: 1px solid rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.05);
       font-family: var(--mono);
     }
     .idle-countdown {
       font-size: 9.5px;
-      color: var(--accent-orange);
+      color: var(--text-muted);
       margin-top: 3px;
     }
 
     /* Buttons */
     .btn-action {
-      background: rgba(255, 255, 255, 0.08);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #cbd5e1;
       font-size: 11px;
-      font-weight: 600;
+      font-weight: 500;
       padding: 3px 10px;
       border-radius: 5px;
       cursor: pointer;
@@ -656,15 +655,16 @@
       flex-shrink: 0;
     }
     .btn-action:hover {
-      background: rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.08);
+      color: #fff;
     }
     .btn-action.unload {
-      background: rgba(248, 81, 73, 0.15);
-      border-color: rgba(248, 81, 73, 0.35);
-      color: #ff8b85;
+      background: rgba(224, 108, 117, 0.08);
+      border-color: rgba(224, 108, 117, 0.2);
+      color: #e06c75;
     }
     .btn-action.unload:hover {
-      background: rgba(248, 81, 73, 0.28);
+      background: rgba(224, 108, 117, 0.18);
       color: #fff;
     }
 
@@ -677,7 +677,7 @@
     }
     .metric-pill {
       background: rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.04);
       padding: 6px 8px;
       border-radius: 6px;
     }
@@ -690,8 +690,8 @@
     .metric-pill .num {
       font-family: var(--mono);
       font-size: 12px;
-      font-weight: 700;
-      color: var(--text);
+      font-weight: 600;
+      color: #f8fafc;
     }
 
     /* Request queue slots */
@@ -701,7 +701,7 @@
       text-align: center;
       padding: 6px 4px;
       background: rgba(0, 0, 0, 0.3);
-      border: 1px solid rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.04);
       border-radius: 6px;
     }
     .queue-slot .lbl {
@@ -712,31 +712,39 @@
     }
     .queue-slot .num {
       font-family: var(--mono);
-      font-weight: 700;
+      font-weight: 600;
       font-size: 13px;
-      color: var(--text);
+      color: #f8fafc;
     }
 
     .status-badge {
       font-size: 10.5px;
       font-weight: 600;
-      padding: 1px 6px;
-      border-radius: 10px;
+      padding: 1px 7px;
+      border-radius: 4px;
     }
-    .status-badge.ok { background: rgba(63, 185, 80, 0.18); color: var(--accent-green); }
-    .status-badge.warn { background: rgba(210, 153, 34, 0.2); color: var(--accent-orange); }
+    .status-badge.ok {
+      background: rgba(96, 159, 212, 0.1);
+      color: #9bbfe0;
+      border: 1px solid rgba(96, 159, 212, 0.2);
+    }
+    .status-badge.warn {
+      background: rgba(212, 169, 106, 0.12);
+      color: #d4a96a;
+      border: 1px solid rgba(212, 169, 106, 0.25);
+    }
 
     /* Progress bar */
     .progress-bar {
-      height: 7px;
-      background: rgba(255, 255, 255, 0.08);
+      height: 6px;
+      background: rgba(255, 255, 255, 0.07);
       border-radius: 4px;
       overflow: hidden;
       margin: 6px 0;
     }
     .progress-fill {
       height: 100%;
-      background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+      background: #5b8ec9;
       border-radius: 4px;
       transition: width 0.3s;
     }
@@ -744,19 +752,14 @@
     /* Live Activity Banner */
     .activity-banner {
       margin: 14px 16px 0 16px;
-      padding: 11px 16px;
-      border-radius: 10px;
-      background: linear-gradient(90deg, rgba(210, 153, 34, 0.16), rgba(188, 140, 255, 0.16));
-      border: 1px solid rgba(210, 153, 34, 0.45);
+      padding: 10px 16px;
+      border-radius: 8px;
+      background: rgba(14, 23, 41, 0.85);
+      border: 1px solid rgba(96, 159, 212, 0.25);
       display: flex;
       align-items: center;
       justify-content: space-between;
-      animation: pulseGlow 2.5s infinite ease-in-out;
-      box-shadow: 0 4px 20px rgba(210, 153, 34, 0.15);
-    }
-    @keyframes pulseGlow {
-      0%, 100% { border-color: rgba(210, 153, 34, 0.35); box-shadow: 0 0 12px rgba(210, 153, 34, 0.1); }
-      50% { border-color: rgba(210, 153, 34, 0.75); box-shadow: 0 0 24px rgba(210, 153, 34, 0.28); }
+      box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
     }
     .activity-left {
       display: flex;
@@ -764,10 +767,10 @@
       gap: 12px;
     }
     .activity-spinner {
-      width: 18px;
-      height: 18px;
-      border: 2.5px solid rgba(210, 153, 34, 0.25);
-      border-top-color: var(--accent-orange);
+      width: 16px;
+      height: 16px;
+      border: 2px solid rgba(96, 159, 212, 0.2);
+      border-top-color: var(--accent-blue);
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
     }
@@ -775,9 +778,9 @@
       to { transform: rotate(360deg); }
     }
     .activity-title {
-      font-size: 13px;
-      font-weight: 700;
-      color: #ffe194;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: #f8fafc;
       display: flex;
       align-items: center;
       gap: 6px;
@@ -794,40 +797,39 @@
       gap: 8px;
     }
     .activity-badge {
-      font-size: 11px;
-      font-weight: 600;
-      padding: 3px 8px;
-      border-radius: 6px;
-      background: rgba(0, 0, 0, 0.4);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      color: var(--accent-orange);
+      font-size: 10.5px;
+      font-weight: 500;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #9bbfe0;
       font-family: var(--mono);
     }
     .activity-badge.engine {
-      color: var(--accent-purple);
-      background: rgba(188, 140, 255, 0.15);
-      border-color: rgba(188, 140, 255, 0.3);
+      color: #94a3b8;
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(255, 255, 255, 0.08);
     }
 
     /* Model items enhancements */
     .model-item.active-loading {
-      border: 1px solid rgba(210, 153, 34, 0.6) !important;
-      background: rgba(210, 153, 34, 0.1) !important;
-      box-shadow: 0 0 16px rgba(210, 153, 34, 0.18);
+      border: 1px solid rgba(96, 159, 212, 0.4) !important;
+      background: rgba(96, 159, 212, 0.08) !important;
     }
     .btn-action.load {
-      background: rgba(56, 139, 253, 0.16);
-      border-color: rgba(56, 139, 253, 0.4);
-      color: #79b8ff;
+      background: rgba(96, 159, 212, 0.1);
+      border-color: rgba(96, 159, 212, 0.22);
+      color: #9bbfe0;
     }
     .btn-action.load:hover {
-      background: rgba(56, 139, 253, 0.3);
+      background: rgba(96, 159, 212, 0.2);
       color: #fff;
     }
     .dot.pulse-orange {
-      background: var(--accent-orange);
-      box-shadow: 0 0 8px var(--accent-orange);
-      animation: blink 1s infinite alternate;
+      background: var(--accent-blue);
+      box-shadow: 0 0 6px rgba(96, 159, 212, 0.6);
+      animation: blink 1.2s infinite alternate;
     }
     @keyframes blink {
       from { opacity: 0.4; }
@@ -837,17 +839,16 @@
       font-size: 9.5px;
       padding: 1px 6px;
       border-radius: 4px;
-      background: rgba(210, 153, 34, 0.25);
-      color: var(--accent-orange);
+      background: rgba(96, 159, 212, 0.15);
+      color: #9bbfe0;
       margin-left: 6px;
-      font-weight: 700;
+      font-weight: 600;
       letter-spacing: 0.4px;
     }
     .chip.warn-pulse {
-      background: rgba(210, 153, 34, 0.2);
-      border-color: rgba(210, 153, 34, 0.4);
-      color: var(--accent-orange);
-      animation: blink 1.2s infinite alternate;
+      background: rgba(96, 159, 212, 0.12);
+      border-color: rgba(96, 159, 212, 0.3);
+      color: #9bbfe0;
       font-weight: 600;
     }
 
@@ -882,8 +883,8 @@
       align-items: center;
     }
     .event-entry .event-time {
-      color: var(--accent-blue);
-      font-weight: 600;
+      color: var(--text-muted);
+      font-weight: 500;
       min-width: 55px;
     }
     .event-entry .event-msg {
@@ -902,13 +903,13 @@
       border: 1px solid rgba(255, 255, 255, 0.03);
       font-size: 10.5px;
     }
-    .request-row .req-time { color: var(--accent-blue); }
+    .request-row .req-time { color: var(--text-muted); }
     .request-row .req-model { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .request-row .req-tok { color: var(--text-muted); text-align: right; }
     .request-row .req-dur { color: var(--text-muted); text-align: right; }
-    .request-row .req-status { text-align: right; font-weight: 700; }
-    .request-row .req-status.ok { color: var(--accent-green); }
-    .request-row .req-status.err { color: var(--accent-red); }
+    .request-row .req-status { text-align: right; font-weight: 600; }
+    .request-row .req-status.ok { color: #9bbfe0; }
+    .request-row .req-status.err { color: #e06c75; }
 
     /* Playground Sub-Navigation */
     .pg-container {
@@ -927,12 +928,12 @@
       align-items: center;
       gap: 8px;
       padding: 8px 16px;
-      border-radius: 8px;
+      border-radius: 6px;
       background: rgba(255, 255, 255, 0.04);
       border: 1px solid rgba(255, 255, 255, 0.06);
       color: var(--text-muted);
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 12.5px;
+      font-weight: 500;
       cursor: pointer;
       transition: all 0.15s ease;
       white-space: nowrap;
@@ -942,10 +943,10 @@
       color: var(--text);
     }
     .pg-subnav-btn.active {
-      background: linear-gradient(135deg, rgba(56, 139, 253, 0.2), rgba(188, 140, 255, 0.15));
-      border-color: rgba(56, 139, 253, 0.5);
+      background: rgba(96, 159, 212, 0.12);
+      border-color: rgba(96, 159, 212, 0.35);
       color: #fff;
-      box-shadow: 0 0 12px rgba(56, 139, 253, 0.2);
+      box-shadow: none;
     }
 
     /* Playground Split Grid */
@@ -984,8 +985,8 @@
       transition: border-color 0.15s;
     }
     .form-input:focus, .form-textarea:focus, .form-select:focus {
-      border-color: var(--accent-blue);
-      box-shadow: 0 0 0 2px rgba(56, 139, 253, 0.15);
+      border-color: #609fd4;
+      box-shadow: 0 0 0 2px rgba(96, 159, 212, 0.15);
     }
     .form-textarea {
       resize: vertical;
@@ -1012,12 +1013,12 @@
     .slider-val {
       font-family: var(--mono);
       font-size: 11px;
-      font-weight: 700;
-      color: var(--accent-blue);
+      font-weight: 600;
+      color: #f8fafc;
     }
     .form-range {
       width: 100%;
-      accent-color: var(--accent-blue);
+      accent-color: #609fd4;
       cursor: pointer;
     }
 
@@ -1030,14 +1031,14 @@
       font-size: 10px;
       padding: 2px 7px;
       border-radius: 4px;
-      background: rgba(255, 255, 255, 0.06);
-      border: 1px solid rgba(255, 255, 255, 0.08);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.07);
       color: var(--text-muted);
       cursor: pointer;
       transition: all 0.15s;
     }
     .btn-preset:hover {
-      background: rgba(255, 255, 255, 0.12);
+      background: rgba(255, 255, 255, 0.1);
       color: var(--text);
     }
 
@@ -1046,23 +1047,22 @@
       display: inline-flex;
       align-items: center;
       gap: 8px;
-      padding: 9px 18px;
-      border-radius: 7px;
-      background: linear-gradient(90deg, #1f6feb, #388bfd);
-      border: 1px solid rgba(255, 255, 255, 0.15);
+      padding: 8px 16px;
+      border-radius: 6px;
+      background: #2b5c8f;
+      border: 1px solid rgba(255, 255, 255, 0.12);
       color: #fff;
-      font-size: 13px;
-      font-weight: 700;
+      font-size: 12.5px;
+      font-weight: 600;
       cursor: pointer;
       transition: all 0.15s ease;
-      box-shadow: 0 2px 8px rgba(31, 111, 235, 0.3);
+      box-shadow: none;
     }
     .btn-run-primary:hover {
-      filter: brightness(1.1);
-      box-shadow: 0 4px 14px rgba(31, 111, 235, 0.45);
+      background: #366ea8;
     }
     .btn-run-primary:disabled {
-      opacity: 0.5;
+      opacity: 0.45;
       cursor: not-allowed;
       filter: grayscale(0.5);
     }
@@ -1161,7 +1161,7 @@
       transition: border-color 0.15s;
     }
     .pack-search-input:focus {
-      border-color: var(--accent-blue);
+      border-color: #609fd4;
     }
     .filter-pills {
       display: flex;
@@ -1175,7 +1175,7 @@
       border: 1px solid rgba(255, 255, 255, 0.06);
       color: var(--text-muted);
       font-size: 11.5px;
-      font-weight: 600;
+      font-weight: 500;
       cursor: pointer;
       transition: all 0.15s;
       white-space: nowrap;
@@ -1185,8 +1185,8 @@
       background: rgba(255, 255, 255, 0.08);
     }
     .filter-pill.active {
-      background: rgba(56, 139, 253, 0.2);
-      border-color: rgba(56, 139, 253, 0.5);
+      background: rgba(96, 159, 212, 0.15);
+      border-color: rgba(96, 159, 212, 0.35);
       color: #fff;
     }
     .packs-grid {
@@ -1197,7 +1197,7 @@
     .pack-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
-      border-radius: 10px;
+      border-radius: 9px;
       padding: 14px 16px;
       display: flex;
       flex-direction: column;
@@ -1205,7 +1205,7 @@
       transition: transform 0.15s, border-color 0.15s;
     }
     .pack-card:hover {
-      border-color: rgba(56, 139, 253, 0.4);
+      border-color: rgba(96, 159, 212, 0.35);
       transform: translateY(-2px);
     }
     .pack-card-header {
@@ -1357,7 +1357,7 @@
 
     <div class="sidebar-footer">
       <div class="sidebar-host-pill">
-        <span class="dot" style="background: var(--accent-green);"></span>
+        <span class="dot" style="background: #9bbfe0;"></span>
         <span id="sidebar-host-device">Apple Silicon</span>
       </div>
       <div class="sidebar-version-pill" id="sidebar-version">v0.5.4 · Online</div>
@@ -1421,7 +1421,7 @@
     <div class="card widget-cpu">
       <div class="card-header">
         <div class="card-title"><span>💻</span> CPU Activity</div>
-        <div class="card-value" style="color: var(--accent-blue);" id="cpu-total">0.0%</div>
+        <div class="card-value" id="cpu-total">0.0%</div>
       </div>
       <div class="sparkline-box">
         <canvas class="sparkline" id="spark-cpu"></canvas>
@@ -1429,8 +1429,8 @@
       <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">CPU cores</div>
       <div class="cores-grid" id="cores-container"></div>
       <div class="legend-row" style="margin-top: 6px;">
-        <div class="legend-item"><span class="dot" style="background: var(--accent-blue);"></span> Performance</div>
-        <div class="legend-item"><span class="dot" style="background: var(--accent-cyan);"></span> Efficiency</div>
+        <div class="legend-item"><span class="dot" style="background: #609fd4;"></span> Performance</div>
+        <div class="legend-item"><span class="dot" style="background: #3a5b7e;"></span> Efficiency</div>
       </div>
     </div>
 
@@ -1440,7 +1440,7 @@
         <div class="card-title"><span>🎮</span> GPU Utilization</div>
         <div style="display: flex; align-items: center; gap: 6px;">
           <span class="chip" id="gpu-count-chip">1 device</span>
-          <span class="card-value" style="color: var(--accent-purple);" id="gpu-util">0.0%</span>
+          <span class="card-value" id="gpu-util">0.0%</span>
         </div>
       </div>
       <div id="gpu-devices-container">
@@ -1448,7 +1448,7 @@
       </div>
       <div class="row-meta" id="gpu-efficiency-row" style="display: none;">
         <span>Efficiency</span>
-        <span class="val" style="color: var(--accent-green);" id="gpu-efficiency">— tok/W</span>
+        <span class="val" id="gpu-efficiency">— tok/W</span>
       </div>
     </div>
 
@@ -1470,9 +1470,9 @@
       </div>
 
       <div class="legend-row">
-        <div class="legend-item"><span class="dot" style="background: var(--accent-blue);"></span> App <span id="leg-app">0 GB</span></div>
-        <div class="legend-item"><span class="dot" style="background: var(--accent-purple);"></span> Wired <span id="leg-wired">0 GB</span></div>
-        <div class="legend-item"><span class="dot" style="background: var(--accent-orange);"></span> Compressed <span id="leg-comp">0 GB</span></div>
+        <div class="legend-item"><span class="dot" style="background: #7ba4c7;"></span> App <span id="leg-app">0 GB</span></div>
+        <div class="legend-item"><span class="dot" style="background: #4a7096;"></span> Wired <span id="leg-wired">0 GB</span></div>
+        <div class="legend-item"><span class="dot" style="background: #2c4561;"></span> Compressed <span id="leg-comp">0 GB</span></div>
         <div class="legend-item"><span class="dot" style="background: rgba(255, 255, 255, 0.25);"></span> Free <span id="leg-free">0 GB</span></div>
       </div>
 
@@ -1490,11 +1490,11 @@
       </div>
       <div style="display: flex; gap: 16px; margin-bottom: 8px;">
         <div>
-          <div style="font-size: 9.5px; color: var(--accent-green); font-weight: 700;">↓ DOWNLOAD</div>
+          <div style="font-size: 9.5px; color: var(--text-muted); font-weight: 600; letter-spacing: 0.3px;">↓ DOWNLOAD</div>
           <div class="card-value" id="net-down">0 B/s</div>
         </div>
         <div>
-          <div style="font-size: 9.5px; color: var(--accent-orange); font-weight: 700;">↑ UPLOAD</div>
+          <div style="font-size: 9.5px; color: var(--text-muted); font-weight: 600; letter-spacing: 0.3px;">↑ UPLOAD</div>
           <div class="card-value" id="net-up">0 B/s</div>
         </div>
       </div>
@@ -1518,7 +1518,7 @@
       </div>
       <div class="row-meta">
         <span>CAS Deduplication Savings</span>
-        <span class="val" style="color: var(--accent-green);" id="cas-saved">0 B (1.0x)</span>
+        <span class="val" id="cas-saved">0 B (1.0x)</span>
       </div>
     </div>
 
@@ -1530,7 +1530,7 @@
       </div>
       <div class="row-meta">
         <span>Thermal State</span>
-        <span class="val" style="color: var(--accent-green);">Nominal (Cool)</span>
+        <span class="val">Nominal (Cool)</span>
       </div>
       <div class="row-meta">
         <span>Power Source</span>
@@ -1574,7 +1574,7 @@
         </div>
         <div class="metric-pill">
           <div class="lbl">Decode</div>
-          <div class="num" style="color: var(--accent-green);" id="inf-decode">0.0 t/s</div>
+          <div class="num" id="inf-decode">0.0 t/s</div>
         </div>
         <div class="metric-pill">
           <div class="lbl">Peak TPS</div>
@@ -1619,12 +1619,12 @@
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--card-border);">
         <div>
           <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">This Session</div>
-          <div class="card-value" style="color: var(--accent-blue); font-size: 13px;" id="tok-session-total">0 tokens</div>
+          <div class="card-value" style="font-size: 13px;" id="tok-session-total">0 tokens</div>
           <div style="font-size: 10px; color: var(--text-muted);" id="tok-session-meta">P: 0 · C: 0 · 0 reqs</div>
         </div>
         <div>
           <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">All-Time Cumulative</div>
-          <div class="card-value" style="color: var(--accent-purple); font-size: 13px;" id="tok-cumul-total">0 tokens</div>
+          <div class="card-value" style="font-size: 13px;" id="tok-cumul-total">0 tokens</div>
           <div style="font-size: 10px; color: var(--text-muted);" id="tok-cumul-meta">P: 0 · C: 0 · 0 reqs</div>
         </div>
       </div>
@@ -1742,14 +1742,13 @@
               <div id="pg-chat-stats-pill" class="chip">Idle</div>
             </div>
 
-            <div id="pg-chat-metrics-bar" class="metrics-pills" style="display: none; margin-bottom: 8px;">
               <div class="metric-pill">
                 <div class="lbl">Latency</div>
                 <div class="num" id="pg-chat-latency">0 ms</div>
               </div>
               <div class="metric-pill">
                 <div class="lbl">Decode TPS</div>
-                <div class="num" style="color: var(--accent-green);" id="pg-chat-tps">0.0 t/s</div>
+                <div class="num" id="pg-chat-tps">0.0 t/s</div>
               </div>
               <div class="metric-pill">
                 <div class="lbl">Tokens</div>
@@ -1822,7 +1821,7 @@
               </div>
             </div>
 
-            <button id="btn-pg-img-run" class="btn-run-primary" style="background: linear-gradient(90deg, #8957e5, #bc8cff); margin-top: 10px;">
+            <button id="btn-pg-img-run" class="btn-run-primary" style="margin-top: 10px;">
               <span>🎨</span> Generate Image
             </button>
           </div>
@@ -1878,7 +1877,7 @@
               <input type="range" id="pg-audio-duration" class="form-range" min="1.0" max="10.0" step="0.5" value="3.0" />
             </div>
 
-            <button id="btn-pg-audio-run" class="btn-run-primary" style="background: linear-gradient(90deg, #d29922, #f0883e); margin-top: 10px;">
+            <button id="btn-pg-audio-run" class="btn-run-primary" style="margin-top: 10px;">
               <span>🎵</span> Synthesize Music
             </button>
           </div>
@@ -1931,7 +1930,7 @@
               <input type="text" id="pg-stt-lang" class="form-input" placeholder="e.g. en, fr, es, de (auto-detect if empty)" />
             </div>
 
-            <button id="btn-pg-stt-run" class="btn-run-primary" style="background: linear-gradient(90deg, #238636, #2ea043); margin-top: 10px;">
+            <button id="btn-pg-stt-run" class="btn-run-primary" style="margin-top: 10px;">
               <span>🎙️</span> Transcribe Audio
             </button>
           </div>
@@ -1999,7 +1998,7 @@
               <div class="pack-meta-item"><span>Format</span><strong>MLX 4-bit</strong></div>
               <div class="pack-meta-item"><span>VRAM Footprint</span><strong>~2.10 GB</strong></div>
               <div class="pack-meta-item"><span>Context Window</span><strong>131,072 ctx</strong></div>
-              <div class="pack-meta-item"><span>CAS Dedup</span><strong style="color: var(--accent-green);">1.46x Saved</strong></div>
+              <div class="pack-meta-item"><span>CAS Dedup</span><strong>1.46x Saved</strong></div>
             </div>
           </div>
           <div class="pack-card-actions">
@@ -2049,7 +2048,7 @@
               <div class="pack-meta-item"><span>Format</span><strong>GGUF / MLX 4-bit</strong></div>
               <div class="pack-meta-item"><span>VRAM Footprint</span><strong>~2.00 GB</strong></div>
               <div class="pack-meta-item"><span>Context Window</span><strong>32,768 ctx</strong></div>
-              <div class="pack-meta-item"><span>Chain of Thought</span><strong style="color: var(--accent-purple);">Enabled</strong></div>
+              <div class="pack-meta-item"><span>Chain of Thought</span><strong>Enabled</strong></div>
             </div>
           </div>
           <div class="pack-card-actions">
@@ -2074,7 +2073,7 @@
               <div class="pack-meta-item"><span>Engine</span><strong>mlx-whisper / faster-whisper</strong></div>
               <div class="pack-meta-item"><span>VRAM Footprint</span><strong>~800 MB</strong></div>
               <div class="pack-meta-item"><span>Languages</span><strong>99 supported</strong></div>
-              <div class="pack-meta-item"><span>Speedup</span><strong style="color: var(--accent-green);">8x Realtime</strong></div>
+              <div class="pack-meta-item"><span>Speedup</span><strong>8x Realtime</strong></div>
             </div>
           </div>
           <div class="pack-card-actions">
@@ -2160,11 +2159,11 @@
           <div class="pack-card-desc">Patent-backed Content-Addressable Storage (CAS) architecture with ephemeral in-memory execution guarantees prompt and output secrecy.</div>
           <div class="gov-item">
             <span class="lbl"><span>💾</span> Disk Data Persistence</span>
-            <span class="val" style="color: var(--accent-green);">0 Bytes (Ephemeral RAM only)</span>
+            <span class="val">0 Bytes (Ephemeral RAM only)</span>
           </div>
           <div class="gov-item">
             <span class="lbl"><span>🧩</span> CAS Deduplication Ratio</span>
-            <span class="val" style="color: var(--accent-cyan);">1.46x · 75.02 GB Saved</span>
+            <span class="val">1.46x · 75.02 GB Saved</span>
           </div>
           <div class="gov-item">
             <span class="lbl"><span>⚡</span> IPC Shared Memory Isolation</span>
@@ -2172,7 +2171,7 @@
           </div>
           <div class="gov-item">
             <span class="lbl"><span>🌐</span> Air-Gap Loopback Guarantee</span>
-            <span class="val" style="color: var(--accent-green);">127.0.0.1 (No External Phoning)</span>
+            <span class="val">127.0.0.1 (No External Phoning)</span>
           </div>
         </div>
 
@@ -2185,11 +2184,11 @@
           <div class="pack-card-desc">Configured runtime policy constraints applied before model weights execute to ensure enterprise safety compliance.</div>
           <div class="gov-item">
             <span class="lbl"><span>🛡️</span> System Prompt Invariance</span>
-            <span class="val" style="color: var(--accent-green);">Enforced (Anti-Jailbreak)</span>
+            <span class="val">Enforced (Anti-Jailbreak)</span>
           </div>
           <div class="gov-item">
             <span class="lbl"><span>🕵️</span> Automated PII & Secret Redaction</span>
-            <span class="val" style="color: var(--accent-green);">Enabled (API keys & SSNs stripped)</span>
+            <span class="val">Enabled (API keys & SSNs stripped)</span>
           </div>
           <div class="gov-item">
             <span class="lbl"><span>📏</span> Max Context Budget Quota</span>
@@ -2197,7 +2196,7 @@
           </div>
           <div class="gov-item">
             <span class="lbl"><span>🚫</span> Harmful Generation Filter</span>
-            <span class="val" style="color: var(--accent-green);">Active (Pre & Post-Filter)</span>
+            <span class="val">Active (Pre & Post-Filter)</span>
           </div>
         </div>
 
@@ -2214,7 +2213,7 @@
           </div>
           <div class="gov-item">
             <span class="lbl"><span>📦</span> Model Weights Integrity</span>
-            <span class="val" style="color: var(--accent-green);">Merkle Root Verified</span>
+            <span class="val">Merkle Root Verified</span>
           </div>
           <div class="gov-item">
             <span class="lbl"><span>⏱️</span> Audited Session Count</span>
@@ -2247,7 +2246,7 @@
           </div>
           <div class="gov-item">
             <span class="lbl"><span>💼</span> Enterprise Mode</span>
-            <span class="val" style="color: var(--accent-purple);">Enabled (Pantry Server v0.5.4)</span>
+            <span class="val">Enabled (Pantry Server v0.5.4)</span>
           </div>
         </div>
       </div>
@@ -2387,7 +2386,7 @@
         if (gpuHistories[id].length > 30) gpuHistories[id].shift();
         hist = gpuHistories[id];
       }
-      drawSparkline(`spark-gpu-${id}`, hist, '#bc8cff', 'rgba(188, 140, 255, 0.12)');
+      drawSparkline(`spark-gpu-${id}`, hist, '#609fd4', 'rgba(96, 159, 212, 0.07)');
       if (d.power_watts != null) totalPowerW += d.power_watts;
       utilSum += (d.utilization_percent ?? 0);
     });
@@ -2491,7 +2490,7 @@
     // CPU
     if (data.cpu) {
       document.getElementById('cpu-total').textContent = `${data.cpu.overall_percent}%`;
-      drawSparkline('spark-cpu', data.cpu.history || [], '#388bfd', 'rgba(56, 139, 253, 0.12)');
+      drawSparkline('spark-cpu', data.cpu.history || [], '#609fd4', 'rgba(96, 159, 212, 0.07)');
 
       const coresBox = document.getElementById('cores-container');
       coresBox.innerHTML = '';
@@ -2516,7 +2515,7 @@
 
       netHistory.push(data.network.download_bytes_sec / 1024);
       if (netHistory.length > 30) netHistory.shift();
-      drawSparkline('spark-net', netHistory, '#3fb950', 'rgba(63, 185, 80, 0.10)');
+      drawSparkline('spark-net', netHistory, '#609fd4', 'rgba(96, 159, 212, 0.07)');
     }
 
     // GPU (multi-device aware)
@@ -2579,7 +2578,7 @@
           item.className = 'model-item' + (m.is_loading ? ' active-loading' : '');
           const icon = m.modality === 'image_gen' ? '🎨' : (m.modality === 'video' ? '🎬' : (m.modality === 'music' ? '🎵' : '💬'));
           const dotClass = m.is_loading ? 'dot pulse-orange' : 'dot';
-          const dotStyle = m.is_loading ? '' : 'style="background: var(--accent-green);"';
+          const dotStyle = m.is_loading ? '' : 'style="background: #609fd4;"';
           const busyBadge = m.is_loading ? '<span class="badge-busy">BUSY</span>' : '';
           const subText = m.is_loading ? `${m.status} · ${(m.elapsed_seconds || 0).toFixed(1)}s` : `Resident in RAM · ~${m.resident_human}`;
           const ctxLabel = m.context_length ? `ctx ${m.context_length.toLocaleString ? m.context_length.toLocaleString() : m.context_length}` : null;
@@ -2675,7 +2674,7 @@
         effRow.style.display = 'none';
       }
 
-      drawSparkline('spark-throughput', inf.decode_history || [], '#3fb950', 'rgba(63, 185, 80, 0.12)');
+      drawSparkline('spark-throughput', inf.decode_history || [], '#609fd4', 'rgba(96, 159, 212, 0.07)');
 
       const s = inf.session || {};
       document.getElementById('tok-session-total').textContent = `${(s.total_tokens || 0).toLocaleString()} tokens`;
@@ -3125,7 +3124,7 @@
         const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
         if (!res.ok) {
           const errText = await res.text();
-          imgPlaceholder.innerHTML = `<span>⚠️</span><div style="color: #ff8b85;">Generation error (${res.status}): ${errText}</div>`;
+          imgPlaceholder.innerHTML = `<span>⚠️</span><div style="color: var(--accent-danger);">Generation error (${res.status}): ${errText}</div>`;
           imgMeta.textContent = 'Error';
           imgMeta.className = 'chip';
           return;
@@ -3196,7 +3195,7 @@
         const elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
         if (!res.ok) {
           const errText = await res.text();
-          audioPlaceholder.innerHTML = `<span>⚠️</span><div style="color: #ff8b85;">Audio error (${res.status}): ${errText}</div>`;
+          audioPlaceholder.innerHTML = `<span>⚠️</span><div style="color: var(--accent-danger);">Audio error (${res.status}): ${errText}</div>`;
           audioMeta.textContent = 'Error';
           audioMeta.className = 'chip';
           return;
