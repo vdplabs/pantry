@@ -121,7 +121,16 @@ def test_mlx_music_runtime_generate(tmp_path: Path):
     raw = wav_path.read_bytes()
     assert raw[:4] == b"RIFF"
     assert raw[8:12] == b"WAVE"
+    # Verify residency was advertised
+    assert manifest.id in store.read_state()["loaded"]
+
+    # Verify unload
+    rt.unload(manifest.id)
+    assert rt._pipeline is None
+    assert rt._loaded_package_id is None
+    assert manifest.id not in store.read_state()["loaded"]
 
     # Verify runtime factory
     resolved_rt = music_runtime_for(manifest, store)
     assert isinstance(resolved_rt, MLXMusicRuntime)
+

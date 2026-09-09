@@ -26,6 +26,11 @@ def default_data(home: Path | None = None) -> Path:
     )
     if override:
         return Path(override).expanduser().resolve()
+    volumes_dir = Path("/Volumes")
+    if volumes_dir.is_dir():
+        for candidate in sorted(volumes_dir.glob("*/huggingface/pantry")):
+            if candidate.is_dir():
+                return candidate.resolve()
     return (home or default_home()).resolve()
 
 

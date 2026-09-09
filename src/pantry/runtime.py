@@ -127,6 +127,12 @@ class MLXRuntime(Runtime):
         elif self.store is not None:
             path = str(self.store.weights_dir(package_id))
             self._models.pop(path, None)
+            man = self.store.load_manifest(package_id)
+            if man:
+                resolved = self.store.resolve_weights_path(man)
+                if resolved:
+                    self._models.pop(str(resolved), None)
+            self.store.mark_unloaded(package_id)
         gc.collect()
         try:
             import mlx.core as mx  # type: ignore
@@ -182,6 +188,8 @@ class MLXRuntime(Runtime):
         if model_path not in self._models:
             loaded = await asyncio.to_thread(load, model_path)
             self._models[model_path] = loaded  # type: ignore[assignment]
+        if self.store is not None:
+            self.store.mark_loaded(manifest.id, pin=False)
         model, tokenizer = self._models[model_path]
 
         draft_path, _draft_id = resolve_draft_path(
@@ -340,6 +348,20 @@ class RuntimeHub:
             models = getattr(self._mflux_image, "_models", None)
             if package_id is None or not models:
                 self._mflux_image = None
+        try:
+            from pantry.video_runtime import _shared_ltx_video_runtime
+
+            if _shared_ltx_video_runtime is not None and hasattr(_shared_ltx_video_runtime, "unload"):
+                _shared_ltx_video_runtime.unload(package_id)
+        except Exception:
+            pass
+        try:
+            from pantry.music_runtime import _shared_mlx_music_runtime
+
+            if _shared_mlx_music_runtime is not None and hasattr(_shared_mlx_music_runtime, "unload"):
+                _shared_mlx_music_runtime.unload(package_id)
+        except Exception:
+            pass
 
 
 def runtime_for(manifest: PackageManifest, store: PackageStore | None = None) -> Runtime:

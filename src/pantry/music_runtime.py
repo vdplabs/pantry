@@ -95,6 +95,9 @@ class EchoMusicRuntime:
             item["b64_json"] = base64.b64encode(wav).decode("ascii")
         else:
             item["url"] = path.as_uri()
+
+        # Advertise residency to menu bar / `pantry status` / unload.
+        self.store.mark_loaded(manifest.id, pin=False)
         return [item]
 
 
@@ -106,15 +109,18 @@ class MLXMusicRuntime:
         self._pipeline: Any = None
         self._loaded_package_id: str | None = None
 
-    def unload(self) -> None:
-        self._pipeline = None
-        self._loaded_package_id = None
-        try:
-            import mlx.core as mx
+    def unload(self, package_id: str | None = None) -> None:
+        if package_id is None or self._loaded_package_id == package_id:
+            self._pipeline = None
+            self._loaded_package_id = None
+            try:
+                import mlx.core as mx
 
-            mx.clear_cache()
-        except Exception:
-            pass
+                mx.clear_cache()
+            except Exception:
+                pass
+        if package_id:
+            self.store.mark_unloaded(package_id)
 
     def _load_pipeline(self, manifest: PackageManifest) -> Any:
         if self._pipeline is not None and self._loaded_package_id == manifest.id:
@@ -181,6 +187,9 @@ class MLXMusicRuntime:
             item["b64_json"] = base64.b64encode(wav).decode("ascii")
         else:
             item["url"] = path.as_uri()
+
+        # Advertise residency to menu bar / `pantry status` / unload.
+        self.store.mark_loaded(manifest.id, pin=False)
         return [item]
 
 

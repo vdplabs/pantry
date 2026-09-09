@@ -264,6 +264,7 @@ Deeper reference lives under [`Docs/`](Docs/README.md):
 - [Modalities](Docs/Modalities.md)
 - [Memory](Docs/Memory.md)
 - [API](Docs/API.md)
+- [Integration](Docs/Integration.md)
 - [Speculative](Docs/Speculative.md)
 - [Install](Docs/Install.md) (pip / uv / Homebrew)
 - [Launchd](Docs/Launchd.md)

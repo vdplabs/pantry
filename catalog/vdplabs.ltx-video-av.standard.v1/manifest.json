@@ -1,0 +1,38 @@
+{
+  "id": "vdplabs.ltx-video-av.standard.v1",
+  "family": "ltx-video",
+  "role": "video",
+  "params_b": 2.0,
+  "quality_tier": "standard",
+  "quant_method": "bf16",
+  "bits_approx": 16.0,
+  "ram_gb_min": 16.0,
+  "ram_gb_comfortable": 24.0,
+  "modalities": [
+    "video",
+    "audio"
+  ],
+  "context_max": 512,
+  "license": "other",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": [
+    "video-av",
+    "ltx-video-av",
+    "ltx23-av"
+  ],
+  "listable": true,
+  "runtime": {
+    "primary": "ltx_video_av",
+    "hf_repo": "notapalindrome/ltx23-mlx-av",
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "vbench-2025",
+    "score": 0.85,
+    "notes": "Lightricks LTX-Video 2.3 unified audio-video model with synchronized audio generation on Apple Silicon."
+  },
+  "blobs": [],
+  "system_preamble": ""
+}

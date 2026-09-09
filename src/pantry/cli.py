@@ -124,6 +124,7 @@ def init_cmd(
 @app.command("resolve")
 def resolve_cmd(
     modality: str = typer.Option("chat", "--modality"),
+    task: str | None = typer.Option(None, "--task", help="coding|reasoning|chat|general|embed"),
     ram_gb_max: float | None = typer.Option(None, "--ram-gb-max"),
     quality: str | None = typer.Option(None, "--quality", help="standard|compact|extreme"),
     latency: str = typer.Option("balanced", "--latency", help="balanced|fast"),
@@ -138,6 +139,7 @@ def resolve_cmd(
     tier = QualityTier(quality) if quality else None
     req = CapabilityRequest(
         modality=modality,
+        task_intent=task,
         ram_gb_max=ram_gb_max,
         quality_tier=tier,
         latency_class=LatencyClass(latency),
@@ -203,24 +205,33 @@ def load(
 ) -> None:
     """Mark package loaded (warm) — prefers the running daemon when available."""
     store = _store(home)
-    if store.load_manifest(package_id) is None:
+    manifest = store.load_manifest(package_id)
+    if manifest is None:
+        from pantry.resolve import find_by_model_string
+
+        manifest = find_by_model_string(package_id, store.list_manifests())
+    if manifest is None:
+        manifest = store.install_from_bundled_catalog(package_id)
+    if manifest is None:
         typer.secho(f"unknown package: {package_id}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1)
+    target_id = manifest.id
     remote = _daemon_post(
         "/v1/load",
-        {"package_id": package_id, "pin": pin},
+        {"package_id": target_id, "pin": pin},
         host=host,
         port=port,
     )
     if remote is not None:
         typer.echo(json.dumps(remote, indent=2))
         return
-    store.mark_loaded(package_id, pin=pin)
+    store.mark_loaded(target_id, pin=pin)
     typer.echo(
         json.dumps(
             {
                 "ok": True,
                 "loaded": store.read_state().get("loaded", []),
+                "package_id": target_id,
                 "via": "local-state",
                 "note": "no pantry serve on "
                 f"{host}:{port}; marked state only (weights warm on first chat)",
@@ -240,25 +251,34 @@ def unload(
     port: int = typer.Option(18787, "--port"),
 ) -> None:
     """Unload runtime weights from the running daemon (falls back to local state)."""
+    target_id = package_id
     store = _store(home)
+    if target_id:
+        manifest = store.load_manifest(target_id)
+        if manifest is None:
+            from pantry.resolve import find_by_model_string
+
+            manifest = find_by_model_string(target_id, store.list_manifests())
+        if manifest is not None:
+            target_id = manifest.id
     remote = _daemon_post(
         "/v1/unload",
-        {"package_id": package_id},
+        {"package_id": target_id},
         host=host,
         port=port,
     )
     if remote is not None:
         typer.echo(json.dumps(remote, indent=2))
         return
-    if package_id:
-        store.mark_unloaded(package_id)
+    if target_id:
+        store.mark_unloaded(target_id)
     else:
         state = store.read_state()
         for pid in list(state.get("loaded", [])):
             store.mark_unloaded(pid)
     typer.secho(
         f"no pantry serve on {host}:{port}; cleared local state only "
-        "(Metal weights in another process are unchanged)",
+        f"({'all' if not target_id else target_id})",
         fg=typer.colors.YELLOW,
         err=True,
     )

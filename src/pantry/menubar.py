@@ -207,6 +207,28 @@ def run_menubar(
             _copy(text)
             rumps.notification("pantry", "Copied", f"{label}: {text}")
 
+        def _load(self, package_id: str) -> None:
+            try:
+                r = httpx.post(
+                    f"http://{self._host}:{self._port}/v1/load",
+                    json={"package_id": package_id},
+                    timeout=5.0,
+                )
+                r.raise_for_status()
+            except Exception as e:  # noqa: BLE001
+                rumps.notification(
+                    "pantry",
+                    "Load failed",
+                    f"{package_id}: {e}",
+                )
+                return
+            rumps.notification(
+                "pantry",
+                "Loaded",
+                package_id,
+            )
+            self.refresh()
+
         def _unload(self, package_id: str | None) -> None:
             try:
                 r = httpx.post(
@@ -272,6 +294,14 @@ def run_menubar(
 
                 unload.set_callback(on_unload)
                 root.add(unload)
+            else:
+                load_item = rumps.MenuItem("Load")
+
+                def on_load(_: rumps.MenuItem, value: str = package_id) -> None:
+                    self._load(value)
+
+                load_item.set_callback(on_load)
+                root.add(load_item)
 
             return root
 
@@ -428,7 +458,7 @@ def run_menubar(
                     for m in models:
                         alias = str(m.get("id") or "?")
                         package_id = str(m.get("package_id") or m.get("owned_by") or alias)
-                        is_loaded = package_id in self._loaded
+                        is_loaded = package_id in self._loaded or alias in self._loaded
                         self.models_menu.add(
                             self._model_submenu(
                                 alias=alias, package_id=package_id, loaded=is_loaded

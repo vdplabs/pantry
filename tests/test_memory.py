@@ -89,3 +89,28 @@ def test_clear_without_mlx():
     with patch("pantry.memory._load_mlx", return_value=None):
         out = clear_metal_cache()
     assert out["cleared"] is False
+
+
+def test_snapshot_includes_torch_mps():
+    mx = MagicMock()
+    mx.metal.is_available.return_value = True
+    mx.get_active_memory.return_value = 1_000_000
+    mx.get_peak_memory.return_value = 1_500_000
+    mx.get_cache_memory.return_value = 0
+    mx.device_info.return_value = {
+        "device_name": "Apple M-Test",
+        "memory_size": 16_000_000_000,
+        "max_recommended_working_set_size": 12_000_000_000,
+    }
+
+    mock_torch = MagicMock()
+    mock_torch.backends.mps.is_available.return_value = True
+    mock_torch.mps.current_allocated_memory.return_value = 500_000
+
+    with patch("pantry.memory._load_mlx", return_value=mx), \
+         patch.dict("sys.modules", {"torch": mock_torch}):
+        snap = snapshot(apply_limits=False)
+
+    assert snap["available"] is True
+    assert snap["active_bytes"] == 1_500_000
+

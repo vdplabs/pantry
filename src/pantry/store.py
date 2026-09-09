@@ -280,6 +280,14 @@ class PackageStore:
         if primary == "echo" or primary.startswith("echo_"):
             return True
 
+        # Special check for LTX-Video: supports either standard diffusers tree or single .safetensors checkpoint
+        if (manifest.family or "").lower() == "ltx-video" or primary in {"ltx_video", "ltx", "ltx-video", "ltx_video_q4", "ltx_video_av", "ltx-video-q4", "ltx-video-av"}:
+            if (path / "model_index.json").is_file() and (path / "transformer").is_dir():
+                return True
+            st_files = [f for f in path.glob("*.safetensors") if f.stat().st_size > 100 * 1024 * 1024]
+            if st_files:
+                return True
+
         # Root / nested config (mlx-lm, diffusers, classic HF).
         has_config = (
             (path / "config.json").is_file()
@@ -293,9 +301,30 @@ class PackageStore:
             or any(path.glob("*.npz"))
             or any(path.glob("*.bin"))
         )
-        # Multi-component trees (mflux Z-Image / FLUX): shards live under
+        # Multi-component trees (mflux Z-Image / FLUX / LTX-Video): shards live under
         # transformer/ / text_encoder/ / vae/ and often have no root config.json.
         component_dirs = ("transformer", "unet", "text_encoder", "vae")
+
+        # Verify any index.json files actually have their referenced shards present
+        for name in component_dirs:
+            cdir = path / name
+            if not cdir.is_dir():
+                continue
+            for idx_name in ("model.safetensors.index.json", "diffusion_pytorch_model.safetensors.index.json"):
+                idx_file = cdir / idx_name
+                if idx_file.is_file():
+                    try:
+                        import json
+                        with open(idx_file, "r", encoding="utf-8") as f:
+                            idx_data = json.load(f)
+                        weight_map = idx_data.get("weight_map", {})
+                        if weight_map:
+                            needed_shards = set(weight_map.values())
+                            if any(not (cdir / s).is_file() for s in needed_shards):
+                                return False
+                    except Exception:
+                        pass
+
         has_component_weights = any(
             (path / name).is_dir()
             and (
@@ -315,12 +344,18 @@ class PackageStore:
         if primary == "echo" or primary.startswith("echo_"):
             return None
 
-        # 1. Check local package store
+        # 1. Prefer shared Hugging Face cache snapshot with complete pipeline structure
+        if manifest.runtime.hf_repo:
+            snap = self.find_hf_snapshot(manifest.runtime.hf_repo, manifest.runtime.hf_revision)
+            if snap and self._is_dir_weights_complete(snap, manifest):
+                return snap
+
+        # 2. Check local package store
         local = self.weights_dir(manifest.id)
         if self._is_dir_weights_complete(local, manifest):
             return local
 
-        # 1b. Check if CAS recipe exists and can be materialized into local weights
+        # 3. Check if CAS recipe exists and can be materialized into local weights
         recipe = self.load_recipe(manifest.id)
         if recipe is not None:
             all_chunks = all(
@@ -334,18 +369,17 @@ class PackageStore:
                 except Exception:
                     pass
 
-        # 2. Check shared Hugging Face cache
-        if manifest.runtime.hf_repo:
-            snap = self.find_hf_snapshot(manifest.runtime.hf_repo, manifest.runtime.hf_revision)
-            if snap and self._is_dir_weights_complete(snap, manifest):
-                return snap
-
         return None
 
     def weights_ready(self, manifest: PackageManifest) -> bool:
         primary = (manifest.runtime.primary or "echo").lower()
         if primary == "echo" or primary.startswith("echo_"):
             return True
+
+        if manifest.runtime.hf_repo:
+            snap = self.find_hf_snapshot(manifest.runtime.hf_repo, manifest.runtime.hf_revision)
+            if snap and self._is_dir_weights_complete(snap, manifest):
+                return True
 
         local = self.weights_dir(manifest.id)
         if self._is_dir_weights_complete(local, manifest):
@@ -361,11 +395,6 @@ class PackageStore:
             if all_chunks:
                 return True
 
-        if manifest.runtime.hf_repo:
-            snap = self.find_hf_snapshot(manifest.runtime.hf_repo, manifest.runtime.hf_revision)
-            if snap and self._is_dir_weights_complete(snap, manifest):
-                return True
-
         return False
 
     def install_from_bundled_catalog(self, package_id: str) -> PackageManifest | None:
@@ -373,7 +402,7 @@ class PackageStore:
 
         for mpath in bundled_catalog_dir().glob("*/manifest.json"):
             candidate = PackageManifest.model_validate_json(mpath.read_text(encoding="utf-8"))
-            if candidate.id == package_id:
+            if candidate.id == package_id or package_id in candidate.aliases:
                 return self.install_manifest_file(mpath)
         return None
 

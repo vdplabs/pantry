@@ -105,6 +105,21 @@ def snapshot(*, apply_limits: bool = False, max_age: float = 2.0) -> dict[str, A
     except Exception:  # noqa: BLE001, S110
         pass
 
+    try:
+        import sys
+
+        if "torch" in sys.modules:
+            import torch  # type: ignore
+
+            if hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                if hasattr(torch, "mps") and hasattr(torch.mps, "current_allocated_memory"):
+                    mps_alloc = int(torch.mps.current_allocated_memory())
+                    if mps_alloc > 0:
+                        active = (active or 0) + mps_alloc
+                        peak = max((peak or 0), active)
+    except Exception:
+        pass
+
     budget = device_budget(mx)
     recommended = budget.get("recommended_working_set_bytes")
     limits: dict[str, Any] = {"applied": False}
@@ -239,4 +254,73 @@ def clear_metal_cache() -> dict[str, Any]:
                 "after": snapshot(apply_limits=False),
             }
     after = snapshot(apply_limits=False)
+    try:
+        import sys
+
+        if "torch" in sys.modules:
+            import torch  # type: ignore
+
+            if hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+                    torch.mps.empty_cache()
+                    after = snapshot(apply_limits=False)
+    except Exception:
+        pass
     return {"ok": True, "cleared": True, "before": before, "after": after}
+
+
+def get_available_unified_dram() -> int:
+    """Determine currently available physical unified memory shared across CPU and GPU (Patent Claim 1 & Step 204)."""
+    mx = _load_mlx()
+    if mx is not None:
+        budget = device_budget(mx)
+        mem_size = budget.get("memory_size_bytes")
+        active = 0
+        try:
+            active = int(mx.get_active_memory())
+        except Exception:
+            pass
+        if mem_size and mem_size > 0:
+            return max(1024 * 1024 * 512, mem_size - active)
+
+    # Fallback to macOS sysctl hw.memsize
+    try:
+        import platform
+        import subprocess
+
+        if platform.system() == "Darwin":
+            out = subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True, timeout=1).strip()
+            total = int(out)
+            return max(1024 * 1024 * 512, total)
+    except Exception:
+        pass
+
+    return 16 * 1024 * 1024 * 1024  # 16 GB safe default
+
+
+def estimate_kv_cache_bytes(
+    context_tokens: int,
+    params_b: float,
+    bits_per_elem: int = 16,
+) -> int:
+    """Estimate KV cache memory footprint in bytes as a function of context length and model scale."""
+    if context_tokens <= 0 or params_b <= 0:
+        return 0
+    bytes_per_token = max(32, int((params_b or 1.0) * 80)) * (bits_per_elem // 8)
+    return int(context_tokens * bytes_per_token)
+
+
+def calculate_usable_context(
+    available_bytes: int,
+    weights_bytes: int,
+    params_b: float,
+    max_context: int = 32768,
+) -> int:
+    """Calculate safe context window that fits in available unified memory without paging (Patent FIG. 2, Step 218)."""
+    leftover = max(0, available_bytes - weights_bytes)
+    if leftover <= 0:
+        return min(512, max_context)
+    bytes_per_token = max(32, int((params_b or 1.0) * 80)) * 2
+    tokens = leftover // bytes_per_token
+    return int(max(512, min(max_context, tokens)))
+

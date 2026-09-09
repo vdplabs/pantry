@@ -1,0 +1,38 @@
+{
+  "id": "vdplabs.ltx-video-q4.compact.v1",
+  "family": "ltx-video",
+  "role": "video",
+  "params_b": 2.0,
+  "quality_tier": "compact",
+  "quant_method": "q4",
+  "bits_approx": 4.0,
+  "ram_gb_min": 8.0,
+  "ram_gb_comfortable": 12.0,
+  "modalities": [
+    "video"
+  ],
+  "context_max": 512,
+  "license": "other",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": [
+    "video-compact",
+    "ltx-video-q4",
+    "video-q4",
+    "ltx-2.3-q4"
+  ],
+  "listable": true,
+  "runtime": {
+    "primary": "ltx_video_q4",
+    "hf_repo": "notapalindrome/ltx23-mlx-av-q4",
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "vbench-2025",
+    "score": 0.79,
+    "notes": "Quantized 4-bit LTX-Video 2.3 (~22GB download) optimized for 8GB-16GB RAM Apple Silicon Macs."
+  },
+  "blobs": [],
+  "system_preamble": ""
+}

@@ -7,6 +7,7 @@
 | [Modalities](Modalities.md) | text / image_gen / music (+ planned), resolve rules, scaffolds |
 | [Memory](Memory.md) | Unified-memory watchdog, Metal heap stats, cache caps |
 | [API](API.md) | HTTP endpoints and CLI surface |
+| [Integration](Integration.md) | Client integration guide, workflow walkthrough, and all endpoints |
 | [Launchd](Launchd.md) | Optional login LaunchAgent |
 | [Install](Install.md) | pip / uv / Homebrew install |
 | [Speculative](Speculative.md) | Curated draft/target speculative decoding |

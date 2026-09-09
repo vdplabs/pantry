@@ -3,7 +3,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class QualityTier(str, Enum):
@@ -74,10 +74,12 @@ class PackageManifest(BaseModel):
 
 
 class CapabilityRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     modality: str = "chat"
     ram_gb_max: float | None = None
     context_min: int | None = None
-    quality_tier: QualityTier | None = None
+    quality_tier: QualityTier | None = Field(default=None, alias="quality")
     latency_class: LatencyClass = LatencyClass.balanced
     family_prefer: str | None = None
     license_allow: list[str] | None = None
@@ -86,6 +88,35 @@ class CapabilityRequest(BaseModel):
     prefer_speculative: bool = False
     # When set, resolve will not cross this family.
     pin_family: str | None = None
+    # Task-specific intent (coding, reasoning, chat, general, embed)
+    task_intent: str | None = Field(default=None, alias="task")
+    # Step 216 Fallback Resolution: downgrade quant, disable speculative, cap context
+    allow_fallback: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def _normalize_fields(cls, values: Any) -> Any:
+        if isinstance(values, dict):
+            if "quality" in values and "quality_tier" not in values:
+                values["quality_tier"] = values.get("quality")
+            if "task" in values and "task_intent" not in values:
+                values["task_intent"] = values.get("task")
+        return values
+
+
+class ExecutionPlan(BaseModel):
+    """Execution plan specifying model weights, quantization, context, and pipeline (Patent FIG. 2, Step 218)."""
+    package_id: str
+    runtime: str = "mlx"
+    quant_scheme: str = "mlx_4bit"
+    context_window: int = 4096
+    speculative: bool = False
+    draft_package_id: str | None = None
+    estimated_tps: float | None = None
+    footprint_bytes: int = 0
+    dynamic_ceiling_bytes: int = 0
+    weights_ready: bool = False
+    fallback_applied: list[str] = Field(default_factory=list)
 
 
 class ResolveResult(BaseModel):
@@ -209,13 +240,19 @@ class AudioGenerateRequest(BaseModel):
 class VideoGenerateRequest(BaseModel):
     model: str
     prompt: str = Field(..., min_length=1)
+    negative_prompt: str | None = None
     width: int = Field(default=512, ge=128, le=1920)
     height: int = Field(default=512, ge=128, le=1920)
-    frames: int = Field(default=24, ge=8, le=128)
-    fps: int = Field(default=24, ge=8, le=60)
+    frames: int = Field(default=24, ge=8, le=240)
+    fps: int = Field(default=24, ge=1, le=60)
+    steps: int | None = Field(default=None, ge=1, le=100)
+    guidance: float | None = Field(default=None, ge=0.0, le=20.0)
     response_format: str = "b64_json"  # b64_json | url | shm
     priority: str = "interactive"
     seed: int | None = None
+    image: str | None = None
+    image_strength: float = Field(default=1.0, ge=0.0, le=1.0)
+    include_audio: bool = False
 
 
 class EmbeddingRequest(BaseModel):

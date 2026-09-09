@@ -290,27 +290,44 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
     @app.post("/v1/load")
     def load(req: LoadBody) -> dict[str, Any]:
-        if store.load_manifest(req.package_id) is None:
+        pkg = store.load_manifest(req.package_id)
+        if pkg is None:
+            try:
+                pkg = svc.resolve_model(req.package_id)
+            except Exception:
+                pkg = None
+        if pkg is None:
             raise HTTPException(status_code=404, detail=f"unknown package: {req.package_id}")
-        store.mark_loaded(req.package_id, pin=req.pin)
+        target_id = pkg.id
+        store.mark_loaded(target_id, pin=req.pin)
         return {
             "ok": True,
             "loaded": store.read_state().get("loaded", []),
-            "note": "weights warm on first chat completion",
+            "package_id": target_id,
+            "note": "weights warm on first chat completion or generation",
         }
 
     @app.post("/v1/unload")
     def unload(req: UnloadBody = UnloadBody()) -> dict[str, Any]:
-        if req.package_id:
-            store.mark_unloaded(req.package_id)
+        target_id = req.package_id
+        if target_id:
+            pkg = store.load_manifest(target_id)
+            if pkg is None:
+                try:
+                    pkg = svc.resolve_model(target_id)
+                except Exception:
+                    pkg = None
+            if pkg is not None:
+                target_id = pkg.id
+            store.mark_unloaded(target_id)
         else:
             state = store.read_state()
             for pid in list(state.get("loaded", [])):
                 store.mark_unloaded(pid)
-        svc.runtimes.unload(req.package_id)
+        svc.runtimes.unload(target_id)
         return {
             "ok": True,
-            "unloaded": req.package_id or "all",
+            "unloaded": target_id or "all",
             "loaded": store.read_state().get("loaded", []),
         }
 
@@ -912,6 +929,16 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
     async def video_generations(
         req: VideoGenerateRequest, request: Request
     ) -> dict[str, Any]:
+        t0 = time.time()
+        prompt_snippet = (req.prompt or "").strip().replace("\n", " ")
+        if len(prompt_snippet) > 60:
+            prompt_snippet = prompt_snippet[:57] + "…"
+        print(
+            f"[pantry.server] POST /v1/video/generations: model='{req.model}' prompt='{prompt_snippet}' "
+            f"dims={req.width}x{req.height} frames={req.frames} fps={req.fps} "
+            f"has_image={bool(req.image)} audio={bool(req.include_audio)}",
+            flush=True,
+        )
         pkg = svc.resolve_model(req.model)
         if not _is_video_package(pkg):
             raise HTTPException(
@@ -935,18 +962,29 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 return runtime.generate(
                     pkg,
                     prompt=req.prompt,
+                    negative_prompt=req.negative_prompt or "",
                     width=req.width,
                     height=req.height,
                     frames=req.frames,
                     fps=req.fps,
+                    steps=req.steps,
+                    guidance=req.guidance,
                     seed=req.seed,
                     response_format=req.response_format,
+                    image=req.image,
+                    image_strength=req.image_strength,
+                    include_audio=req.include_audio,
                 )
 
         async def _gen() -> list[dict]:
             return await asyncio.to_thread(_video_fn)
 
         data = await svc.scheduler.run(req.priority, _gen, modality="video")
+        elapsed = round(time.time() - t0, 2)
+        print(
+            f"[pantry.server] POST /v1/video/generations completed successfully in {elapsed}s for '{pkg.id}'",
+            flush=True,
+        )
 
         want_shm = (req.response_format or "").lower() == "shm" or request.headers.get("x-pantry-transport", "").lower() == "shm"
         if want_shm:
