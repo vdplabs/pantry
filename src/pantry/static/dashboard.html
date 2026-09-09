@@ -1494,57 +1494,6 @@
 </div> <!-- /window-container -->
 
 <script>
-  /*
-    ============================================================================
-    OPTIONAL STATS FIELDS — this dashboard renders every section below only if
-    the field is present, and hides it gracefully if it's missing. Add these
-    to /v1/monitor/stats at your own pace; nothing breaks in the meantime.
-
-    data.server = {
-      version: "0.4.2",            // shown as a header chip
-      uptime_human: "2h 14m",      // shown as a header chip
-      active_streams: 2,           // open SSE/WS connections, header chip
-      pid: 4821                    // not yet rendered, reserved for later
-    }
-
-    data.errors = {
-      recent_count: 0              // failed requests in the last ~5 min
-    }
-
-    // GPU is now an array so multi-GPU (2x/4x Nvidia) boxes render one card
-    // per device. A single object is still accepted for backward compat.
-    data.gpu = [
-      {
-        id: 0, name: "RTX 4090", device_type: "cuda",
-        architecture: "Ada Lovelace",
-        utilization_percent: 42.0,
-        temperature_c: 68,           // drives the temp color (green/orange/red)
-        power_watts: 210,            // drives the tok/W efficiency line
-        clock_mhz: 2520,
-        vram_used_human: "12.1 GB", vram_total_human: "24 GB",
-        history: [ /* optional, else tracked client-side */ ]
-      }
-    ]
-
-    data.inference.queue = {
-      active: 1, queued: 0, max_concurrency: 4
-    }
-    data.inference.latency_percentiles = {
-      decode_tps_p50: 38.2, decode_tps_p95: 22.1, ttft_ms_p99: 640
-    }
-
-    // per resident model, added fields:
-    data.ai_models.resident_models[i] += {
-      quantization: "Q4_K_M", runtime: "mlx", context_length: 32768,
-      idle_unload_seconds: 240      // countdown to auto-unload, if enabled
-    }
-
-    data.requests = [               // most-recent-first, cap ~20 server-side
-      { time: "14:02:11", model: "chat-standard",
-        tokens_in: 128, tokens_out: 64, duration_ms: 820, status: 200 }
-    ]
-    ============================================================================
-  */
 
   let pollInterval = 1000;
   let pollTimer = null;
