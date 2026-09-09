@@ -211,7 +211,12 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
     @app.get("/v1/monitor/stats")
     def monitor_stats() -> dict[str, Any]:
-        return telemetry.sample()
+        try:
+            return telemetry.sample()
+        except Exception as exc:
+            import logging
+            logging.getLogger("pantry").exception("Error sampling monitor stats")
+            return {"ok": False, "error": str(exc)}
 
     @app.post("/v1/monitor/reset")
     def monitor_reset() -> dict[str, Any]:

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from starlette.testclient import TestClient
 
+from pantry.config import bundled_catalog_dir
 from pantry.server import create_app
 from pantry.store import PackageStore
 from pantry.telemetry import TokenMetricsTracker
@@ -108,3 +109,34 @@ def test_token_metrics_tracker_and_reset(tmp_path):
     assert reset_stats["session"]["total_tokens"] == 0
     # Cumulative should persist across session resets
     assert reset_stats["cumulative"]["total_tokens"] == 200
+
+
+def test_monitor_stats_with_loaded_models(tmp_path):
+    store = PackageStore(tmp_path)
+    store.seed_from_catalog(bundled_catalog_dir())
+
+    # Mark a model as loaded in state
+    pkg_id = "vdplabs.z-image-turbo.standard.v1"
+    store._write_state({"loaded": [pkg_id], "pinned": []})
+
+    app = create_app(store)
+    client = TestClient(app)
+
+    resp = client.get("/v1/monitor/stats")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("ok") is True
+
+    ai_models = data.get("ai_models", {})
+    assert ai_models.get("total_resident_bytes", 0) > 0
+    resident = ai_models.get("resident_models", [])
+    assert len(resident) == 1
+    assert resident[0]["id"] == pkg_id
+    assert resident[0]["title"] in ["z-image-turbo", "z-image", pkg_id]
+    assert resident[0]["modality"] == "image_gen"
+    assert "resident_human" in resident[0]
+
+    available = ai_models.get("available_models", [])
+    assert len(available) > 0
+    assert available[0]["title"] is not None
+
