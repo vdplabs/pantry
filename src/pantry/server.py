@@ -264,12 +264,20 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         return {"ok": True}
 
     @app.get("/v1/health")
-    async def health() -> dict[str, Any]:
-        state = store.read_state()
-        mem = memory_snapshot(apply_limits=False)
-        cas_stats = store.cas.get_stats()
+    def health() -> dict[str, Any]:
         loading_info = svc.get_loading_info()
         is_loading = loading_info.get("loading") is not None
+        state = store.read_state(max_age=2.0)
+        mem = memory_snapshot(apply_limits=False, max_age=2.0)
+        cas_stats = store.cas.get_stats(max_age=30.0)
+        pkg_count = len(store.list_manifests(max_age=5.0))
+        shm_count = 0
+        try:
+            if store.shm_dir.exists():
+                shm_count = len(list(store.shm_dir.glob("*.bin")))
+        except Exception:
+            pass
+
         return {
             "ok": True,
             "status": "loading" if is_loading else "ok",
@@ -277,14 +285,14 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "activity": loading_info.get("activity"),
             "name": "pantry",
             "version": __version__,
-            "packages": len(store.list_manifests()),
+            "packages": pkg_count,
             "loaded": state.get("loaded", []),
             "home": str(store.root),
             "data": str(store.data_root),
             "socket": str(store.socket_path) if store.socket_path.exists() else None,
             "shm": {
                 "dir": str(store.shm_dir),
-                "active_buffers": len(list(store.shm_dir.glob("*.bin"))),
+                "active_buffers": shm_count,
             },
             "cas": {
                 "dir": str(store.cas_dir),

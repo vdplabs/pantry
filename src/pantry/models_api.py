@@ -1,7 +1,9 @@
-from __future__ import annotations
+import time
 
 from pantry.schemas import PackageManifest
 from pantry.store import PackageStore
+
+_MODELS_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
 
 
 def preferred_model_id(manifest: PackageManifest) -> str:
@@ -19,8 +21,16 @@ def list_model_entries(
     include_demos: bool = False,
     include_unready: bool = True,
     include_package_ids: bool = False,
+    max_age: float = 3.0,
 ) -> list[dict]:
     """Build OpenAI-style model rows — one primary id per package by default."""
+    cache_key = (str(store.root), include_demos, include_unready, include_package_ids)
+    now = time.time()
+    if max_age > 0 and cache_key in _MODELS_CACHE:
+        cached_at, cached_data = _MODELS_CACHE[cache_key]
+        if now - cached_at < max_age:
+            return [dict(x) for x in cached_data]
+
     data: list[dict] = []
     for p in store.list_manifests():
         primary_runtime = (p.runtime.primary or "").lower()
@@ -60,4 +70,5 @@ def list_model_entries(
                     "weights_ready": ready,
                 }
             )
+    _MODELS_CACHE[cache_key] = (now, data)
     return data

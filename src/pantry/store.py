@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import time
 from pathlib import Path
 
 from pantry.schemas import PackageManifest
@@ -22,6 +23,8 @@ class PackageStore:
         self.blobs = self.data_root / "blobs"
         self.packages = self.root / "packages"
         self.state_path = self.root / "state.json"
+        self._manifests_cache: tuple[float, list[PackageManifest]] | None = None
+        self._state_cache: tuple[float, dict] | None = None
         self.blobs.mkdir(parents=True, exist_ok=True)
         self.packages.mkdir(parents=True, exist_ok=True)
 
@@ -117,12 +120,20 @@ class PackageStore:
         return candidate
 
     def _write_state(self, state: dict) -> None:
+        self._state_cache = (time.time(), dict(state))
         self.state_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
 
-    def read_state(self) -> dict:
+    def read_state(self, max_age: float = 2.0) -> dict:
+        now = time.time()
+        if self._state_cache is not None and (now - self._state_cache[0]) < max_age:
+            return dict(self._state_cache[1])
         if not self.state_path.exists():
-            return {"loaded": [], "pinned": []}
-        return json.loads(self.state_path.read_text(encoding="utf-8"))
+            res = {"loaded": [], "pinned": []}
+            self._state_cache = (now, res)
+            return dict(res)
+        res = json.loads(self.state_path.read_text(encoding="utf-8"))
+        self._state_cache = (now, res)
+        return dict(res)
 
     def put_blob(self, data: bytes) -> str:
         digest = hashlib.sha256(data).hexdigest()
@@ -139,6 +150,7 @@ class PackageStore:
         return self.packages / safe
 
     def write_manifest(self, manifest: PackageManifest) -> Path:
+        self._manifests_cache = None
         d = self.package_dir(manifest.id)
         d.mkdir(parents=True, exist_ok=True)
         path = d / "manifest.json"
@@ -151,15 +163,23 @@ class PackageStore:
             return None
         return PackageManifest.model_validate_json(path.read_text(encoding="utf-8"))
 
-    def list_manifests(self) -> list[PackageManifest]:
+    def list_manifests(self, max_age: float = 5.0) -> list[PackageManifest]:
+        now = time.time()
+        if self._manifests_cache is not None and (now - self._manifests_cache[0]) < max_age:
+            return list(self._manifests_cache[1])
         out: list[PackageManifest] = []
         if not self.packages.exists():
+            self._manifests_cache = (now, out)
             return out
         for child in sorted(self.packages.iterdir()):
             man = child / "manifest.json"
             if man.is_file():
-                out.append(PackageManifest.model_validate_json(man.read_text(encoding="utf-8")))
-        return out
+                try:
+                    out.append(PackageManifest.model_validate_json(man.read_text(encoding="utf-8")))
+                except Exception:
+                    pass
+        self._manifests_cache = (now, out)
+        return list(out)
 
     def install_manifest_file(self, src: Path) -> PackageManifest:
         data = src.read_text(encoding="utf-8")

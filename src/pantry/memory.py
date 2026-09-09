@@ -71,9 +71,17 @@ def device_budget(mx: Any) -> dict[str, Any]:
 _last_snapshot: tuple[float, dict[str, Any]] | None = None
 
 
-def snapshot(*, apply_limits: bool = False, max_age: float = 2.0) -> dict[str, Any]:
+def snapshot(*, apply_limits: bool = False, max_age: float = 0.0) -> dict[str, Any]:
     """Return Metal/MLX or CUDA heap stats for status / health surfaces."""
+    global _last_snapshot
     now = time.time()
+    if not apply_limits and _last_snapshot is not None and max_age > 0:
+        last_time, last_res = _last_snapshot
+        if (now - last_time) < max_age:
+            cached = dict(last_res)
+            cached["sampled_at"] = now
+            return cached
+
     mx = _load_mlx()
     if mx is None:
         # Check NVIDIA CUDA
@@ -88,7 +96,7 @@ def snapshot(*, apply_limits: bool = False, max_age: float = 2.0) -> dict[str, A
                 cache_b = max(0, res_b - alloc_b)
                 dev_name = torch.cuda.get_device_name(0)
                 pressure = _pressure(alloc_b, total_b)
-                return {
+                res = {
                     "ok": True,
                     "available": True,
                     "backend": "cuda",
@@ -114,10 +122,13 @@ def snapshot(*, apply_limits: bool = False, max_age: float = 2.0) -> dict[str, A
                     "sampled_at": now,
                     "message": f"NVIDIA VRAM {_fmt_bytes(alloc_b)} active / {_fmt_bytes(total_b)} total",
                 }
+                if not apply_limits:
+                    _last_snapshot = (now, res)
+                return res
         except Exception:
             pass
 
-        return {
+        res = {
             "ok": False,
             "available": False,
             "backend": None,
@@ -125,6 +136,9 @@ def snapshot(*, apply_limits: bool = False, max_age: float = 2.0) -> dict[str, A
             "message": "mlx not installed — Metal heap metrics unavailable",
             "sampled_at": now,
         }
+        if not apply_limits:
+            _last_snapshot = (now, res)
+        return res
 
     metal_ok = False
     try:

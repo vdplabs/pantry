@@ -398,8 +398,8 @@ class CasManager:
 
         return pruned_count, reclaimed_bytes
 
-    def get_stats(self, force: bool = False) -> dict[str, Any]:
-        stats = self.index.get_stats(force=force)
+    def get_stats(self, force: bool = False, max_age: float = 30.0) -> dict[str, Any]:
+        stats = self.index.get_stats(force=force, max_age=max_age)
         stats["cas_enabled"] = True
         stats["data_root"] = str(self.cas_dir.parent)
         return stats

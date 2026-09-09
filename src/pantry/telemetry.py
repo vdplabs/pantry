@@ -147,32 +147,83 @@ class TelemetryCollector:
     _last_disk: tuple[float, int, int] | None = None
     _cpu_history: list[float] = [0.0] * 20
     _gpu_history: list[float] = [0.0] * 20
+    _last_sample: tuple[float, dict[str, Any]] | None = None
     _lock = threading.Lock()
 
     def __init__(self, store: PackageStore, svc: Any = None) -> None:
         self.store = store
         self.svc = svc
         self.tokens = TokenMetricsTracker.get()
+        self._last_sample: tuple[float, dict[str, Any]] | None = None
 
-    def sample(self) -> dict[str, Any]:
+    def sample(self, max_age: float = 0.4) -> dict[str, Any]:
+        now = time.time()
+        loading_info = self.svc.get_loading_info() if self.svc and hasattr(self.svc, "get_loading_info") else {}
+        loading_id = loading_info.get("loading")
+        last_loading = self._last_sample[1].get("activity", {}).get("loading") if self._last_sample else None
+
+        # Fast path: return cached payload with real-time overlay in < 0.05ms without lock contention
+        if (
+            self._last_sample is not None
+            and max_age > 0
+            and (now - self._last_sample[0]) < max_age
+            and loading_id == last_loading
+        ):
+            cached_at, cached = self._last_sample
+            activity_text = loading_info.get("activity")
+            elapsed_s = loading_info.get("elapsed_seconds", 0.0)
+            events = loading_info.get("events", [])
+            is_busy = bool(loading_id or activity_text)
+
+            loading_title = loading_id
+            if loading_id and "ai_models" in cached:
+                for m in cached["ai_models"].get("resident_models", []) + cached["ai_models"].get("available_models", []):
+                    if m.get("id") == loading_id:
+                        loading_title = m.get("title")
+                        break
+
+            fresh = dict(cached)
+            fresh["timestamp"] = now
+            fresh["activity"] = {
+                "is_busy": is_busy,
+                "loading": loading_id,
+                "loading_title": loading_title,
+                "activity": activity_text,
+                "elapsed_seconds": elapsed_s,
+                "events": events,
+            }
+            try:
+                fresh["inference"] = self.tokens.stats()
+            except Exception:
+                pass
+            return fresh
+
         with self._lock:
             now = time.time()
+            if (
+                self._last_sample is not None
+                and max_age > 0
+                and (now - self._last_sample[0]) < max_age
+                and loading_id == last_loading
+            ):
+                return self.sample(max_age=max_age)
+
             try:
                 hw_info = get_hardware_device_info()
             except Exception:
                 hw_info = {}
 
             try:
-                mem_snap = memory_snapshot(apply_limits=False)
+                mem_snap = memory_snapshot(apply_limits=False, max_age=1.5)
             except Exception:
                 mem_snap = {}
 
             try:
-                state = self.store.read_state()
+                state = self.store.read_state(max_age=2.0)
             except Exception:
                 state = {}
 
-            loading_info: dict[str, Any] = {}
+            loading_info = {}
             if self.svc and hasattr(self.svc, "get_loading_info"):
                 try:
                     loading_info = self.svc.get_loading_info()
@@ -279,12 +330,10 @@ class TelemetryCollector:
                 }
 
             if loading_id:
-                try:
-                    manifests = self.store.list_manifests()
-                    by_id = {m.id: m for m in manifests}
-                    activity_data["loading_title"] = _model_title(by_id.get(loading_id), loading_id)
-                except Exception:
-                    activity_data["loading_title"] = loading_id
+                for m in models_in_memory.get("resident_models", []) + models_in_memory.get("available_models", []):
+                    if m.get("id") == loading_id:
+                        activity_data["loading_title"] = m.get("title")
+                        break
 
             try:
                 token_stats = self.tokens.stats()
@@ -302,7 +351,7 @@ class TelemetryCollector:
                     "decode_history": [],
                 }
 
-            return {
+            payload = {
                 "ok": True,
                 "timestamp": now,
                 "device": {
@@ -323,6 +372,8 @@ class TelemetryCollector:
                 "activity": activity_data,
                 "inference": token_stats,
             }
+            self._last_sample = (now, payload)
+            return payload
 
     def _sample_cpu(self) -> dict[str, Any]:
         overall = 0.0
@@ -508,7 +559,7 @@ class TelemetryCollector:
 
             loaded_ids: list[str] = state.get("loaded", [])
             try:
-                manifests = self.store.list_manifests()
+                manifests = self.store.list_manifests(max_age=5.0)
             except Exception:
                 manifests = []
             by_id = {m.id: m for m in manifests}

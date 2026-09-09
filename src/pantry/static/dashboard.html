@@ -762,6 +762,10 @@
 
 <div class="window-container">
   <!-- Navigation Toolbar -->
+   <div class="toolbar">
+      <div class="chip" id="chip-device">Detecting...</div>
+      <div class="chip" id="header-status-pill">● Online · 127.0.0.1:18787</div>
+    </div>
   <div class="toolbar">
     <div class="title-area">
       <div class="window-title">
@@ -776,9 +780,12 @@
           <span>⚡</span> Playground
           <span class="tab-badge">Multi-Modal</span>
         </button>
+        <button class="main-tab-btn" data-tab="playground" id="tab-btn-playground">
+          <span>📜</span> Activity Log
+
+        </button>
       </div>
-      <div class="chip" id="chip-device">Detecting...</div>
-      <div class="chip" id="header-status-pill">● Online · 127.0.0.1:18787</div>
+
     </div>
 
     <div class="interval-controls" id="monitor-interval-controls">
@@ -1410,16 +1417,33 @@
     ctx.stroke();
   }
 
+  let activeStatsController = null;
   async function fetchStats() {
     if (isPaused) return;
+    if (activeStatsController) {
+      try { activeStatsController.abort(); } catch (_) {}
+    }
+    activeStatsController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      if (activeStatsController) activeStatsController.abort();
+    }, 3500);
+
     try {
-      const res = await fetch('/v1/monitor/stats');
+      const res = await fetch('/v1/monitor/stats', { signal: activeStatsController.signal });
+      clearTimeout(timeoutId);
       if (!res.ok) return;
       const data = await res.json();
-      lastStats = data;
-      renderUI(data);
+      if (data && data.ok) {
+        lastStats = data;
+        renderUI(data);
+      }
     } catch (err) {
-      console.warn('Failed to fetch monitor stats', err);
+      if (err.name !== 'AbortError') {
+        console.warn('Failed to fetch monitor stats', err);
+      }
+    } finally {
+      clearTimeout(timeoutId);
+      activeStatsController = null;
     }
   }
 
@@ -1751,12 +1775,17 @@
   let modelsLoaded = false;
   async function fetchPlaygroundModels() {
     if (modelsLoaded) return;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3500);
     try {
-      const res = await fetch('/v1/models?all_ids=1');
+      const res = await fetch('/v1/models?all_ids=1', { signal: controller.signal });
+      clearTimeout(timeoutId);
       if (!res.ok) return;
       const json = await res.json();
       const models = json.data || [];
-      modelsLoaded = true;
+      if (models.length > 0) {
+        modelsLoaded = true;
+      }
 
       const chatSelect = document.getElementById('pg-chat-model');
       const imgSelect = document.getElementById('pg-img-model');

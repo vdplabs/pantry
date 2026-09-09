@@ -211,3 +211,49 @@ def test_monitor_activity_and_loading_lifecycle(tmp_path):
     assert any("Unloaded model from memory" in ev["message"] for ev in events)
     assert any("Purged unused memory pool" in ev["message"] for ev in events)
 
+
+def test_concurrency_and_health_responsiveness_during_load(tmp_path):
+    """Ensure /v1/health, /v1/monitor/stats, and /v1/models stay ultra-fast & responsive during model loading."""
+    import time
+
+    store = PackageStore(tmp_path)
+    store.seed_from_catalog(bundled_catalog_dir())
+    pkg_id = "vdplabs.qwen2.5-0.5b-instruct.chat-standard.v1"
+
+    app = create_app(store)
+    client = TestClient(app)
+    svc = app.state.svc
+
+    with svc.tracking_load(pkg_id, "Loading heavy model weights into Metal..."):
+        # Rapid concurrent requests to health, monitor, and models
+        t0 = time.perf_counter()
+        h_resp = client.get("/v1/health")
+        t_health = time.perf_counter() - t0
+
+        assert h_resp.status_code == 200
+        h_data = h_resp.json()
+        assert h_data["status"] == "loading"
+        assert h_data["loading"] == pkg_id
+        assert "Loading heavy model weights" in h_data["activity"]
+        # Fast response < 50ms
+        assert t_health < 0.2
+
+        t1 = time.perf_counter()
+        m_resp = client.get("/v1/monitor/stats")
+        t_monitor = time.perf_counter() - t1
+
+        assert m_resp.status_code == 200
+        m_data = m_resp.json()
+        assert m_data["activity"]["is_busy"] is True
+        assert m_data["activity"]["loading"] == pkg_id
+        assert t_monitor < 0.2
+
+        t2 = time.perf_counter()
+        models_resp = client.get("/v1/models?all_ids=1")
+        t_models = time.perf_counter() - t2
+
+        assert models_resp.status_code == 200
+        models_data = models_resp.json()
+        assert len(models_data.get("data", [])) > 0
+        assert t_models < 0.2
+

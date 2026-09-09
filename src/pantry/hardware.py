@@ -130,8 +130,15 @@ def _detect_device_name_sysctl() -> str:
     return "Apple Silicon"
 
 
-def get_hardware_device_info() -> dict[str, Any]:
-    """Query hardware accelerator properties from MLX, CUDA, or system fallbacks."""
+_CACHED_DEVICE_INFO: dict[str, Any] | None = None
+
+
+def get_hardware_device_info(force: bool = False) -> dict[str, Any]:
+    """Query hardware accelerator properties from MLX, CUDA, or system fallbacks. Cached in-memory."""
+    global _CACHED_DEVICE_INFO
+    if not force and _CACHED_DEVICE_INFO is not None:
+        return dict(_CACHED_DEVICE_INFO)
+
     device_name = _detect_device_name_sysctl()
     memory_size_bytes = 0
     recommended_working_set_bytes = 0
@@ -203,7 +210,7 @@ def get_hardware_device_info() -> dict[str, Any]:
     is_apple_silicon = device_type == "apple_silicon" or "apple" in device_name.lower()
     is_nvidia = device_type == "nvidia_cuda" or "nvidia" in device_name.lower() or "geforce" in device_name.lower()
 
-    return {
+    info = {
         "device_name": device_name,
         "device_type": device_type,
         "is_apple_silicon": is_apple_silicon,
@@ -212,6 +219,8 @@ def get_hardware_device_info() -> dict[str, Any]:
         "recommended_working_set_bytes": recommended_working_set_bytes,
         "bandwidth_gbps": bandwidth,
     }
+    _CACHED_DEVICE_INFO = info
+    return dict(info)
 
 
 # Backwards-compatible alias for existing imports
