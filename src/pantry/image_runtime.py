@@ -585,14 +585,17 @@ class MFluxImageRuntime:
                 model = self._models.get(model_key, model)
 
                 # If diffusion ran at a reduced safe memory budget, upscale the resulting image
-                # to the requested target resolution using high-quality Lanczos filtering.
+                # to the requested target resolution using high-quality Lanczos filtering and edge unsharp masking.
                 if (diff_width, diff_height) != (target_width, target_height):
-                    from PIL import Image
+                    from PIL import Image, ImageFilter
 
                     if hasattr(img, "image") and hasattr(img.image, "resize"):
                         img.image = img.image.resize(
                             (target_width, target_height),
                             resample=Image.Resampling.LANCZOS,
+                        )
+                        img.image = img.image.filter(
+                            ImageFilter.UnsharpMask(radius=1.5, percent=110, threshold=2)
                         )
                         img.width = target_width
                         img.height = target_height
@@ -600,6 +603,9 @@ class MFluxImageRuntime:
                         img = img.resize(
                             (target_width, target_height),
                             resample=Image.Resampling.LANCZOS,
+                        )
+                        img = img.filter(
+                            ImageFilter.UnsharpMask(radius=1.5, percent=110, threshold=2)
                         )
                     out_width, out_height = target_width, target_height
                 else:

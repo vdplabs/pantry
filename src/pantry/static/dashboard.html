@@ -40,10 +40,11 @@
       font-family: "Segoe UI", "Avenir", -apple-system,  BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
     }
 
-    /* Outer Window Frame matching macOS */
+    /* Outer Window Frame — Full-Width Modern Widget Dashboard */
     .window-container {
-      max-width: 1080px;
-      margin: 0 auto;
+      width: 100%;
+      max-width: 100%;
+      margin: 0;
       background: rgba(20, 22, 26, 0.85);
       backdrop-filter: blur(28px);
       -webkit-backdrop-filter: blur(28px);
@@ -178,15 +179,59 @@
     }
     .btn-icon:hover { color: var(--text); }
 
-    /* Layout Grid */
+    /* Responsive Full-Width 12-Column Widget Grid */
     .dashboard-grid {
       display: grid;
-      grid-template-columns: 1fr 1.08fr;
+      grid-template-columns: repeat(12, 1fr);
       gap: 14px;
       padding: 16px;
     }
-    @media (max-width: 860px) {
-      .dashboard-grid { grid-template-columns: 1fr; }
+
+    /* Desktop (>= 1100px) */
+    @media (min-width: 1100px) {
+      .widget-cpu       { grid-column: span 4; }
+      .widget-gpu       { grid-column: span 4; }
+      .widget-memory    { grid-column: span 4; }
+
+      .widget-network   { grid-column: span 4; }
+      .widget-disk      { grid-column: span 4; }
+      .widget-sensors   { grid-column: span 4; }
+
+      .widget-models    { grid-column: span 7; }
+      .widget-inference { grid-column: span 5; }
+
+      .widget-events    { grid-column: span 5; }
+      .widget-requests  { grid-column: span 7; }
+    }
+
+    /* Tablet / Medium Screens (768px - 1099px) */
+    @media (max-width: 1099px) and (min-width: 768px) {
+      .widget-cpu       { grid-column: span 6; }
+      .widget-gpu       { grid-column: span 6; }
+      .widget-memory    { grid-column: span 6; }
+      .widget-network   { grid-column: span 6; }
+      .widget-disk      { grid-column: span 6; }
+      .widget-sensors   { grid-column: span 6; }
+
+      .widget-models    { grid-column: span 12; }
+      .widget-inference { grid-column: span 12; }
+      .widget-events    { grid-column: span 12; }
+      .widget-requests  { grid-column: span 12; }
+    }
+
+    /* Mobile / Small Screens (< 768px) */
+    @media (max-width: 767px) {
+      .dashboard-grid {
+        grid-template-columns: 1fr;
+        padding: 12px;
+        gap: 12px;
+      }
+      .widget-cpu, .widget-gpu, .widget-memory,
+      .widget-network, .widget-disk, .widget-sensors,
+      .widget-models, .widget-inference,
+      .widget-events, .widget-requests {
+        grid-column: span 1 !important;
+      }
     }
 
     /* Cards */
@@ -195,7 +240,7 @@
       border: 1px solid var(--card-border);
       border-radius: 10px;
       padding: 13px 15px;
-      margin-bottom: 12px;
+      margin-bottom: 0;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
     .card:last-child { margin-bottom: 0; }
@@ -345,6 +390,14 @@
     .gpu-pills .num.temp-hot { color: var(--accent-red); }
 
     /* Model Cards in Memory */
+    #models-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 8px;
+      max-height: 420px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
     .model-item {
       display: flex;
       align-items: center;
@@ -353,7 +406,7 @@
       background: rgba(255, 255, 255, 0.03);
       border: 1px solid rgba(255, 255, 255, 0.04);
       border-radius: 7px;
-      margin-bottom: 6px;
+      margin-bottom: 0;
       transition: background 0.15s;
       gap: 8px;
     }
@@ -942,230 +995,221 @@
   </div>
 
   <div class="dashboard-grid">
-    <!-- LEFT COLUMN: System Hardware -->
-    <div class="column-left">
-      <!-- 1. CPU Activity -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span>💻</span> CPU Activity</div>
-          <div class="card-value" style="color: var(--accent-blue);" id="cpu-total">0.0%</div>
-        </div>
-        <div class="sparkline-box">
-          <canvas class="sparkline" id="spark-cpu"></canvas>
-        </div>
-        <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">CPU cores</div>
-        <div class="cores-grid" id="cores-container"></div>
-        <div class="legend-row" style="margin-top: 6px;">
-          <div class="legend-item"><span class="dot" style="background: var(--accent-blue);"></span> Performance</div>
-          <div class="legend-item"><span class="dot" style="background: var(--accent-cyan);"></span> Efficiency</div>
-        </div>
+    <!-- 1. CPU Activity Widget -->
+    <div class="card widget-cpu">
+      <div class="card-header">
+        <div class="card-title"><span>💻</span> CPU Activity</div>
+        <div class="card-value" style="color: var(--accent-blue);" id="cpu-total">0.0%</div>
       </div>
-
-      <!-- 2. Network -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span>🌐</span> Network</div>
-          <div class="chip" id="net-iface" style="font-family: var(--mono);">en0</div>
-        </div>
-        <div style="display: flex; gap: 16px; margin-bottom: 8px;">
-          <div>
-            <div style="font-size: 9.5px; color: var(--accent-green); font-weight: 700;">↓ DOWNLOAD</div>
-            <div class="card-value" id="net-down">0 B/s</div>
-          </div>
-          <div>
-            <div style="font-size: 9.5px; color: var(--accent-orange); font-weight: 700;">↑ UPLOAD</div>
-            <div class="card-value" id="net-up">0 B/s</div>
-          </div>
-        </div>
-        <div class="sparkline-box">
-          <canvas class="sparkline" id="spark-net"></canvas>
-        </div>
+      <div class="sparkline-box">
+        <canvas class="sparkline" id="spark-cpu"></canvas>
       </div>
-
-      <!-- 3. GPU Utilization (multi-device aware) -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span>🎮</span> GPU Utilization</div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span class="chip" id="gpu-count-chip">1 device</span>
-            <span class="card-value" style="color: var(--accent-purple);" id="gpu-util">0.0%</span>
-          </div>
-        </div>
-        <div id="gpu-devices-container">
-          <!-- populated per-device by renderGpuDevices() -->
-        </div>
-        <div class="row-meta" id="gpu-efficiency-row" style="display: none;">
-          <span>Efficiency</span>
-          <span class="val" style="color: var(--accent-green);" id="gpu-efficiency">— tok/W</span>
-        </div>
-      </div>
-
-      <!-- 4. Disk & Storage -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span>💾</span> Disk & Storage</div>
-          <div class="card-value" id="disk-used-total">0 GB / 0 GB</div>
-        </div>
-        <div class="progress-bar">
-          <div class="progress-fill" id="disk-progress" style="width: 0%;"></div>
-        </div>
-        <div class="row-meta">
-          <span>Volume</span>
-          <span class="val" id="disk-vol">Host Root</span>
-        </div>
-        <div class="row-meta">
-          <span>CAS Deduplication Savings</span>
-          <span class="val" style="color: var(--accent-green);" id="cas-saved">0 B (1.0x)</span>
-        </div>
-      </div>
-
-      <!-- 5. Sensors & Power -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span>⚡</span> Sensors & Health</div>
-          <div class="status-badge ok" id="health-status">Verified / OK</div>
-        </div>
-        <div class="row-meta">
-          <span>Thermal State</span>
-          <span class="val" style="color: var(--accent-green);">Nominal (Cool)</span>
-        </div>
-        <div class="row-meta">
-          <span>Power Source</span>
-          <span class="val">AC Power</span>
-        </div>
+      <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">CPU cores</div>
+      <div class="cores-grid" id="cores-container"></div>
+      <div class="legend-row" style="margin-top: 6px;">
+        <div class="legend-item"><span class="dot" style="background: var(--accent-blue);"></span> Performance</div>
+        <div class="legend-item"><span class="dot" style="background: var(--accent-cyan);"></span> Efficiency</div>
       </div>
     </div>
 
-    <!-- RIGHT COLUMN: AI & Memory Controls -->
-    <div class="column-right">
-      <!-- 1. Unified Memory / System RAM -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span>🧠</span> System Memory</div>
-          <div style="display: flex; align-items: center; gap: 6px;">
-            <span class="status-badge ok" id="mem-badge">Normal</span>
-            <span class="card-value" id="mem-summary">0 GB / 0 GB (0%)</span>
-          </div>
+    <!-- 2. GPU Utilization Widget (multi-device aware) -->
+    <div class="card widget-gpu">
+      <div class="card-header">
+        <div class="card-title"><span>🎮</span> GPU Utilization</div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span class="chip" id="gpu-count-chip">1 device</span>
+          <span class="card-value" style="color: var(--accent-purple);" id="gpu-util">0.0%</span>
         </div>
+      </div>
+      <div id="gpu-devices-container">
+        <!-- populated per-device by renderGpuDevices() -->
+      </div>
+      <div class="row-meta" id="gpu-efficiency-row" style="display: none;">
+        <span>Efficiency</span>
+        <span class="val" style="color: var(--accent-green);" id="gpu-efficiency">— tok/W</span>
+      </div>
+    </div>
 
-        <div class="segmented-bar">
-          <div class="seg-app" id="seg-app" style="width: 35%;"></div>
-          <div class="seg-wired" id="seg-wired" style="width: 20%;"></div>
-          <div class="seg-comp" id="seg-comp" style="width: 15%;"></div>
-          <div class="seg-free" id="seg-free" style="width: 30%;"></div>
-        </div>
-
-        <div class="legend-row">
-          <div class="legend-item"><span class="dot" style="background: var(--accent-blue);"></span> App <span id="leg-app">0 GB</span></div>
-          <div class="legend-item"><span class="dot" style="background: var(--accent-purple);"></span> Wired <span id="leg-wired">0 GB</span></div>
-          <div class="legend-item"><span class="dot" style="background: var(--accent-orange);"></span> Compressed <span id="leg-comp">0 GB</span></div>
-          <div class="legend-item"><span class="dot" style="background: rgba(255, 255, 255, 0.25);"></span> Free <span id="leg-free">0 GB</span></div>
-        </div>
-
-        <div class="row-meta">
-          <span>Swap Used</span>
-          <span class="val" id="swap-val">0 B</span>
+    <!-- 3. System Memory Widget -->
+    <div class="card widget-memory">
+      <div class="card-header">
+        <div class="card-title"><span>🧠</span> System Memory</div>
+        <div style="display: flex; align-items: center; gap: 6px;">
+          <span class="status-badge ok" id="mem-badge">Normal</span>
+          <span class="card-value" id="mem-summary">0 GB / 0 GB (0%)</span>
         </div>
       </div>
 
-      <!-- 2. AI Models in Memory with Interactive Unload Actions -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span>✨</span> AI Models in Memory</div>
-          <div style="display: flex; gap: 6px; align-items: center;">
-            <span class="chip" id="models-footprint">0 B resident</span>
-            <button class="btn-action" id="btn-purge-pool" title="Purge unused memory cache pages">Purge Pool</button>
-            <button class="btn-action unload" id="btn-unload-all" title="Unload all models">Unload All</button>
-          </div>
-        </div>
+      <div class="segmented-bar">
+        <div class="seg-app" id="seg-app" style="width: 35%;"></div>
+        <div class="seg-wired" id="seg-wired" style="width: 20%;"></div>
+        <div class="seg-comp" id="seg-comp" style="width: 15%;"></div>
+        <div class="seg-free" id="seg-free" style="width: 30%;"></div>
+      </div>
 
-        <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-bottom: 8px;">
-          <span>Weights & State: <strong id="metal-weights" style="color: var(--text);">0 B</strong></span>
-          <span>Reuse Pool: <strong id="metal-pool" style="color: var(--text);">0 B</strong></span>
-        </div>
+      <div class="legend-row">
+        <div class="legend-item"><span class="dot" style="background: var(--accent-blue);"></span> App <span id="leg-app">0 GB</span></div>
+        <div class="legend-item"><span class="dot" style="background: var(--accent-purple);"></span> Wired <span id="leg-wired">0 GB</span></div>
+        <div class="legend-item"><span class="dot" style="background: var(--accent-orange);"></span> Compressed <span id="leg-comp">0 GB</span></div>
+        <div class="legend-item"><span class="dot" style="background: rgba(255, 255, 255, 0.25);"></span> Free <span id="leg-free">0 GB</span></div>
+      </div>
 
-        <div id="models-container">
-          <!-- Dynamically filled with loaded and available packages -->
-          <div style="padding: 12px; text-align: center; color: var(--text-muted);">Scanning models...</div>
+      <div class="row-meta">
+        <span>Swap Used</span>
+        <span class="val" id="swap-val">0 B</span>
+      </div>
+    </div>
+
+    <!-- 4. Network Widget -->
+    <div class="card widget-network">
+      <div class="card-header">
+        <div class="card-title"><span>🌐</span> Network</div>
+        <div class="chip" id="net-iface" style="font-family: var(--mono);">en0</div>
+      </div>
+      <div style="display: flex; gap: 16px; margin-bottom: 8px;">
+        <div>
+          <div style="font-size: 9.5px; color: var(--accent-green); font-weight: 700;">↓ DOWNLOAD</div>
+          <div class="card-value" id="net-down">0 B/s</div>
+        </div>
+        <div>
+          <div style="font-size: 9.5px; color: var(--accent-orange); font-weight: 700;">↑ UPLOAD</div>
+          <div class="card-value" id="net-up">0 B/s</div>
+        </div>
+      </div>
+      <div class="sparkline-box">
+        <canvas class="sparkline" id="spark-net"></canvas>
+      </div>
+    </div>
+
+    <!-- 5. Disk & Storage Widget -->
+    <div class="card widget-disk">
+      <div class="card-header">
+        <div class="card-title"><span>💾</span> Disk & Storage</div>
+        <div class="card-value" id="disk-used-total">0 GB / 0 GB</div>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="disk-progress" style="width: 0%;"></div>
+      </div>
+      <div class="row-meta">
+        <span>Volume</span>
+        <span class="val" id="disk-vol">Host Root</span>
+      </div>
+      <div class="row-meta">
+        <span>CAS Deduplication Savings</span>
+        <span class="val" style="color: var(--accent-green);" id="cas-saved">0 B (1.0x)</span>
+      </div>
+    </div>
+
+    <!-- 6. Sensors & Health Widget -->
+    <div class="card widget-sensors">
+      <div class="card-header">
+        <div class="card-title"><span>⚡</span> Sensors & Health</div>
+        <div class="status-badge ok" id="health-status">Verified / OK</div>
+      </div>
+      <div class="row-meta">
+        <span>Thermal State</span>
+        <span class="val" style="color: var(--accent-green);">Nominal (Cool)</span>
+      </div>
+      <div class="row-meta">
+        <span>Power Source</span>
+        <span class="val">AC Power</span>
+      </div>
+    </div>
+
+    <!-- 7. AI Models in Memory Widget -->
+    <div class="card widget-models">
+      <div class="card-header">
+        <div class="card-title"><span>✨</span> AI Models in Memory</div>
+        <div style="display: flex; gap: 6px; align-items: center;">
+          <span class="chip" id="models-footprint">0 B resident</span>
+          <button class="btn-action" id="btn-purge-pool" title="Purge unused memory cache pages">Purge Pool</button>
+          <button class="btn-action unload" id="btn-unload-all" title="Unload all models">Unload All</button>
         </div>
       </div>
 
-      <!-- 3. Inference & Tokens Telemetry -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title"><span>⚡</span> Inference & Tokens</div>
-          <button class="btn-action" id="btn-reset-session">Reset Session</button>
-        </div>
+      <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-bottom: 8px;">
+        <span>Weights & State: <strong id="metal-weights" style="color: var(--text);">0 B</strong></span>
+        <span>Reuse Pool: <strong id="metal-pool" style="color: var(--text);">0 B</strong></span>
+      </div>
 
+      <div id="models-container">
+        <!-- Dynamically filled with loaded and available packages -->
+        <div style="padding: 12px; text-align: center; color: var(--text-muted);">Scanning models...</div>
+      </div>
+    </div>
+
+    <!-- 8. Inference & Tokens Telemetry Widget -->
+    <div class="card widget-inference">
+      <div class="card-header">
+        <div class="card-title"><span>⚡</span> Inference & Tokens</div>
+        <button class="btn-action" id="btn-reset-session">Reset Session</button>
+      </div>
+
+      <div class="metrics-pills">
+        <div class="metric-pill">
+          <div class="lbl">Prefill</div>
+          <div class="num" id="inf-prefill">0 ms · 0 t/s</div>
+        </div>
+        <div class="metric-pill">
+          <div class="lbl">Decode</div>
+          <div class="num" style="color: var(--accent-green);" id="inf-decode">0.0 t/s</div>
+        </div>
+        <div class="metric-pill">
+          <div class="lbl">Peak TPS</div>
+          <div class="num" id="inf-peak">0.0 t/s</div>
+        </div>
+      </div>
+
+      <div id="queue-section" style="display: none;">
+        <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Request queue</div>
+        <div class="queue-row">
+          <div class="queue-slot"><div class="lbl">Active</div><div class="num" id="queue-active">0</div></div>
+          <div class="queue-slot"><div class="lbl">Queued</div><div class="num" id="queue-queued">0</div></div>
+          <div class="queue-slot"><div class="lbl">Max</div><div class="num" id="queue-max">—</div></div>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px;">
+        <span>Context Fill:</span>
+        <span style="font-family: var(--mono); font-weight: 600;" id="ctx-summary">0 / 32,768 (0%)</span>
+      </div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="ctx-progress" style="width: 0%;"></div>
+      </div>
+      <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 10px;">
+        Est. KV cache: <span id="kv-cache" style="color: var(--text); font-family: var(--mono);">0 B</span>
+      </div>
+
+      <div id="percentiles-section" style="display: none;">
+        <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Latency percentiles (session)</div>
         <div class="metrics-pills">
-          <div class="metric-pill">
-            <div class="lbl">Prefill</div>
-            <div class="num" id="inf-prefill">0 ms · 0 t/s</div>
-          </div>
-          <div class="metric-pill">
-            <div class="lbl">Decode</div>
-            <div class="num" style="color: var(--accent-green);" id="inf-decode">0.0 t/s</div>
-          </div>
-          <div class="metric-pill">
-            <div class="lbl">Peak TPS</div>
-            <div class="num" id="inf-peak">0.0 t/s</div>
-          </div>
+          <div class="metric-pill"><div class="lbl">p50 TPS</div><div class="num" id="pct-p50">—</div></div>
+          <div class="metric-pill"><div class="lbl">p95 TPS</div><div class="num" id="pct-p95">—</div></div>
+          <div class="metric-pill"><div class="lbl">p99 TTFT</div><div class="num" id="pct-ttft-p99">—</div></div>
         </div>
+      </div>
 
-        <div id="queue-section" style="display: none;">
-          <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Request queue</div>
-          <div class="queue-row">
-            <div class="queue-slot"><div class="lbl">Active</div><div class="num" id="queue-active">0</div></div>
-            <div class="queue-slot"><div class="lbl">Queued</div><div class="num" id="queue-queued">0</div></div>
-            <div class="queue-slot"><div class="lbl">Max</div><div class="num" id="queue-max">—</div></div>
-          </div>
-        </div>
+      <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Decode throughput (t/s)</div>
+      <div class="sparkline-box">
+        <canvas class="sparkline" id="spark-throughput"></canvas>
+      </div>
 
-        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px;">
-          <span>Context Fill:</span>
-          <span style="font-family: var(--mono); font-weight: 600;" id="ctx-summary">0 / 32,768 (0%)</span>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--card-border);">
+        <div>
+          <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">This Session</div>
+          <div class="card-value" style="color: var(--accent-blue); font-size: 13px;" id="tok-session-total">0 tokens</div>
+          <div style="font-size: 10px; color: var(--text-muted);" id="tok-session-meta">P: 0 · C: 0 · 0 reqs</div>
         </div>
-        <div class="progress-bar">
-          <div class="progress-fill" id="ctx-progress" style="width: 0%;"></div>
-        </div>
-        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 10px;">
-          Est. KV cache: <span id="kv-cache" style="color: var(--text); font-family: var(--mono);">0 B</span>
-        </div>
-
-        <div id="percentiles-section" style="display: none;">
-          <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Latency percentiles (session)</div>
-          <div class="metrics-pills">
-            <div class="metric-pill"><div class="lbl">p50 TPS</div><div class="num" id="pct-p50">—</div></div>
-            <div class="metric-pill"><div class="lbl">p95 TPS</div><div class="num" id="pct-p95">—</div></div>
-            <div class="metric-pill"><div class="lbl">p99 TTFT</div><div class="num" id="pct-ttft-p99">—</div></div>
-          </div>
-        </div>
-
-        <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Decode throughput (t/s)</div>
-        <div class="sparkline-box">
-          <canvas class="sparkline" id="spark-throughput"></canvas>
-        </div>
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--card-border);">
-          <div>
-            <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">This Session</div>
-            <div class="card-value" style="color: var(--accent-blue); font-size: 13px;" id="tok-session-total">0 tokens</div>
-            <div style="font-size: 10px; color: var(--text-muted);" id="tok-session-meta">P: 0 · C: 0 · 0 reqs</div>
-          </div>
-          <div>
-            <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">All-Time Cumulative</div>
-            <div class="card-value" style="color: var(--accent-purple); font-size: 13px;" id="tok-cumul-total">0 tokens</div>
-            <div style="font-size: 10px; color: var(--text-muted);" id="tok-cumul-meta">P: 0 · C: 0 · 0 reqs</div>
-          </div>
+        <div>
+          <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">All-Time Cumulative</div>
+          <div class="card-value" style="color: var(--accent-purple); font-size: 13px;" id="tok-cumul-total">0 tokens</div>
+          <div style="font-size: 10px; color: var(--text-muted);" id="tok-cumul-meta">P: 0 · C: 0 · 0 reqs</div>
         </div>
       </div>
     </div>
-  </div>
 
-  <!-- Live Event Log & Request Log -->
-  <div class="bottom-grid">
-    <!-- Live Event Log -->
-    <div class="card">
+    <!-- 9. Activity & Lifecycle Log Widget -->
+    <div class="card widget-events">
       <div class="card-header">
         <div class="card-title"><span>📜</span> Activity & Lifecycle Log</div>
         <span class="chip" style="font-size: 10px;" id="event-count-badge">0 events</span>
@@ -1175,8 +1219,8 @@
       </div>
     </div>
 
-    <!-- Request Log -->
-    <div class="card">
+    <!-- 10. Request Log Widget -->
+    <div class="card widget-requests">
       <div class="card-header">
         <div class="card-title"><span>🧾</span> Request Log</div>
         <span class="chip" style="font-size: 10px;" id="request-count-badge">0 requests</span>
@@ -1185,7 +1229,7 @@
         <div style="color: var(--text-muted); font-size: 11px; text-align: center; padding: 12px 0;">No requests logged yet</div>
       </div>
     </div>
-  </div>
+  </div> <!-- /dashboard-grid -->
   </div> <!-- /tab-view-monitor -->
 
   <!-- VIEW 2: MULTI-MODAL PLAYGROUND -->
@@ -2495,6 +2539,15 @@
     if (pollTimer) clearInterval(pollTimer);
     pollTimer = setInterval(fetchStats, pollInterval);
   }
+
+  // Smooth redraw on window resize
+  let resizeDebounce = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeDebounce);
+    resizeDebounce = setTimeout(() => {
+      if (lastStats) renderUI(lastStats);
+    }, 150);
+  });
 
   fetchStats();
   restartPolling();
