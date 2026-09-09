@@ -988,6 +988,24 @@ def chat_cmd(
             raise typer.Exit(1) from e
 
 
+@app.command()
+def dashboard(
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    launch: bool = typer.Option(True, "--open/--no-open", help="Open in default web browser"),
+) -> None:
+    """Open or print URL to the Pantry Web System Monitor Dashboard."""
+    url = f"http://{host}:{port}/dashboard"
+    typer.echo(f"Pantry System Monitor: {url}")
+    if launch:
+        import webbrowser
+
+        try:
+            webbrowser.open(url)
+        except Exception:
+            pass
+
+
 if __name__ == "__main__":
     app()
 

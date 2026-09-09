@@ -13,7 +13,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 
 from pantry import __version__
 from pantry.memory import apply_protection_limits, clear_metal_cache
@@ -23,6 +23,7 @@ from pantry.pull import PullError, pull_package
 from pantry.resolve import ResolveError, find_by_model_string, resolve
 from pantry.runtime import RuntimeHub
 from pantry.scheduler import Scheduler
+from pantry.telemetry import TelemetryCollector, TokenMetricsTracker
 from pantry.schemas import (
     AudioGenerateRequest,
     CapabilityRequest,
@@ -175,11 +176,25 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         allow_headers=["*"],
     )
 
+    telemetry = TelemetryCollector(store)
+    dashboard_path = Path(__file__).parent / "static" / "dashboard.html"
+
+    @app.get("/dashboard", response_class=HTMLResponse)
+    def dashboard() -> HTMLResponse:
+        if dashboard_path.is_file():
+            return HTMLResponse(content=dashboard_path.read_text(encoding="utf-8"))
+        return HTMLResponse(content="<h1>Pantry Dashboard Not Found</h1>", status_code=404)
+
     @app.get("/")
-    def root() -> dict[str, Any]:
+    def root(request: Request) -> Any:
+        accept = request.headers.get("accept", "")
+        if "text/html" in accept and dashboard_path.is_file():
+            return HTMLResponse(content=dashboard_path.read_text(encoding="utf-8"))
         return {
             "name": "pantry",
             "version": __version__,
+            "dashboard": "/dashboard",
+            "monitor": "/v1/monitor/stats",
             "health": "/v1/health",
             "models": "/v1/models",
             "chat": "/v1/chat/completions",
@@ -193,6 +208,15 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "shm": "/v1/shm",
             "storage": "/v1/storage",
         }
+
+    @app.get("/v1/monitor/stats")
+    def monitor_stats() -> dict[str, Any]:
+        return telemetry.sample()
+
+    @app.post("/v1/monitor/reset")
+    def monitor_reset() -> dict[str, Any]:
+        TokenMetricsTracker.get().reset_session()
+        return {"ok": True}
 
     @app.get("/v1/health")
     async def health() -> dict[str, Any]:
@@ -374,7 +398,9 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 )
 
         if not req.stream:
+            t0 = time.time()
             text = await svc.scheduler.run(req.priority, _complete, modality="text")
+            duration_s = max(0.01, time.time() - t0)
             tool_calls = _parse_tool_calls(text) if req.tools else None
             message_obj: dict[str, Any] = {
                 "role": "assistant",
@@ -385,6 +411,13 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             finish_reason = "tool_calls" if tool_calls else "stop"
 
             usage = usage_info if usage_info else _estimate_usage(pkg, req.messages, text)
+            TokenMetricsTracker.get().record_completion(
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+                decode_duration_s=duration_s,
+                context_limit=getattr(pkg, "context_max", 4096),
+                model_params_b=getattr(pkg, "params_b", 3.0),
+            )
             return {
                 "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
                 "object": "chat.completion",
@@ -406,6 +439,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         async def event_stream() -> AsyncIterator[bytes]:
             cid = f"chatcmpl-{uuid.uuid4().hex[:12]}"
             created = int(time.time())
+            t_stream_start = time.time()
             assembled: list[str] = []
             stream_usage: dict[str, int] = {}
 
@@ -447,6 +481,14 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             finish_reason = "tool_calls" if tool_calls else "stop"
 
             usage = stream_usage if stream_usage else _estimate_usage(pkg, req.messages, full_text)
+            duration_s = max(0.01, time.time() - t_stream_start)
+            TokenMetricsTracker.get().record_completion(
+                prompt_tokens=usage.get("prompt_tokens", 0),
+                completion_tokens=usage.get("completion_tokens", 0),
+                decode_duration_s=duration_s,
+                context_limit=getattr(pkg, "context_max", 4096),
+                model_params_b=getattr(pkg, "params_b", 3.0),
+            )
             done = {
                 "id": cid,
                 "object": "chat.completion.chunk",

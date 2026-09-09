@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pantry · System Monitor</title>
+  <style>
+    :root {
+      --bg: #141517;
+      --card-bg: rgba(28, 30, 34, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text: #f0f2f5;
+      --text-muted: #8b929e;
+      --text-dim: #5c6370;
+      --accent-blue: #388bfd;
+      --accent-cyan: #00d2ff;
+      --accent-green: #3fb950;
+      --accent-purple: #bc8cff;
+      --accent-orange: #d29922;
+      --accent-red: #f85149;
+      --glass: rgba(255, 255, 255, 0.04);
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      background-image: radial-gradient(circle at 50% 0%, rgba(56, 139, 253, 0.08), transparent 45%);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 13px;
+      line-height: 1.4;
+      padding: 18px;
+      min-height: 100vh;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Outer Window Frame matching macOS */
+    .window-container {
+      max-width: 1080px;
+      margin: 0 auto;
+      background: rgba(20, 22, 26, 0.85);
+      backdrop-filter: blur(28px);
+      -webkit-backdrop-filter: blur(28px);
+      border: 1px solid var(--card-border);
+      border-radius: 14px;
+      box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.05);
+      overflow: hidden;
+    }
+
+    /* Top Chrome / Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 18px;
+      background: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--card-border);
+    }
+    .traffic-lights {
+      display: flex;
+      gap: 7px;
+      margin-right: 14px;
+    }
+    .traffic-light {
+      width: 11px;
+      height: 11px;
+      border-radius: 50%;
+    }
+    .tl-red { background: #ff5f56; border: 1px solid #e0443e; }
+    .tl-yellow { background: #ffbd2e; border: 1px solid #dea123; }
+    .tl-green { background: #27c93f; border: 1px solid #1aab29; }
+
+    .title-area {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .window-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      letter-spacing: -0.2px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .chip {
+      font-size: 11px;
+      font-weight: 500;
+      padding: 2px 8px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.07);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .interval-controls {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      background: rgba(0, 0, 0, 0.35);
+      padding: 2px;
+      border-radius: 7px;
+      border: 1px solid var(--card-border);
+    }
+    .btn-interval {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-interval:hover { color: var(--text); }
+    .btn-interval.active {
+      background: var(--accent-blue);
+      color: #fff;
+    }
+    .btn-icon {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 4px 6px;
+      font-size: 12px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .btn-icon:hover { color: var(--text); }
+
+    /* Layout Grid */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr 1.08fr;
+      gap: 14px;
+      padding: 16px;
+    }
+    @media (max-width: 860px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 10px;
+      padding: 13px 15px;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+    .card:last-child { margin-bottom: 0; }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .card-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text);
+    }
+    .card-value {
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 12px;
+    }
+
+    /* Mini Sparklines */
+    .sparkline-box {
+      width: 100%;
+      height: 48px;
+      margin-bottom: 10px;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 6px;
+      overflow: hidden;
+      position: relative;
+    }
+    canvas.sparkline {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    /* Multi-Core Blocks */
+    .cores-grid {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 4px;
+      margin: 8px 0;
+    }
+    .core-cell {
+      height: 24px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 3px;
+      overflow: hidden;
+      position: relative;
+      border: 1px solid rgba(255, 255, 255, 0.03);
+    }
+    .core-fill {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      background: var(--accent-blue);
+      transition: height 0.25s ease-out;
+    }
+    .core-fill.eff { background: var(--accent-cyan); }
+
+    /* Segmented Memory Bar */
+    .segmented-bar {
+      height: 11px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      display: flex;
+      overflow: hidden;
+      margin: 10px 0 8px;
+    }
+    .seg-app { background: var(--accent-blue); }
+    .seg-wired { background: var(--accent-purple); }
+    .seg-comp { background: var(--accent-orange); }
+    .seg-free { background: rgba(255, 255, 255, 0.18); }
+
+    .legend-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      font-size: 10.5px;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* Key-Value Rows */
+    .row-meta {
+      display: flex;
+      justify-content: space-between;
+      padding: 3.5px 0;
+      font-size: 11px;
+      color: var(--text-muted);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+    .row-meta:last-child { border-bottom: none; }
+    .row-meta .val {
+      font-family: var(--mono);
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    /* Model Cards in Memory */
+    .model-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 7px;
+      margin-bottom: 6px;
+      transition: background 0.15s;
+    }
+    .model-item:hover { background: rgba(255, 255, 255, 0.05); }
+    .model-info {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .model-icon {
+      font-size: 15px;
+      width: 22px;
+      text-align: center;
+    }
+    .model-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .model-sub {
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+
+    /* Buttons */
+    .btn-action {
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      color: var(--text);
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 10px;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-action:hover {
+      background: rgba(255, 255, 255, 0.14);
+    }
+    .btn-action.unload {
+      background: rgba(248, 81, 73, 0.15);
+      border-color: rgba(248, 81, 73, 0.35);
+      color: #ff8b85;
+    }
+    .btn-action.unload:hover {
+      background: rgba(248, 81, 73, 0.28);
+      color: #fff;
+    }
+
+    /* Metric Badges */
+    .metrics-pills {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .metric-pill {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 6px 8px;
+      border-radius: 6px;
+    }
+    .metric-pill .lbl {
+      font-size: 9.5px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.3px;
+    }
+    .metric-pill .num {
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+
+    .status-badge {
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 1px 6px;
+      border-radius: 10px;
+    }
+    .status-badge.ok { background: rgba(63, 185, 80, 0.18); color: var(--accent-green); }
+    .status-badge.warn { background: rgba(210, 153, 34, 0.2); color: var(--accent-orange); }
+
+    /* Progress bar */
+    .progress-bar {
+      height: 7px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      overflow: hidden;
+      margin: 6px 0;
+    }
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-blue), var(--accent-cyan));
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+  </style>
+</head>
+<body>
+
+<div class="window-container">
+  <!-- Window Titlebar -->
+  <div class="toolbar">
+    <div class="title-area">
+      <div class="traffic-lights">
+        <div class="traffic-light tl-red"></div>
+        <div class="traffic-light tl-yellow"></div>
+        <div class="traffic-light tl-green"></div>
+      </div>
+      <div class="window-title">
+        <span>⊞</span> System Monitor
+      </div>
+      <div class="chip" id="chip-device">Detecting...</div>
+      <div class="chip" id="chip-port">127.0.0.1:18787</div>
+    </div>
+
+    <div class="interval-controls">
+      <button class="btn-interval" data-interval="500">0.5s</button>
+      <button class="btn-interval active" data-interval="1000">1.0s</button>
+      <button class="btn-interval" data-interval="2000">2.0s</button>
+      <button class="btn-interval" data-interval="5000">5.0s</button>
+      <button class="btn-icon" id="btn-pause" title="Pause / Resume">⏸</button>
+      <button class="btn-icon" id="btn-copy" title="Copy Telemetry JSON">📋</button>
+    </div>
+  </div>
+
+  <div class="dashboard-grid">
+    <!-- LEFT COLUMN: System Hardware -->
+    <div class="column-left">
+      <!-- 1. CPU Activity -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span>💻</span> CPU Activity</div>
+          <div class="card-value" style="color: var(--accent-blue);" id="cpu-total">0.0%</div>
+        </div>
+        <div class="sparkline-box">
+          <canvas class="sparkline" id="spark-cpu"></canvas>
+        </div>
+        <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">CPU cores</div>
+        <div class="cores-grid" id="cores-container"></div>
+        <div class="legend-row" style="margin-top: 6px;">
+          <div class="legend-item"><span class="dot" style="background: var(--accent-blue);"></span> Performance</div>
+          <div class="legend-item"><span class="dot" style="background: var(--accent-cyan);"></span> Efficiency</div>
+        </div>
+      </div>
+
+      <!-- 2. Network -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span>🌐</span> Network</div>
+          <div class="chip" id="net-iface" style="font-family: var(--mono);">en0</div>
+        </div>
+        <div style="display: flex; gap: 16px; margin-bottom: 8px;">
+          <div>
+            <div style="font-size: 9.5px; color: var(--accent-green); font-weight: 700;">↓ DOWNLOAD</div>
+            <div class="card-value" id="net-down">0 B/s</div>
+          </div>
+          <div>
+            <div style="font-size: 9.5px; color: var(--accent-orange); font-weight: 700;">↑ UPLOAD</div>
+            <div class="card-value" id="net-up">0 B/s</div>
+          </div>
+        </div>
+        <div class="sparkline-box">
+          <canvas class="sparkline" id="spark-net"></canvas>
+        </div>
+      </div>
+
+      <!-- 3. GPU Utilization -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span>🎮</span> GPU Utilization</div>
+          <div class="card-value" style="color: var(--accent-purple);" id="gpu-util">0.0%</div>
+        </div>
+        <div class="sparkline-box">
+          <canvas class="sparkline" id="spark-gpu"></canvas>
+        </div>
+        <div class="row-meta">
+          <span>Device</span>
+          <span class="val" id="gpu-name">Apple Silicon</span>
+        </div>
+        <div class="row-meta">
+          <span>Architecture</span>
+          <span class="val" id="gpu-arch">Unified Shader</span>
+        </div>
+        <div class="row-meta">
+          <span>Allocated VRAM</span>
+          <span class="val" id="gpu-vram">0 B</span>
+        </div>
+      </div>
+
+      <!-- 4. Disk & Storage -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span>💾</span> Disk & Storage</div>
+          <div class="card-value" id="disk-used-total">0 GB / 0 GB</div>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="disk-progress" style="width: 0%;"></div>
+        </div>
+        <div class="row-meta">
+          <span>Volume</span>
+          <span class="val" id="disk-vol">Host Root</span>
+        </div>
+        <div class="row-meta">
+          <span>CAS Deduplication Savings</span>
+          <span class="val" style="color: var(--accent-green);" id="cas-saved">0 B (1.0x)</span>
+        </div>
+      </div>
+
+      <!-- 5. Sensors & Power -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span>⚡</span> Sensors & Health</div>
+          <div class="status-badge ok" id="health-status">Verified / OK</div>
+        </div>
+        <div class="row-meta">
+          <span>Thermal State</span>
+          <span class="val" style="color: var(--accent-green);">Nominal (Cool)</span>
+        </div>
+        <div class="row-meta">
+          <span>Power Source</span>
+          <span class="val">AC Power</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: AI & Memory Controls -->
+    <div class="column-right">
+      <!-- 1. Unified Memory / System RAM -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span>🧠</span> System Memory</div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <span class="status-badge ok" id="mem-badge">Normal</span>
+            <span class="card-value" id="mem-summary">0 GB / 0 GB (0%)</span>
+          </div>
+        </div>
+
+        <div class="segmented-bar">
+          <div class="seg-app" id="seg-app" style="width: 35%;"></div>
+          <div class="seg-wired" id="seg-wired" style="width: 20%;"></div>
+          <div class="seg-comp" id="seg-comp" style="width: 15%;"></div>
+          <div class="seg-free" id="seg-free" style="width: 30%;"></div>
+        </div>
+
+        <div class="legend-row">
+          <div class="legend-item"><span class="dot" style="background: var(--accent-blue);"></span> App <span id="leg-app">0 GB</span></div>
+          <div class="legend-item"><span class="dot" style="background: var(--accent-purple);"></span> Wired <span id="leg-wired">0 GB</span></div>
+          <div class="legend-item"><span class="dot" style="background: var(--accent-orange);"></span> Compressed <span id="leg-comp">0 GB</span></div>
+          <div class="legend-item"><span class="dot" style="background: rgba(255, 255, 255, 0.25);"></span> Free <span id="leg-free">0 GB</span></div>
+        </div>
+
+        <div class="row-meta">
+          <span>Swap Used</span>
+          <span class="val" id="swap-val">0 B</span>
+        </div>
+      </div>
+
+      <!-- 2. AI Models in Memory with Interactive Unload Actions -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span>✨</span> AI Models in Memory</div>
+          <div style="display: flex; gap: 6px; align-items: center;">
+            <span class="chip" id="models-footprint">0 B resident</span>
+            <button class="btn-action" id="btn-purge-pool" title="Purge unused memory cache pages">Purge Pool</button>
+            <button class="btn-action unload" id="btn-unload-all" title="Unload all models">Unload All</button>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; font-size: 10px; color: var(--text-muted); margin-bottom: 8px;">
+          <span>Weights & State: <strong id="metal-weights" style="color: var(--text);">0 B</strong></span>
+          <span>Reuse Pool: <strong id="metal-pool" style="color: var(--text);">0 B</strong></span>
+        </div>
+
+        <div id="models-container">
+          <!-- Dynamically filled with loaded and available packages -->
+          <div style="padding: 12px; text-align: center; color: var(--text-muted);">Scanning models...</div>
+        </div>
+      </div>
+
+      <!-- 3. Inference & Tokens Telemetry -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span>⚡</span> Inference & Tokens</div>
+          <button class="btn-action" id="btn-reset-session">Reset Session</button>
+        </div>
+
+        <div class="metrics-pills">
+          <div class="metric-pill">
+            <div class="lbl">Prefill</div>
+            <div class="num" id="inf-prefill">0 ms · 0 t/s</div>
+          </div>
+          <div class="metric-pill">
+            <div class="lbl">Decode</div>
+            <div class="num" style="color: var(--accent-green);" id="inf-decode">0.0 t/s</div>
+          </div>
+          <div class="metric-pill">
+            <div class="lbl">Peak TPS</div>
+            <div class="num" id="inf-peak">0.0 t/s</div>
+          </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px;">
+          <span>Context Fill:</span>
+          <span style="font-family: var(--mono); font-weight: 600;" id="ctx-summary">0 / 32,768 (0%)</span>
+        </div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="ctx-progress" style="width: 0%;"></div>
+        </div>
+        <div style="font-size: 10px; color: var(--text-muted); margin-bottom: 10px;">
+          Est. KV cache: <span id="kv-cache" style="color: var(--text); font-family: var(--mono);">0 B</span>
+        </div>
+
+        <div style="font-size: 10.5px; color: var(--text-muted); margin-bottom: 4px;">Decode throughput (t/s)</div>
+        <div class="sparkline-box">
+          <canvas class="sparkline" id="spark-throughput"></canvas>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--card-border);">
+          <div>
+            <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">This Session</div>
+            <div class="card-value" style="color: var(--accent-blue); font-size: 13px;" id="tok-session-total">0 tokens</div>
+            <div style="font-size: 10px; color: var(--text-muted);" id="tok-session-meta">P: 0 · C: 0 · 0 reqs</div>
+          </div>
+          <div>
+            <div style="font-size: 10px; color: var(--text-muted); text-transform: uppercase;">All-Time Cumulative</div>
+            <div class="card-value" style="color: var(--accent-purple); font-size: 13px;" id="tok-cumul-total">0 tokens</div>
+            <div style="font-size: 10px; color: var(--text-muted);" id="tok-cumul-meta">P: 0 · C: 0 · 0 reqs</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  let pollInterval = 1000;
+  let pollTimer = null;
+  let isPaused = false;
+  let lastStats = null;
+
+  const netHistory = [];
+  const throughputHistory = [];
+
+  // Initialize Canvas sparklines
+  function drawSparkline(canvasId, values, color, fillColor) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.parentElement.clientWidth;
+    const h = canvas.parentElement.clientHeight;
+
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, w, h);
+
+    if (!values || values.length < 2) return;
+    const max = Math.max(...values, 1.0);
+    const min = 0;
+    const step = w / (values.length - 1);
+
+    ctx.beginPath();
+    values.forEach((v, i) => {
+      const x = i * step;
+      const y = h - ((v - min) / (max - min)) * (h - 6) - 3;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+
+    if (fillColor) {
+      ctx.lineTo(w, h);
+      ctx.lineTo(0, h);
+      ctx.closePath();
+      ctx.fillStyle = fillColor;
+      ctx.fill();
+    }
+
+    ctx.beginPath();
+    values.forEach((v, i) => {
+      const x = i * step;
+      const y = h - ((v - min) / (max - min)) * (h - 6) - 3;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.8;
+    ctx.stroke();
+  }
+
+  async function fetchStats() {
+    if (isPaused) return;
+    try {
+      const res = await fetch('/v1/monitor/stats');
+      if (!res.ok) return;
+      const data = await res.json();
+      lastStats = data;
+      renderUI(data);
+    } catch (err) {
+      console.warn('Failed to fetch monitor stats', err);
+    }
+  }
+
+  function renderUI(data) {
+    // Device & Toolbar
+    if (data.device) {
+      document.getElementById('chip-device').textContent = data.device.name;
+    }
+
+    // CPU
+    if (data.cpu) {
+      document.getElementById('cpu-total').textContent = `${data.cpu.overall_percent}%`;
+      drawSparkline('spark-cpu', data.cpu.history || [], '#388bfd', 'rgba(56, 139, 253, 0.12)');
+
+      const coresBox = document.getElementById('cores-container');
+      coresBox.innerHTML = '';
+      const cores = data.cpu.per_core_percent || [];
+      cores.forEach((pct, idx) => {
+        const cell = document.createElement('div');
+        cell.className = 'core-cell';
+        const fill = document.createElement('div');
+        fill.className = idx >= data.cpu.performance_cores ? 'core-fill eff' : 'core-fill';
+        fill.style.height = `${Math.min(100, Math.max(4, pct))}%`;
+        cell.appendChild(fill);
+        cell.title = `Core ${idx + 1}: ${pct}%`;
+        coresBox.appendChild(cell);
+      });
+    }
+
+    // Network
+    if (data.network) {
+      document.getElementById('net-iface').textContent = data.network.interface;
+      document.getElementById('net-down').textContent = data.network.download_human_sec;
+      document.getElementById('net-up').textContent = data.network.upload_human_sec;
+
+      netHistory.push(data.network.download_bytes_sec / 1024);
+      if (netHistory.length > 30) netHistory.shift();
+      drawSparkline('spark-net', netHistory, '#3fb950', 'rgba(63, 185, 80, 0.10)');
+    }
+
+    // GPU
+    if (data.gpu) {
+      document.getElementById('gpu-util').textContent = `${data.gpu.utilization_percent}%`;
+      document.getElementById('gpu-name').textContent = data.device?.name || 'Apple Silicon';
+      document.getElementById('gpu-arch').textContent = data.device?.architecture || 'Unified Shader';
+      document.getElementById('gpu-vram').textContent = data.gpu.allocated_vram_human || '0 B';
+      drawSparkline('spark-gpu', data.gpu.history || [], '#bc8cff', 'rgba(188, 140, 255, 0.12)');
+    }
+
+    // Disk
+    if (data.disk) {
+      document.getElementById('disk-used-total').textContent = `${data.disk.used_human} / ${data.disk.total_human}`;
+      document.getElementById('disk-progress').style.width = `${data.disk.percent}%`;
+      document.getElementById('disk-vol').textContent = data.disk.volume;
+      document.getElementById('cas-saved').textContent = `${data.disk.cas_saved_human} (${data.disk.cas_dedup_ratio}x)`;
+    }
+
+    // Memory
+    if (data.memory) {
+      const mem = data.memory;
+      document.getElementById('mem-summary').textContent = `${mem.used_human} / ${mem.total_human} (${mem.percent}%)`;
+      const badge = document.getElementById('mem-badge');
+      badge.textContent = mem.status;
+      badge.className = `status-badge ${mem.status === 'Normal' ? 'ok' : 'warn'}`;
+
+      const total = mem.total_bytes || 1;
+      const pApp = (mem.app_bytes / total) * 100;
+      const pWired = (mem.wired_bytes / total) * 100;
+      const pComp = (mem.compressed_bytes / total) * 100;
+      const pFree = Math.max(0, 100 - (pApp + pWired + pComp));
+
+      document.getElementById('seg-app').style.width = `${pApp}%`;
+      document.getElementById('seg-wired').style.width = `${pWired}%`;
+      document.getElementById('seg-comp').style.width = `${pComp}%`;
+      document.getElementById('seg-free').style.width = `${pFree}%`;
+
+      document.getElementById('leg-app').textContent = mem.app_human;
+      document.getElementById('leg-wired').textContent = mem.wired_human;
+      document.getElementById('leg-comp').textContent = mem.compressed_human;
+      document.getElementById('leg-free').textContent = mem.free_human;
+      document.getElementById('swap-val').textContent = mem.swap_used_human;
+    }
+
+    // AI Models in Memory
+    if (data.ai_models) {
+      const aim = data.ai_models;
+      document.getElementById('models-footprint').textContent = `${aim.total_resident_human} resident`;
+      document.getElementById('metal-weights').textContent = aim.total_resident_human;
+      document.getElementById('metal-pool').textContent = aim.cache_pool_human;
+
+      const container = document.getElementById('models-container');
+      container.innerHTML = '';
+
+      const resident = aim.resident_models || [];
+      const available = aim.available_models || [];
+
+      if (resident.length === 0 && available.length === 0) {
+        container.innerHTML = '<div style="padding: 10px; color: var(--text-muted); text-align: center;">No models discovered</div>';
+      } else {
+        resident.forEach(m => {
+          const item = document.createElement('div');
+          item.className = 'model-item';
+          const icon = m.modality === 'image_gen' ? '🎨' : (m.modality === 'video' ? '🎬' : (m.modality === 'music' ? '🎵' : '💬'));
+          item.innerHTML = `
+            <div class="model-info">
+              <span class="model-icon">${icon}</span>
+              <div>
+                <div class="model-name"><span class="dot" style="background: var(--accent-green);"></span> ${m.title || m.id}</div>
+                <div class="model-sub">Resident in RAM · ~${m.resident_human}</div>
+              </div>
+            </div>
+            <button class="btn-action unload" onclick="unloadModel('${m.id}')">Unload</button>
+          `;
+          container.appendChild(item);
+        });
+
+        available.forEach(m => {
+          const item = document.createElement('div');
+          item.className = 'model-item';
+          item.style.opacity = '0.65';
+          const icon = m.modality === 'image_gen' ? '✏️' : (m.modality === 'video' ? '📽️' : (m.modality === 'music' ? '🎧' : '💭'));
+          item.innerHTML = `
+            <div class="model-info">
+              <span class="model-icon">${icon}</span>
+              <div>
+                <div class="model-name"><span class="dot" style="background: var(--text-dim);"></span> ${m.title || m.id}</div>
+                <div class="model-sub">Not loaded · ${m.resident_human}</div>
+              </div>
+            </div>
+            <span class="chip" style="font-size: 10px;">Standby</span>
+          `;
+          container.appendChild(item);
+        });
+      }
+    }
+
+    // Inference & Tokens
+    if (data.inference) {
+      const inf = data.inference;
+      document.getElementById('inf-prefill').textContent = `${inf.prefill_ms} ms · ${inf.prefill_tps} t/s`;
+      document.getElementById('inf-decode').textContent = `${inf.decode_tps} t/s`;
+      document.getElementById('inf-peak').textContent = `${inf.peak_decode_tps} t/s`;
+
+      const ctx = inf.context_fill || {};
+      document.getElementById('ctx-summary').textContent = `${(ctx.active_tokens || 0).toLocaleString()} / ${(ctx.max_tokens || 32768).toLocaleString()} (${ctx.percent || 0}%)`;
+      document.getElementById('ctx-progress').style.width = `${Math.min(100, ctx.percent || 0)}%`;
+      document.getElementById('kv-cache').textContent = inf.kv_cache_human || '0 B';
+
+      drawSparkline('spark-throughput', inf.decode_history || [], '#3fb950', 'rgba(63, 185, 80, 0.12)');
+
+      const s = inf.session || {};
+      document.getElementById('tok-session-total').textContent = `${(s.total_tokens || 0).toLocaleString()} tokens`;
+      document.getElementById('tok-session-meta').textContent = `P: ${(s.prompt_tokens || 0).toLocaleString()} · C: ${(s.completion_tokens || 0).toLocaleString()} · ${s.requests || 0} reqs`;
+
+      const c = inf.cumulative || {};
+      document.getElementById('tok-cumul-total').textContent = `${(c.total_tokens || 0).toLocaleString()} tokens`;
+      document.getElementById('tok-cumul-meta').textContent = `P: ${(c.prompt_tokens || 0).toLocaleString()} · C: ${(c.completion_tokens || 0).toLocaleString()} · ${c.requests || 0} reqs`;
+    }
+  }
+
+  // Interactive Actions
+  async function unloadModel(packageId) {
+    try {
+      const res = await fetch('/v1/unload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: packageId })
+      });
+      if (res.ok) fetchStats();
+    } catch (err) {
+      console.error('Failed to unload model', err);
+    }
+  }
+
+  document.getElementById('btn-unload-all').addEventListener('click', async () => {
+    try {
+      const res = await fetch('/v1/unload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      if (res.ok) fetchStats();
+    } catch (err) {
+      console.error('Failed to unload all', err);
+    }
+  });
+
+  document.getElementById('btn-purge-pool').addEventListener('click', async () => {
+    try {
+      const res = await fetch('/v1/memory/clear', { method: 'POST' });
+      if (res.ok) fetchStats();
+    } catch (err) {
+      console.error('Failed to purge pool', err);
+    }
+  });
+
+  document.getElementById('btn-reset-session').addEventListener('click', async () => {
+    try {
+      const res = await fetch('/v1/monitor/reset', { method: 'POST' });
+      if (res.ok) fetchStats();
+    } catch (err) {
+      console.error('Failed to reset session', err);
+    }
+  });
+
+  // Interval Buttons
+  document.querySelectorAll('.btn-interval').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.btn-interval').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      pollInterval = parseInt(btn.getAttribute('data-interval'), 10);
+      restartPolling();
+    });
+  });
+
+  // Pause / Resume
+  const btnPause = document.getElementById('btn-pause');
+  btnPause.addEventListener('click', () => {
+    isPaused = !isPaused;
+    btnPause.textContent = isPaused ? '▶' : '⏸';
+  });
+
+  // Copy JSON
+  document.getElementById('btn-copy').addEventListener('click', () => {
+    if (lastStats) {
+      navigator.clipboard.writeText(JSON.stringify(lastStats, null, 2));
+      alert('Telemetry JSON copied to clipboard!');
+    }
+  });
+
+  function restartPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(fetchStats, pollInterval);
+  }
+
+  fetchStats();
+  restartPolling();
+</script>
+
+</body>
+</html>

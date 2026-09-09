@@ -307,6 +307,159 @@ class MLXRuntime(Runtime):
         return ref
 
 
+class CUDARuntime(Runtime):
+    """PyTorch / Hugging Face Transformers backend for NVIDIA CUDA and Linux systems."""
+
+    def __init__(self, store: PackageStore | None = None) -> None:
+        self.store = store
+        self._models: dict[str, tuple[object, object]] = {}
+
+    def unload(self, package_id: str | None = None) -> None:
+        if package_id is None:
+            self._models.clear()
+        elif self.store is not None:
+            path = str(self.store.weights_dir(package_id))
+            self._models.pop(path, None)
+            man = self.store.load_manifest(package_id)
+            if man:
+                resolved = self.store.resolve_weights_path(man)
+                if resolved:
+                    self._models.pop(str(resolved), None)
+            self.store.mark_unloaded(package_id)
+        gc.collect()
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception:
+            pass
+
+    def _resolve_model_path(self, manifest: PackageManifest) -> str:
+        if self.store is not None:
+            resolved = self.store.resolve_weights_path(manifest)
+            if resolved is not None:
+                return str(resolved)
+            path = self.store.weights_dir(manifest.id)
+            if path.is_dir() and any(path.iterdir()):
+                return str(path)
+        ref = manifest.runtime.hf_repo or manifest.runtime.mlc_artifact or ""
+        if ref:
+            return ref
+        raise RuntimeError(f"package {manifest.id} has no weights path for CUDA/PyTorch")
+
+    def _get_model(self, manifest: PackageManifest) -> tuple[object, object]:
+        path_str = self._resolve_model_path(manifest)
+        if path_str in self._models:
+            return self._models[path_str]
+
+        import torch
+        from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore
+
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        dtype = torch.bfloat16 if (torch.cuda.is_available() and torch.cuda.is_bf16_supported()) else torch.float16
+
+        tokenizer = AutoTokenizer.from_pretrained(path_str, trust_remote_code=True)
+        model = AutoModelForCausalLM.from_pretrained(
+            path_str,
+            torch_dtype=dtype,
+            device_map="auto" if device == "cuda" else None,
+            trust_remote_code=True,
+        )
+        if device == "cpu":
+            model = model.to("cpu")
+
+        self._models[path_str] = (model, tokenizer)
+        if self.store is not None:
+            self.store.mark_loaded(manifest.id)
+        return model, tokenizer
+
+    async def complete(
+        self,
+        manifest: PackageManifest,
+        messages: list[ChatMessage],
+        *,
+        max_tokens: int | None,
+        temperature: float | None,
+        prefer_speculative: bool = False,
+        usage: dict[str, int] | None = None,
+        tools: list[dict] | None = None,
+    ) -> str:
+        parts: list[str] = []
+        async for chunk in self.stream(
+            manifest,
+            messages,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            prefer_speculative=prefer_speculative,
+            usage=usage,
+            tools=tools,
+        ):
+            parts.append(chunk)
+        return strip_stop_tokens("".join(parts), manifest)
+
+    async def stream(
+        self,
+        manifest: PackageManifest,
+        messages: list[ChatMessage],
+        *,
+        max_tokens: int | None,
+        temperature: float | None,
+        prefer_speculative: bool = False,
+        usage: dict[str, int] | None = None,
+        tools: list[dict] | None = None,
+    ) -> AsyncIterator[str]:
+        try:
+            from transformers import TextIteratorStreamer  # type: ignore
+        except ImportError as e:
+            raise RuntimeError(f"PyTorch/Transformers not available for CUDA runtime: {e}") from e
+
+        model, tokenizer = await asyncio.to_thread(self._get_model, manifest)
+        prompt = apply_chat_template(manifest, messages, tools=tools)
+        max_toks = clamp_max_tokens(max_tokens, manifest.limits.max_tokens_soft)
+
+        inputs = tokenizer(prompt, return_tensors="pt")
+        device = next(model.parameters()).device
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+        prompt_len = inputs["input_ids"].shape[1]
+
+        streamer = TextIteratorStreamer(tokenizer, skip_prompt=True, skip_special_tokens=True)
+        gen_kwargs = {
+            **inputs,
+            "streamer": streamer,
+            "max_new_tokens": max_toks,
+            "do_sample": (temperature or 0.7) > 0.0,
+            "temperature": max(0.01, float(temperature or 0.7)),
+        }
+
+        thread = threading.Thread(target=model.generate, kwargs=gen_kwargs)
+        thread.start()
+
+        generated_chunks = []
+        loop = asyncio.get_running_loop()
+
+        def _next_chunk():
+            try:
+                return next(streamer)
+            except StopIteration:
+                return None
+
+        while True:
+            chunk = await loop.run_in_executor(None, _next_chunk)
+            if chunk is None:
+                break
+            generated_chunks.append(chunk)
+            yield chunk
+
+        thread.join()
+        if usage is not None:
+            full_out = "".join(generated_chunks)
+            out_toks = len(tokenizer.encode(full_out))
+            usage["prompt_tokens"] = prompt_len
+            usage["completion_tokens"] = out_toks
+            usage["total_tokens"] = prompt_len + out_toks
+
+
 class RuntimeHub:
     """Process-wide runtime instances keyed by engine."""
 
@@ -320,12 +473,27 @@ class RuntimeHub:
             self.mlx: Runtime = IsolatedMLXRuntime(store)
         else:
             self.mlx = MLXRuntime(store)
+        self.cuda = CUDARuntime(store)
         self._mflux_image: object | None = None
 
     def for_manifest(self, manifest: PackageManifest) -> Runtime:
         primary = (manifest.runtime.primary or "echo").lower()
         if primary in {"mlx", "mlx_lm", "mlx-lm"}:
-            return self.mlx
+            try:
+                import mlx.core  # type: ignore
+
+                return self.mlx
+            except Exception:
+                try:
+                    import torch
+
+                    if torch.cuda.is_available():
+                        return self.cuda
+                except Exception:
+                    pass
+                return self.echo
+        if primary in {"cuda", "vllm", "transformers", "pytorch"}:
+            return self.cuda
         return self.echo
 
     def image_runtime(self, manifest: PackageManifest) -> object:
@@ -342,6 +510,8 @@ class RuntimeHub:
     def unload(self, package_id: str | None = None) -> None:
         if hasattr(self.mlx, "unload"):
             self.mlx.unload(package_id)
+        if hasattr(self.cuda, "unload"):
+            self.cuda.unload(package_id)
         if self._mflux_image is not None and hasattr(self._mflux_image, "unload"):
             self._mflux_image.unload(package_id)
             # Drop the hub handle when nothing remains cached (full unload or last pack).
@@ -370,5 +540,19 @@ def runtime_for(manifest: PackageManifest, store: PackageStore | None = None) ->
         return hub.for_manifest(manifest)
     primary = (manifest.runtime.primary or "echo").lower()
     if primary in {"mlx", "mlx_lm", "mlx-lm"}:
-        return MLXRuntime(store)
+        try:
+            import mlx.core  # type: ignore
+
+            return MLXRuntime(store)
+        except Exception:
+            try:
+                import torch
+
+                if torch.cuda.is_available():
+                    return CUDARuntime(store)
+            except Exception:
+                pass
+            return EchoRuntime()
+    if primary in {"cuda", "vllm", "transformers", "pytorch"}:
+        return CUDARuntime(store)
     return EchoRuntime()

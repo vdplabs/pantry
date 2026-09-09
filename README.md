@@ -269,6 +269,18 @@ Deeper reference lives under [`Docs/`](Docs/README.md):
 - [Install](Docs/Install.md) (pip / uv / Homebrew)
 - [Launchd](Docs/Launchd.md)
 
+## Web System Monitor
+
+When the daemon is running, open `http://127.0.0.1:18787/dashboard` in any browser or run:
+```bash
+pantry dashboard
+```
+Provides a real-time dark glassmorphism dashboard matching SINK:
+- Live CPU, GPU (Metal or NVIDIA CUDA), and Memory gauges.
+- Network and Disk / CAS deduplication statistics.
+- **AI Models in Memory**: inspect resident RAM footprint with 1-click **Unload** and **Purge Pool** actions.
+- **Inference & Tokens**: live Prefill & Decode TPS, context window usage progress bar, and session/cumulative token counters.
+
 ## Menu bar
 
 Included when you install with `.[mac]` or `.[menubar]`. `pantry serve` opens the status item automatically; use `--no-menubar` for HTTP-only.

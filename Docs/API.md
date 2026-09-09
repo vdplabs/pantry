@@ -4,9 +4,39 @@ Default base URL: `http://127.0.0.1:18787`.
 
 ## HTTP
 
+### `GET /dashboard`
+
+Interactive real-time **Web System Monitor Dashboard** matching SINK's macOS System Monitor.
+- Real-time CPU, GPU (Metal or CUDA), Memory breakdown (App, Wired, Compressed, Free, VRAM).
+- Network I/O and Disk throughput / CAS store stats.
+- **AI Models in Memory**: lists resident packages with interactive **Unload** and **Purge Pool** actions.
+- **Inference & Tokens**: live Prefill & Decode TPS, context fill %, KV cache estimation, and session/cumulative token counters.
+- Selectable refresh intervals (0.5s, 1.0s, 2.0s, 5.0s, pause) and clipboard JSON export.
+
 ### `GET /`
 
-Service name, version, and path hints (`chat`, `images`, `resolve`, …).
+Service name, version, and path hints (`chat`, `images`, `dashboard`, `monitor`, …). When requested with `Accept: text/html` from a browser, automatically serves the Web System Monitor dashboard.
+
+### `GET /v1/monitor/stats`
+
+Real-time telemetry payload JSON consumed by the dashboard and orchestrators:
+```json
+{
+  "ok": true,
+  "device": { "name": "Apple M1 Pro", "architecture": "Apple Silicon Unified Shader", "bandwidth_gbps": 200.0 },
+  "cpu": { "overall_percent": 8.9, "per_core_percent": [5.0, 5.0, 25.0], "cores_count": 8 },
+  "memory": { "status": "Normal", "total_human": "16.0 GB", "used_human": "13.29 GB", "percent": 83.0 },
+  "gpu": { "utilization_percent": 23.0, "allocated_vram_human": "768.0 MB" },
+  "network": { "interface": "en0", "download_human_sec": "964 B/s", "upload_human_sec": "0 B/s" },
+  "disk": { "volume": "Macintosh HD", "used_human": "365.09 GB", "cas_saved_human": "12.4 GB" },
+  "ai_models": { "total_resident_human": "2.8 GB", "cache_pool_human": "2.35 GB", "resident_models": [] },
+  "inference": { "decode_tps": 19.5, "prefill_tps": 224.0, "context_fill": { "percent": 7.0 }, "kv_cache_human": "308.3 MB" }
+}
+```
+
+### `POST /v1/monitor/reset`
+
+Resets session token counters (`prompt_tokens`, `completion_tokens`, `requests`) while preserving cumulative statistics.
 
 ### `GET /v1/health`
 
@@ -260,6 +290,7 @@ Demo pack uses **`echo_music`** (deterministic sine WAV).
 | `pantry resolve --modality chat --ram-gb-max 8 --quality compact` | Capability resolve |
 | `pantry list` | Installed packages (`need-pull` / `ready`) |
 | `pantry load` / `unload` | Prefer running daemon (`POST /v1/load`, `/v1/unload`); else local `state.json` only |
+| `pantry dashboard` | Open the Web System Monitor dashboard in default browser (`http://127.0.0.1:18787/dashboard`) |
 | `pantry serve [--host] [--port] [--worker-isolation]` | HTTP server + menu bar (`--worker-isolation` so unload reclaims that worker's Metal allocations) |
 | `pantry service install` / `start` / `stop` / `status` | Manage macOS login LaunchAgent daemon |
 | `pantry catalog update` / `list` | Sync remote catalog manifests from registry / GitHub |

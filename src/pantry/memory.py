@@ -72,16 +72,51 @@ _last_snapshot: tuple[float, dict[str, Any]] | None = None
 
 
 def snapshot(*, apply_limits: bool = False, max_age: float = 2.0) -> dict[str, Any]:
-    """Return Metal/MLX heap stats for status / health surfaces."""
-    global _last_snapshot
+    """Return Metal/MLX or CUDA heap stats for status / health surfaces."""
     now = time.time()
-    if not apply_limits and _last_snapshot is not None:
-        cached_at, cached_snap = _last_snapshot
-        if now - cached_at < max_age:
-            return dict(cached_snap)
-
     mx = _load_mlx()
     if mx is None:
+        # Check NVIDIA CUDA
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                free_b, total_b = torch.cuda.mem_get_info(0)
+                alloc_b = int(torch.cuda.memory_allocated(0))
+                res_b = int(torch.cuda.memory_reserved(0))
+                peak_b = int(torch.cuda.max_memory_allocated(0))
+                cache_b = max(0, res_b - alloc_b)
+                dev_name = torch.cuda.get_device_name(0)
+                pressure = _pressure(alloc_b, total_b)
+                return {
+                    "ok": True,
+                    "available": True,
+                    "backend": "cuda",
+                    "device_name": dev_name,
+                    "metal_available": False,
+                    "cuda_available": True,
+                    "pressure": pressure,
+                    "active_bytes": alloc_b,
+                    "peak_bytes": peak_b,
+                    "cache_bytes": cache_b,
+                    "active_human": _fmt_bytes(alloc_b),
+                    "peak_human": _fmt_bytes(peak_b),
+                    "cache_human": _fmt_bytes(cache_b),
+                    "device": {
+                        "device_name": dev_name,
+                        "architecture": "NVIDIA CUDA",
+                        "memory_size_bytes": total_b,
+                        "recommended_working_set_bytes": int(total_b * 0.90),
+                        "memory_size_human": _fmt_bytes(total_b),
+                        "recommended_working_set_human": _fmt_bytes(int(total_b * 0.90)),
+                    },
+                    "limits": {"applied": False},
+                    "sampled_at": now,
+                    "message": f"NVIDIA VRAM {_fmt_bytes(alloc_b)} active / {_fmt_bytes(total_b)} total",
+                }
+        except Exception:
+            pass
+
         return {
             "ok": False,
             "available": False,
@@ -127,7 +162,7 @@ def snapshot(*, apply_limits: bool = False, max_age: float = 2.0) -> dict[str, A
         limits = apply_protection_limits(mx, recommended_working_set=recommended)
 
     pressure = _pressure(active, recommended)
-    return {
+    res = {
         "ok": True,
         "available": True,
         "backend": "mlx-metal" if metal_ok else "mlx",
@@ -235,42 +270,61 @@ def apply_protection_limits(
 
 
 def clear_metal_cache() -> dict[str, Any]:
-    """Best-effort reclaim of unused Metal/MLX cache pages."""
-    mx = _load_mlx()
+    """Best-effort reclaim of unused MLX Metal or NVIDIA CUDA cache pages."""
+    import gc
+
     before = snapshot(apply_limits=False)
+    cleared = False
+    mx = _load_mlx()
     if mx is None:
-        return {"ok": False, "cleared": False, "before": before, "after": before}
+        cleared = False
+        try:
+            import torch
+
+            if hasattr(torch, "cuda") and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                cleared = True
+        except Exception:
+            pass
+        return {"ok": False if not cleared else True, "cleared": cleared, "before": before, "after": before}
+
     try:
         mx.clear_cache()
-    except Exception:  # noqa: BLE001
+        cleared = True
+    except Exception:
         try:
             mx.metal.clear_cache()
-        except Exception as e:  # noqa: BLE001
-            return {
-                "ok": False,
-                "cleared": False,
-                "error": str(e),
-                "before": before,
-                "after": snapshot(apply_limits=False),
-            }
-    after = snapshot(apply_limits=False)
+            cleared = True
+        except Exception:
+            pass
+
     try:
         import sys
 
         if "torch" in sys.modules:
             import torch  # type: ignore
 
+            if hasattr(torch, "cuda") and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                cleared = True
             if hasattr(torch, "backends") and hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
                 if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
                     torch.mps.empty_cache()
-                    after = snapshot(apply_limits=False)
+                    cleared = True
     except Exception:
         pass
-    return {"ok": True, "cleared": True, "before": before, "after": after}
+
+    gc.collect()
+    after = snapshot(apply_limits=False)
+    return {"ok": True, "cleared": cleared, "before": before, "after": after}
+
+
+clear_cache = clear_metal_cache
 
 
 def get_available_unified_dram() -> int:
-    """Determine currently available physical unified memory shared across CPU and GPU (Patent Claim 1 & Step 204)."""
+    """Determine currently available physical memory shared across CPU and GPU or CUDA device VRAM (Patent Claim 1 & Step 204)."""
+    # 1. MLX Unified Memory (Apple Silicon)
     mx = _load_mlx()
     if mx is not None:
         budget = device_budget(mx)
@@ -283,7 +337,17 @@ def get_available_unified_dram() -> int:
         if mem_size and mem_size > 0:
             return max(1024 * 1024 * 512, mem_size - active)
 
-    # Fallback to macOS sysctl hw.memsize
+    # 2. NVIDIA CUDA VRAM
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            free_b, _ = torch.cuda.mem_get_info(0)
+            return max(1024 * 1024 * 512, int(free_b))
+    except Exception:
+        pass
+
+    # 3. macOS sysctl hw.memsize
     try:
         import platform
         import subprocess
@@ -292,6 +356,14 @@ def get_available_unified_dram() -> int:
             out = subprocess.check_output(["sysctl", "-n", "hw.memsize"], text=True, timeout=1).strip()
             total = int(out)
             return max(1024 * 1024 * 512, total)
+    except Exception:
+        pass
+
+    # 4. Linux / psutil available memory
+    try:
+        import psutil
+
+        return max(1024 * 1024 * 512, int(psutil.virtual_memory().available))
     except Exception:
         pass
 
