@@ -17,6 +17,7 @@ def isolate_hf_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     test_hub.mkdir(parents=True, exist_ok=True)
     monkeypatch.setenv("HF_HUB_CACHE", str(test_hub))
     monkeypatch.setenv("HF_HOME", str(tmp_path / "test_hf_home"))
+    monkeypatch.setenv("PANTRY_AVAILABLE_DRAM", "32GB")
 
 
 @pytest.fixture

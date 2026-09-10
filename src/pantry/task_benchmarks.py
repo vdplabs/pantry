@@ -25,19 +25,19 @@ class TaskIntent(str, Enum):
 _FAMILY_TASK_BENCHMARKS: list[dict[str, Any]] = [
     {
         "patterns": ["qwen2.5-coder", "coder"],
-        "scores": {"coding": 92.0, "reasoning": 78.0, "chat": 74.0, "general": 80.0},
+        "scores": {"coding": 95.0, "reasoning": 78.0, "chat": 72.0, "general": 80.0},
     },
     {
         "patterns": ["deepseek-r1", "r1", "reasoning"],
-        "scores": {"reasoning": 95.0, "coding": 84.0, "chat": 72.0, "general": 82.0},
+        "scores": {"reasoning": 95.0, "coding": 82.0, "chat": 70.0, "general": 80.0},
     },
     {
         "patterns": ["llama3.2", "llama"],
-        "scores": {"chat": 88.0, "general": 82.0, "coding": 72.0, "reasoning": 74.0},
+        "scores": {"chat": 88.0, "general": 82.0, "coding": 68.0, "reasoning": 72.0},
     },
     {
         "patterns": ["qwen2.5", "qwen"],
-        "scores": {"chat": 82.0, "general": 82.0, "coding": 80.0, "reasoning": 80.0},
+        "scores": {"chat": 85.0, "general": 82.0, "coding": 68.0, "reasoning": 72.0},
     },
 ]
 
@@ -117,8 +117,8 @@ def score_package(
     param_scale = min(15.0, (pkg.params_b or 0.5) * 5.0)
     quality = min(100.0, (0.60 * alignment) + (0.30 * eval_score) + (0.10 * param_scale))
 
-    # 2. Speed (0-100): Normalized tokens/sec (100 tok/s = 80 pts, 150+ = 100 pts)
-    speed = min(100.0, (estimated_tps / 1.5)) if estimated_tps > 0 else 50.0
+    # 2. Speed (0-100): Normalized tokens/sec with diminishing returns above interactive thresholds
+    speed = min(100.0, max(20.0, 30.0 + (estimated_tps * 0.7))) if estimated_tps > 0 else 50.0
 
     # 3. Fit (0-100): Memory utilization sweet spot (50-80% of available memory is optimal)
     fit = 70.0

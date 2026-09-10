@@ -114,3 +114,17 @@ def test_snapshot_includes_torch_mps():
     assert snap["available"] is True
     assert snap["active_bytes"] == 1_500_000
 
+
+def test_get_available_unified_dram_env_override(monkeypatch):
+    from pantry.memory import get_available_unified_dram
+
+    monkeypatch.setenv("PANTRY_AVAILABLE_DRAM", "16GB")
+    assert get_available_unified_dram() == 16 * 1024 * 1024 * 1024
+
+    monkeypatch.setenv("PANTRY_AVAILABLE_DRAM", "8")
+    assert get_available_unified_dram() == 8 * 1024 * 1024 * 1024
+
+    monkeypatch.setenv("PANTRY_AVAILABLE_DRAM", "4294967296")
+    assert get_available_unified_dram() == 4294967296
+
+

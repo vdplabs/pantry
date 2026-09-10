@@ -27,4 +27,6 @@ jobs:
           pip install -e ".[dev,mac]"
 
       - name: Test
+        env:
+          PANTRY_AVAILABLE_DRAM: 32GB
         run: pytest -q

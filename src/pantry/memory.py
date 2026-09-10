@@ -336,8 +336,39 @@ def clear_metal_cache() -> dict[str, Any]:
 clear_cache = clear_metal_cache
 
 
+def _parse_dram_env(val: str | None) -> int | None:
+    if not val:
+        return None
+    v = val.strip().lower()
+    if not v:
+        return None
+    multiplier = 1
+    if v.endswith("gb") or v.endswith("g"):
+        multiplier = 1024 * 1024 * 1024
+        v = v.rstrip("gb").rstrip("g").strip()
+    elif v.endswith("mb") or v.endswith("m"):
+        multiplier = 1024 * 1024
+        v = v.rstrip("mb").rstrip("m").strip()
+    elif v.endswith("b"):
+        multiplier = 1
+        v = v.rstrip("b").strip()
+    try:
+        num = float(v)
+        if multiplier == 1 and num < 1024:
+            return int(num * 1024 * 1024 * 1024)
+        return int(num * multiplier)
+    except ValueError:
+        return None
+
+
 def get_available_unified_dram() -> int:
     """Determine currently available physical memory shared across CPU and GPU or CUDA device VRAM (Patent Claim 1 & Step 204)."""
+    env_override = _parse_dram_env(os.environ.get("PANTRY_AVAILABLE_DRAM")) or _parse_dram_env(
+        os.environ.get("PANTRY_AVAILABLE_DRAM_BYTES")
+    )
+    if env_override is not None and env_override > 0:
+        return max(1024 * 1024 * 512, env_override)
+
     # 1. MLX Unified Memory (Apple Silicon)
     mx = _load_mlx()
     if mx is not None:
