@@ -1107,16 +1107,13 @@
       color: var(--text-muted);
     }
 
-    /* Domain 3: Hardware Telemetry Grid */
+    /* Domain 3: Hardware Telemetry Grid (2 Columns) */
     .hardware-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 14px;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
     }
-    @media (max-width: 1200px) {
-      .hardware-grid { grid-template-columns: repeat(2, 1fr); }
-    }
-    @media (max-width: 700px) {
+    @media (max-width: 900px) {
       .hardware-grid { grid-template-columns: 1fr; }
     }
 
@@ -1574,39 +1571,137 @@
     @media (max-width: 960px) {
       .pg-split { grid-template-columns: 1fr; }
     }
-    .field-group { margin-bottom: 14px; }
-    .field-lbl {
-      font-size: 10px;
+    /* Header Live Status Pill */
+    .status-live-pill {
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--accent-emerald-subtle);
+      border: 1px solid var(--accent-emerald-border);
+      color: var(--accent-emerald);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+    .status-live-pill.working {
+      background: var(--accent-amber-subtle);
+      border-color: var(--accent-amber-border);
+      color: var(--accent-amber);
+    }
+    .live-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 6px var(--accent-emerald);
+    }
+    .status-live-pill.working .live-dot {
+      background: var(--accent-amber);
+      box-shadow: 0 0 6px var(--accent-amber);
+    }
+
+    /* Playground Modern Form Styling */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-bottom: 14px;
+    }
+    .form-label {
+      font-size: 10.5px;
       font-weight: 700;
       color: var(--text-dim);
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      margin-bottom: 5px;
-      display: flex;
-      justify-content: space-between;
     }
-    .field-lbl .val { font-family: var(--mono); color: var(--text-title); }
-    .pg-input, .pg-select, .pg-textarea {
+    .form-select, .form-input, .form-textarea {
       width: 100%;
-      background: var(--bg-card-inner);
+      background: var(--bg-input);
       border: 1px solid var(--border-card);
       border-radius: 8px;
-      padding: 8px 12px;
+      padding: 9px 12px;
       color: var(--text-title);
-      font-size: 12.5px;
+      font-size: 13px;
+      font-family: var(--font);
       outline: none;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+      box-sizing: border-box;
     }
-    .pg-input:focus, .pg-select:focus, .pg-textarea:focus {
+    .form-select:focus, .form-input:focus, .form-textarea:focus {
       border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px var(--accent-primary-subtle);
     }
-    .pg-textarea { resize: vertical; min-height: 80px; font-family: var(--font); line-height: 1.4; }
-    .slider-row { display: flex; align-items: center; gap: 10px; }
-    .slider-row input[type="range"] { flex: 1; accent-color: var(--accent-primary); }
-    .preset-chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+    .form-select {
+      cursor: pointer;
+    }
+    .form-textarea {
+      resize: vertical;
+      min-height: 84px;
+      line-height: 1.5;
+    }
+    .form-row {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .slider-val {
+      font-family: var(--mono);
+      font-weight: 700;
+      font-size: 11.5px;
+      color: var(--text-title);
+    }
+    .form-range {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: var(--bar-bg);
+      outline: none;
+      accent-color: var(--accent-primary);
+      cursor: pointer;
+    }
+    .btn-run-primary {
+      width: 100%;
+      background: var(--accent-primary);
+      border: 1px solid var(--accent-primary);
+      color: #ffffff;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.15s ease;
+      box-shadow: 0 2px 8px rgba(37, 99, 235, 0.25);
+    }
+    .btn-run-primary:hover {
+      background: var(--accent-primary-hover);
+      border-color: var(--accent-primary-hover);
+    }
+    .btn-run-primary:disabled {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+    .pg-presets {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
     .btn-preset {
       font-size: 10.5px;
-      padding: 3px 8px;
+      font-weight: 500;
+      padding: 2px 8px;
       border-radius: 5px;
       background: var(--chip-bg);
       border: 1px solid var(--chip-border);
@@ -1614,21 +1709,58 @@
       cursor: pointer;
       transition: all 0.15s;
     }
-    .btn-preset:hover { color: var(--text-title); background: var(--border-card); }
-    .output-box {
+    .btn-preset:hover {
+      color: var(--text-title);
+      background: var(--border-card);
+      border-color: var(--border-card-subtle);
+    }
+    .pg-output-box {
       min-height: 280px;
-      max-height: 520px;
+      max-height: 480px;
       overflow-y: auto;
       background: var(--bg-card-inner);
       border: 1px solid var(--border-card);
       border-radius: 8px;
-      padding: 14px;
+      padding: 16px;
       font-family: var(--font);
       font-size: 13px;
-      line-height: 1.55;
+      line-height: 1.6;
       color: var(--text-title);
       white-space: pre-wrap;
       word-break: break-word;
+    }
+    .pg-media-box {
+      min-height: 280px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border-card);
+      border-radius: 8px;
+      padding: 16px;
+      overflow: hidden;
+    }
+    .pg-empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      gap: 10px;
+      color: var(--text-muted);
+      font-size: 12.5px;
+      padding: 40px 20px;
+    }
+    .pg-empty-state span {
+      font-size: 32px;
+      opacity: 0.85;
+    }
+    .pg-image-preview {
+      max-width: 100%;
+      max-height: 440px;
+      border-radius: 8px;
+      object-fit: contain;
+      box-shadow: var(--shadow-card);
     }
   </style>
 </head>
@@ -1702,36 +1834,34 @@
       </div>
 
       <div class="header-right">
-        <div class="header-chip-row">
-          <div class="chip" id="chip-device">Detecting...</div>
-          <div class="chip" id="chip-version" style="display:none;">v0.0.0</div>
-          <div class="chip" id="chip-uptime" style="display:none;">Uptime —</div>
-          <div class="chip" id="chip-streams" style="display:none;">0 active streams</div>
-          <div class="chip" id="chip-errors" style="display:none;">0 errors</div>
-          <div class="chip" id="header-status-pill">● Online · 127.0.0.1:18787</div>
+        <!-- Background telemetry elements preserved for JS/tests -->
+        <div style="display: none;">
+          <div id="chip-device">Detecting...</div>
+          <div id="chip-version">v0.0.0</div>
+          <div id="chip-uptime">Uptime —</div>
+          <div id="chip-streams">0 active streams</div>
         </div>
 
-        <!-- Light / System / Dark Theme Switcher -->
+        <div class="chip" id="chip-errors" style="display: none;">0 errors</div>
+        <div class="status-live-pill" id="header-status-pill"><span class="live-dot"></span> Live</div>
+
+        <!-- Sleek compact Theme Switcher -->
         <div class="theme-switcher" id="theme-switcher" role="radiogroup" aria-label="Theme mode">
-          <button type="button" class="btn-theme" data-theme-value="light" title="Light theme" aria-label="Light theme">
+          <button type="button" class="btn-theme" data-theme-value="light" title="Light Theme" aria-label="Light theme">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
-            <span>Light</span>
           </button>
-          <button type="button" class="btn-theme active" data-theme-value="system" title="System theme" aria-label="System theme">
+          <button type="button" class="btn-theme active" data-theme-value="system" title="System Theme" aria-label="System theme">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
-            <span>System</span>
           </button>
-          <button type="button" class="btn-theme" data-theme-value="dark" title="Dark theme" aria-label="Dark theme">
+          <button type="button" class="btn-theme" data-theme-value="dark" title="Dark Theme" aria-label="Dark theme">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
-            <span>Dark</span>
           </button>
         </div>
 
         <div class="interval-controls" id="monitor-interval-controls">
-          <button class="btn-interval" data-interval="500">0.5s</button>
-          <button class="btn-interval active" data-interval="1000">1.0s</button>
-          <button class="btn-interval" data-interval="2000">2.0s</button>
-          <button class="btn-interval" data-interval="5000">5.0s</button>
+          <button class="btn-interval" data-interval="500" title="Poll every 0.5s">0.5s</button>
+          <button class="btn-interval active" data-interval="1000" title="Poll every 1s">1s</button>
+          <button class="btn-interval" data-interval="3000" title="Poll every 3s">3s</button>
           <button class="btn-icon" id="btn-pause" title="Pause / Resume">⏸</button>
           <button class="btn-icon" id="btn-copy" title="Copy Telemetry JSON">📋</button>
         </div>
@@ -2380,6 +2510,8 @@
 
   
 
+
+
 <!-- VIEW 3: MODEL PACKS (BROWSE & DOWNLOAD) -->
   <div id="tab-view-packs" class="tab-view" style="display: none;">
     <div class="view-container">
@@ -2559,6 +2691,8 @@
   </div> <!-- /tab-view-packs -->
 
   
+
+
 
 <!-- VIEW 4: ENTERPRISE GOVERNANCE & POLICY -->
   <div id="tab-view-governance" class="tab-view" style="display: none;">
@@ -2951,43 +3085,42 @@
       if (archEl) archEl.textContent = `${data.device.name} · ${data.device.architecture || 'Unified Memory'}`;
     }
 
-    // Server chips
+    // Server identity
     if (data.server) {
       const vChip = document.getElementById('chip-version');
       const uChip = document.getElementById('chip-uptime');
       const sChip = document.getElementById('chip-streams');
       if (data.server.version) {
-        vChip.style.display = 'inline-block';
-        vChip.textContent = `v${data.server.version}`;
+        if (vChip) vChip.textContent = `v${data.server.version}`;
         const sbVer = document.getElementById('sidebar-version');
         if (sbVer) sbVer.textContent = `v${data.server.version} · Online`;
       }
-      if (data.server.uptime_human) {
-        uChip.style.display = 'inline-block';
+      if (data.server.uptime_human && uChip) {
         uChip.textContent = `Up ${data.server.uptime_human}`;
       }
-      if (data.server.active_streams != null) {
-        sChip.style.display = 'inline-block';
+      if (data.server.active_streams != null && sChip) {
         sChip.textContent = `${data.server.active_streams} active stream${data.server.active_streams === 1 ? '' : 's'}`;
       }
     }
 
-    // Errors chip
+    // Errors chip in header
     if (data.errors) {
       const eChip = document.getElementById('chip-errors');
       const count = data.errors.recent_count ?? 0;
-      eChip.style.display = 'inline-block';
-      eChip.textContent = `${count} error${count === 1 ? '' : 's'} (5m)`;
-      eChip.className = count > 0 ? 'chip error-pulse' : 'chip';
+      if (eChip) {
+        eChip.style.display = count > 0 ? 'inline-block' : 'none';
+        eChip.textContent = `${count} error${count === 1 ? '' : 's'} (5m)`;
+        eChip.className = count > 0 ? 'chip error-pulse' : 'chip';
+      }
     }
 
-    // Activity banner & header pill
+    // Header live status pill & Activity Banner
     const headerPill = document.getElementById('header-status-pill');
     const actBanner = document.getElementById('live-activity-banner');
     if (data.activity && data.activity.is_busy) {
       if (headerPill) {
-        headerPill.textContent = `⚡ Working (${(data.activity.elapsed_seconds || 0).toFixed(1)}s)`;
-        headerPill.className = 'chip warn-pulse';
+        headerPill.innerHTML = `<span class="activity-spinner" style="width: 8px; height: 8px; border-width: 1.5px;"></span> Working (${(data.activity.elapsed_seconds || 0).toFixed(1)}s)`;
+        headerPill.className = 'status-live-pill working';
       }
       if (actBanner) {
         actBanner.style.display = 'flex';
@@ -2998,8 +3131,8 @@
       }
     } else {
       if (headerPill) {
-        headerPill.textContent = 'Live Monitoring';
-        headerPill.className = 'chip';
+        headerPill.innerHTML = '<span class="live-dot"></span> Live';
+        headerPill.className = 'status-live-pill';
       }
       if (actBanner) {
         actBanner.style.display = 'none';
@@ -3913,6 +4046,8 @@
       setTimeout(() => { btnSttCopy.textContent = '📋 Copy Transcript'; }, 2000);
     });
   }
+
+  
 
   
 
