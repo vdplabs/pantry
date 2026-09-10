@@ -3417,6 +3417,16 @@
   const throughputHistory = [];
   const gpuHistories = {};
 
+  function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
   // Theme Switching Engine with Persistence
   const THEME_KEY = 'pantry-theme-preference';
 
@@ -4161,8 +4171,8 @@
     }
 
     // 7. Update Analytics Views
-    renderPerformance(data);
-    renderUsage(data);
+    try { renderPerformance(data); } catch (e) { console.error('Error in renderPerformance:', e); }
+    try { renderUsage(data); } catch (e) { console.error('Error in renderUsage:', e); }
   }
 
 
@@ -4350,7 +4360,8 @@
       }
     }
 
-    const totalReqs = sess.requests || modelKeys.reduce((acc, k) => acc + (models[k].session_requests || 0), 0);
+    const allModelsReqs = modelKeys.reduce((acc, k) => acc + (models[k].session_requests || 0), 0);
+    const totalReqs = Math.max(sess.requests || 0, allModelsReqs);
     const kpiReq = document.getElementById('usage-kpi-requests');
     if (kpiReq) kpiReq.textContent = (totalReqs || 0).toLocaleString();
 
@@ -4405,7 +4416,8 @@
           const pOut = m.session_completion_tokens || 0;
           const pTot = m.session_total_tokens || 0;
           const reqs = m.session_requests || 0;
-          const share = effReqBase > 0 ? ((reqs / effReqBase) * 100.0).toFixed(1) : '0.0';
+          const sharePercent = effReqBase > 0 ? Math.min(100, Math.max(0, (reqs / effReqBase) * 100.0)) : 0.0;
+          const share = sharePercent.toFixed(1);
           let savedUsd = m.cost_saved_usd || 0.0;
           if (savedUsd === 0) {
             if (mod === 'image') savedUsd = (m.session_requests || 0) * 0.04;
@@ -4584,10 +4596,10 @@
       fetchPlaygroundModels();
     }
     if (tab === 'performance' && lastStats) {
-      renderPerformance(lastStats);
+      try { renderPerformance(lastStats); } catch (e) { console.error('Error rendering performance on tab switch:', e); }
     }
     if (tab === 'usage' && lastStats) {
-      renderUsage(lastStats);
+      try { renderUsage(lastStats); } catch (e) { console.error('Error rendering usage on tab switch:', e); }
     }
   }
 
