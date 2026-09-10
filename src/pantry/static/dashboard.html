@@ -4406,7 +4406,14 @@
           const pTot = m.session_total_tokens || 0;
           const reqs = m.session_requests || 0;
           const share = effReqBase > 0 ? ((reqs / effReqBase) * 100.0).toFixed(1) : '0.0';
-          const saved = `$${(m.cost_saved_usd != null ? m.cost_saved_usd : 0.00).toFixed(2)}`;
+          let savedUsd = m.cost_saved_usd || 0.0;
+          if (savedUsd === 0) {
+            if (mod === 'image') savedUsd = (m.session_requests || 0) * 0.04;
+            else if (mod === 'video') savedUsd = (m.session_requests || 0) * 0.20;
+            else if (mod === 'audio') savedUsd = ((m.audio_seconds || 0) / 60) * 0.006;
+            else if (mod === 'music') savedUsd = ((m.audio_seconds || 0) / 60) * 0.03;
+          }
+          const saved = `$${savedUsd.toFixed(2)}`;
 
           let pInStr = pIn ? pIn.toLocaleString() : '—';
           let pOutStr = pOut ? pOut.toLocaleString() : '—';
