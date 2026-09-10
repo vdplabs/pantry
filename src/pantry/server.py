@@ -122,9 +122,7 @@ class Service:
         self._model_last_used: dict[str, float] = {}
         self._idle_timeout_seconds: float = float(os.environ.get("PANTRY_IDLE_TIMEOUT", "300"))
         self._start_time: float = time.time()
-        self._current_loading: str | None = None
-        self._current_activity: str | None = None
-        self._loading_start_time: float | None = None
+        self._active_operations: dict[str, dict[str, Any]] = {}
         self._recent_events: list[dict[str, Any]] = [
             {"time": time.strftime("%H:%M:%S"), "message": f"Daemon started (v{__version__}) on 127.0.0.1:18787"}
         ]
@@ -152,51 +150,75 @@ class Service:
             if len(self._recent_events) > 30:
                 self._recent_events.pop(0)
 
-    def set_loading(self, model_or_package_id: str | None, activity: str | None = None) -> None:
+    def start_operation(self, op_id: str, model_or_package_id: str, activity: str, modality: str = "text") -> None:
         with self._lock:
-            prev_loading = self._current_loading
-            self._current_loading = model_or_package_id
-            self._current_activity = activity
-            if model_or_package_id is not None:
-                self._loading_start_time = time.time()
-                act_str = activity or "Loading weights"
-                self._recent_events.append({
-                    "time": time.strftime("%H:%M:%S"),
-                    "timestamp": time.time(),
-                    "message": f"Started: {act_str} ({model_or_package_id})",
-                })
-            else:
-                if self._loading_start_time is not None:
-                    dur = round(time.time() - self._loading_start_time, 2)
-                    target = f" for {prev_loading}" if prev_loading else ""
-                    self._recent_events.append({
-                        "time": time.strftime("%H:%M:%S"),
-                        "timestamp": time.time(),
-                        "message": f"Finished operation ({dur}s){target}",
-                    })
-                self._loading_start_time = None
+            self._active_operations[op_id] = {
+                "op_id": op_id,
+                "model": model_or_package_id,
+                "activity": activity,
+                "modality": modality,
+                "start_time": time.time(),
+            }
+            self._recent_events.append({
+                "time": time.strftime("%H:%M:%S"),
+                "timestamp": time.time(),
+                "message": f"Started: {activity} ({model_or_package_id})",
+            })
             if len(self._recent_events) > 30:
                 self._recent_events.pop(0)
 
+    def finish_operation(self, op_id: str) -> None:
+        with self._lock:
+            op = self._active_operations.pop(op_id, None)
+            if op:
+                dur = round(time.time() - op["start_time"], 2)
+                self._recent_events.append({
+                    "time": time.strftime("%H:%M:%S"),
+                    "timestamp": time.time(),
+                    "message": f"Finished operation ({dur}s) for {op['model']}",
+                })
+            if len(self._recent_events) > 30:
+                self._recent_events.pop(0)
+
+    def set_loading(self, model_or_package_id: str | None, activity: str | None = None) -> None:
+        with self._lock:
+            if model_or_package_id is None:
+                self.finish_operation("_legacy_op")
+            else:
+                self.start_operation("_legacy_op", model_or_package_id, activity or "Loading weights…", "text")
+
     def get_loading_info(self) -> dict[str, Any]:
         with self._lock:
-            elapsed = 0.0
-            if self._loading_start_time is not None:
-                elapsed = round(time.time() - self._loading_start_time, 1)
+            now = time.time()
+            ops = [
+                {
+                    "op_id": op["op_id"],
+                    "model": op["model"],
+                    "activity": op["activity"],
+                    "modality": op.get("modality", "text"),
+                    "elapsed_seconds": round(now - op["start_time"], 1),
+                }
+                for op in self._active_operations.values()
+            ]
+            primary = ops[-1] if ops else None
             return {
-                "loading": self._current_loading,
-                "activity": self._current_activity,
-                "elapsed_seconds": elapsed,
+                "is_busy": len(ops) > 0,
+                "active_count": len(ops),
+                "operations": ops,
+                "loading": primary["model"] if primary else None,
+                "activity": primary["activity"] if primary else None,
+                "elapsed_seconds": primary["elapsed_seconds"] if primary else 0.0,
                 "events": list(self._recent_events),
             }
 
     @contextmanager
-    def tracking_load(self, model_or_package_id: str, activity: str = "Loading model…"):
-        self.set_loading(model_or_package_id, activity)
+    def tracking_load(self, model_or_package_id: str, activity: str = "Loading model…", modality: str = "text"):
+        op_id = f"op-{uuid.uuid4().hex[:8]}"
+        self.start_operation(op_id, model_or_package_id, activity, modality)
         try:
-            yield
+            yield op_id
         finally:
-            self.set_loading(None, None)
+            self.finish_operation(op_id)
 
     def packages(self) -> list[PackageManifest]:
         return self.store.list_manifests()
@@ -463,7 +485,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         usage_info: dict[str, int] = {}
 
         async def _complete() -> str:
-            with svc.tracking_load(pkg.id, "Generating chat response…"):
+            with svc.tracking_load(pkg.id, "Generating chat response…", modality="text"):
                 return await runtime.complete(
                     pkg,
                     req.messages,
@@ -477,7 +499,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         if not req.stream:
             t0 = time.time()
             try:
-                text = await svc.scheduler.run(req.priority, _complete, modality="text")
+                text = await svc.scheduler.run(req.priority, _complete, modality="text", model=req.model, description="Generating chat response…")
                 duration_s = max(0.01, time.time() - t0)
                 tool_calls = _parse_tool_calls(text) if req.tools else None
                 message_obj: dict[str, Any] = {
@@ -548,8 +570,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             svc.active_streams += 1
 
             async def _locked_stream() -> AsyncIterator[str]:
-                async with svc.scheduler.hold(req.priority, modality="text"):
-                    with svc.tracking_load(pkg.id, "Streaming chat response…"):
+                async with svc.scheduler.hold(req.priority, modality="text", model=req.model, description="Streaming chat response…"):
+                    with svc.tracking_load(pkg.id, "Streaming chat response…", modality="text"):
                         async for chunk in runtime.stream(
                             pkg,
                             req.messages,
@@ -719,7 +741,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
         if not complete_req.stream:
             async def _complete() -> str:
-                with svc.tracking_load(pkg.id, "Generating chat response…"):
+                with svc.tracking_load(pkg.id, "Generating chat response…", modality="text"):
                     return await runtime.complete(
                         pkg,
                         complete_req.messages,
@@ -730,7 +752,13 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                         tools=complete_req.tools,
                     )
 
-            text = await svc.scheduler.run(complete_req.priority, _complete, modality="text")
+            text = await svc.scheduler.run(
+                complete_req.priority,
+                _complete,
+                modality="text",
+                model=complete_req.model,
+                description="Generating chat response…",
+            )
             usage = usage_info if usage_info else _estimate_usage(pkg, complete_req.messages, text)
             return {
                 "id": resp_id,
@@ -763,8 +791,13 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             svc.active_streams += 1
 
             async def _locked_stream() -> AsyncIterator[str]:
-                async with svc.scheduler.hold(complete_req.priority, modality="text"):
-                    with svc.tracking_load(pkg.id, "Streaming chat response…"):
+                async with svc.scheduler.hold(
+                    complete_req.priority,
+                    modality="text",
+                    model=complete_req.model,
+                    description="Streaming chat response…",
+                ):
+                    with svc.tracking_load(pkg.id, "Streaming chat response…", modality="text"):
                         async for chunk in runtime.stream(
                             pkg,
                             complete_req.messages,
@@ -881,7 +914,11 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             return runtime.embed(pkg, inputs)
 
         embeddings_data, usage = await svc.scheduler.run(
-            req.priority, lambda: asyncio.to_thread(_run_embed), modality="embed"
+            req.priority,
+            lambda: asyncio.to_thread(_run_embed),
+            modality="embed",
+            model=req.model,
+            description="Generating embeddings…",
         )
         TokenMetricsTracker.get().record_embeddings(
             model=req.model,
@@ -956,7 +993,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     loop.call_soon_threadsafe(queue.put_nowait, ("step", step_payload))
 
                 def _worker_fn() -> list[dict]:
-                    with svc.tracking_load(pkg.id, "Generating image / loading weights…"):
+                    with svc.tracking_load(pkg.id, "Generating image / loading weights…", modality="image"):
                         return runtime.generate(
                             pkg,
                             prompt=req.prompt,
@@ -974,7 +1011,13 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     try:
                         async def _sched_call() -> list[dict]:
                             return await asyncio.to_thread(_worker_fn)
-                        gen_data = await svc.scheduler.run(req.priority, _sched_call, modality="image")
+                        gen_data = await svc.scheduler.run(
+                            req.priority,
+                            _sched_call,
+                            modality="image",
+                            model=req.model,
+                            description="Generating image / diffusion steps…",
+                        )
                         if want_shm:
                             for item in gen_data:
                                 img_path = Path(item["path"]) if "path" in item else None
@@ -990,14 +1033,13 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                                         },
                                     )
                                     item["shm"] = desc.to_dict()
-                                    if (req.response_format or "").lower() == "shm":
-                                        item.pop("b64_json", None)
-                        await queue.put(("done", gen_data))
+                                    item.pop("b64_json", None)
+                        loop.call_soon_threadsafe(queue.put_nowait, ("done", gen_data))
                     except Exception as exc:
-                        await queue.put(("error", str(exc)))
+                        loop.call_soon_threadsafe(queue.put_nowait, ("error", exc))
 
+                task = asyncio.create_task(_worker_task())
                 try:
-                    task = asyncio.create_task(_worker_task())
                     while True:
                         kind, payload = await queue.get()
                         if kind == "step":
@@ -1148,7 +1190,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         runtime = music_runtime_for(pkg, store)
 
         def _audio_fn() -> list[dict]:
-            with svc.tracking_load(pkg.id, "Generating music / loading weights…"):
+            with svc.tracking_load(pkg.id, "Generating music / loading weights…", modality="audio"):
                 return runtime.generate(
                     pkg,
                     prompt=req.prompt,
@@ -1159,7 +1201,13 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         async def _gen() -> list[dict]:
             return await asyncio.to_thread(_audio_fn)
 
-        data = await svc.scheduler.run(req.priority, _gen, modality="audio")
+        data = await svc.scheduler.run(
+            req.priority,
+            _gen,
+            modality="audio",
+            model=req.model,
+            description="Generating music / rendering audio…",
+        )
 
         want_shm = (req.response_format or "").lower() == "shm" or request.headers.get("x-pantry-transport", "").lower() == "shm"
         if want_shm:
@@ -1220,7 +1268,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         runtime = video_runtime_for(pkg, store)
 
         def _video_fn() -> list[dict]:
-            with svc.tracking_load(pkg.id, "Generating video / rendering frames…"):
+            with svc.tracking_load(pkg.id, "Generating video / rendering frames…", modality="video"):
                 return runtime.generate(
                     pkg,
                     prompt=req.prompt,
@@ -1241,7 +1289,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         async def _gen() -> list[dict]:
             return await asyncio.to_thread(_video_fn)
 
-        data = await svc.scheduler.run(req.priority, _gen, modality="video")
+        data = await svc.scheduler.run(req.priority, _gen, modality="video", model=req.model, description="Generating video / rendering frames…")
         elapsed = round(time.time() - t0, 2)
         print(
             f"[pantry.server] POST /v1/video/generations completed successfully in {elapsed}s for '{pkg.id}'",
@@ -1349,21 +1397,28 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
         async def _transcribe() -> dict[str, Any]:
             try:
-                return await asyncio.to_thread(
-                    runtime.transcribe,
-                    pkg,
-                    audio_path=tmp_path,
-                    language=language,
-                    prompt=prompt,
-                    temperature=temperature,
-                    word_timestamps=word_timestamps,
-                    original_filename=file.filename,
-                )
+                with svc.tracking_load(pkg.id, "Transcribing audio / loading model…", modality="stt"):
+                    return await asyncio.to_thread(
+                        runtime.transcribe,
+                        pkg,
+                        audio_path=tmp_path,
+                        language=language,
+                        prompt=prompt,
+                        temperature=temperature,
+                        word_timestamps=word_timestamps,
+                        original_filename=file.filename,
+                    )
             finally:
                 tmp_path.unlink(missing_ok=True)
 
         t0 = time.time()
-        result = await svc.scheduler.run("interactive", _transcribe, modality="stt")
+        result = await svc.scheduler.run(
+            "interactive",
+            _transcribe,
+            modality="stt",
+            model=model,
+            description="Transcribing audio…",
+        )
         dur_ms = int(max(0.01, time.time() - t0) * 1000)
         audio_dur = 0.0
         for seg in result.get("segments", []):

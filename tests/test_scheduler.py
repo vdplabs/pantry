@@ -56,3 +56,55 @@ def test_scheduler_serializes_same_modality():
         assert events == ["a_start", "a_end", "b_start", "b_end"]
 
     asyncio.run(_test())
+
+
+def test_scheduler_queue_stats_with_job_tracking():
+    async def _test():
+        sched = Scheduler()
+
+        started = asyncio.Event()
+        finish = asyncio.Event()
+
+        async def worker_a():
+            started.set()
+            await finish.wait()
+            return "ok"
+
+        async def worker_b():
+            return "b_done"
+
+        t1 = asyncio.create_task(
+            sched.run("interactive", worker_a, modality="video", model="video-model-1", description="Rendering frames")
+        )
+        await started.wait()
+
+        # Enqueue second video job while first holds lock
+        t2 = asyncio.create_task(
+            sched.run("batch", worker_b, modality="video", model="video-model-2", description="Queued video")
+        )
+        await asyncio.sleep(0.01)
+
+        stats = sched.get_queue_stats()
+        assert stats["active"] == 1
+        assert stats["queued"] == 1
+        assert len(stats["active_jobs"]) == 1
+        assert stats["active_jobs"][0]["model"] == "video-model-1"
+        assert stats["active_jobs"][0]["modality"] == "video"
+        assert stats["active_jobs"][0]["description"] == "Rendering frames"
+        assert stats["active_jobs"][0]["elapsed_seconds"] >= 0.0
+
+        assert len(stats["queued_jobs"]) == 1
+        assert stats["queued_jobs"][0]["model"] == "video-model-2"
+        assert stats["queued_jobs"][0]["description"] == "Queued video"
+
+        finish.set()
+        await asyncio.gather(t1, t2)
+
+        stats_after = sched.get_queue_stats()
+        assert stats_after["active"] == 0
+        assert stats_after["queued"] == 0
+        assert stats_after["active_jobs"] == []
+        assert stats_after["queued_jobs"] == []
+
+    asyncio.run(_test())
+

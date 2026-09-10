@@ -396,3 +396,49 @@ def test_model_performance_and_usage_tracking(tmp_path):
     assert spec["speedup_factor"] > 1.0
 
 
+def test_monitor_concurrent_operations_and_queue(tmp_path):
+    store = PackageStore(tmp_path)
+    app = create_app(store)
+    svc = getattr(app.state, "svc", None)
+    client = TestClient(app)
+
+    # 1. Start two concurrent operations (e.g. video generation and chat)
+    svc.start_operation("op-vid-1", "vdplabs.ltx-video.standard.v1", "Generating video / rendering frames…", "video")
+    svc.start_operation("op-chat-1", "vdplabs.qwen25-1.5b.standard.v1", "Streaming chat response…", "text")
+
+    resp = client.get("/v1/monitor/stats")
+    assert resp.status_code == 200
+    data = resp.json()
+
+    assert data["activity"]["is_busy"] is True
+    assert data["activity"]["active_count"] == 2
+    ops = data["activity"]["operations"]
+    assert len(ops) == 2
+    models = {op["model"] for op in ops}
+    assert "vdplabs.ltx-video.standard.v1" in models
+    assert "vdplabs.qwen25-1.5b.standard.v1" in models
+
+    # 2. Chat finishes first — video must REMAIN active and visible (regression test for user bug)
+    svc.finish_operation("op-chat-1")
+
+    resp2 = client.get("/v1/monitor/stats")
+    assert resp2.status_code == 200
+    data2 = resp2.json()
+    assert data2["activity"]["is_busy"] is True
+    assert data2["activity"]["active_count"] == 1
+    ops2 = data2["activity"]["operations"]
+    assert len(ops2) == 1
+    assert ops2[0]["model"] == "vdplabs.ltx-video.standard.v1"
+    assert ops2[0]["activity"] == "Generating video / rendering frames…"
+
+    # 3. Video finishes
+    svc.finish_operation("op-vid-1")
+    resp3 = client.get("/v1/monitor/stats")
+    assert resp3.status_code == 200
+    data3 = resp3.json()
+    assert data3["activity"]["is_busy"] is False
+    assert data3["activity"]["active_count"] == 0
+    assert len(data3["activity"]["operations"]) == 0
+
+
+

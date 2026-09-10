@@ -513,10 +513,13 @@ class TelemetryCollector:
                         loading_title = m.get("title")
                         break
 
+            loading_ops = loading_info.get("operations", [])
             fresh = dict(cached)
             fresh["timestamp"] = now
             fresh["activity"] = {
                 "is_busy": is_busy,
+                "active_count": len(loading_ops),
+                "operations": loading_ops,
                 "loading": loading_id,
                 "loading_title": loading_title,
                 "activity": activity_text,
@@ -528,7 +531,7 @@ class TelemetryCollector:
                 inf["queue"] = (
                     self.svc.scheduler.get_queue_stats()
                     if (self.svc and hasattr(self.svc, "scheduler"))
-                    else {"active": 0, "queued": 0, "max_concurrency": 4}
+                    else {"active": 0, "queued": 0, "max_concurrency": 4, "active_jobs": [], "queued_jobs": []}
                 )
                 fresh["inference"] = inf
             except Exception:
@@ -585,10 +588,13 @@ class TelemetryCollector:
             activity_text = loading_info.get("activity")
             elapsed_s = loading_info.get("elapsed_seconds", 0.0)
             events = loading_info.get("events", [])
-            is_busy = bool(loading_id or activity_text)
+            is_busy = bool(loading_id or activity_text or loading_info.get("operations"))
+            loading_ops = loading_info.get("operations", [])
 
             activity_data = {
                 "is_busy": is_busy,
+                "active_count": len(loading_ops),
+                "operations": loading_ops,
                 "loading": loading_id,
                 "loading_title": loading_id,
                 "activity": activity_text,
@@ -1113,9 +1119,13 @@ class TelemetryCollector:
         hw_info: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         try:
-            loading_id = (loading_info or {}).get("loading")
-            activity_text = (loading_info or {}).get("activity")
-            elapsed_s = (loading_info or {}).get("elapsed_seconds", 0.0)
+            ops_list = (loading_info or {}).get("operations") or []
+            if not ops_list and (loading_info or {}).get("loading"):
+                ops_list = [{
+                    "model": (loading_info or {}).get("loading"),
+                    "activity": (loading_info or {}).get("activity") or "Loading weights…",
+                    "elapsed_seconds": (loading_info or {}).get("elapsed_seconds", 0.0),
+                }]
 
             loaded_ids: list[str] = state.get("loaded", [])
             try:
@@ -1123,6 +1133,19 @@ class TelemetryCollector:
             except Exception:
                 manifests = []
             by_id = {m.id: m for m in manifests}
+
+            def _match_op(pkg_id: str, man_obj: Any = None) -> dict[str, Any] | None:
+                aliases = list(getattr(man_obj, "aliases", [])) if man_obj else []
+                title = _model_title(man_obj, pkg_id) if man_obj else pkg_id
+                candidates = [pkg_id, title] + aliases
+                for op in ops_list:
+                    m = (op.get("model") or "").strip()
+                    if not m:
+                        continue
+                    for c in candidates:
+                        if c == m or c.startswith(m) or m.startswith(c):
+                            return op
+                return None
 
             active_items = []
             total_resident = 0
@@ -1138,17 +1161,13 @@ class TelemetryCollector:
                 resident_bytes = _model_ram_bytes(man, default_gb=2.0)
                 total_resident += resident_bytes
 
-                is_curr_loading = bool(
-                    loading_id
-                    and (
-                        pkg_id == loading_id
-                        or pkg_id.startswith(loading_id)
-                        or loading_id.startswith(pkg_id)
-                    )
-                )
+                active_op = _match_op(pkg_id, man)
+                is_curr_loading = active_op is not None
                 status_label = "Resident in RAM"
+                elapsed_s = 0.0
                 if is_curr_loading:
-                    status_label = activity_text or "Loading weights…"
+                    status_label = active_op.get("activity") or "Working…"
+                    elapsed_s = active_op.get("elapsed_seconds", 0.0)
 
                 quant = _model_quantization(man, pkg_id)
                 rt = _model_runtime(man, hw_info)
@@ -1168,7 +1187,7 @@ class TelemetryCollector:
                     "resident_human": _fmt_bytes(resident_bytes) or "0 B",
                     "status": status_label,
                     "is_loading": is_curr_loading,
-                    "elapsed_seconds": elapsed_s if is_curr_loading else 0.0,
+                    "elapsed_seconds": elapsed_s,
                     "quantization": quant,
                     "runtime": rt,
                     "context_length": ctx_len,
@@ -1185,17 +1204,13 @@ class TelemetryCollector:
                         modality = str(man.modalities[0])
                     role = str(getattr(man, "role", "chat") or "chat")
 
-                    is_curr_loading = bool(
-                        loading_id
-                        and (
-                            man.id == loading_id
-                            or man.id.startswith(loading_id)
-                            or loading_id.startswith(man.id)
-                        )
-                    )
+                    active_op = _match_op(man.id, man)
+                    is_curr_loading = active_op is not None
                     status_label = "Standby"
+                    elapsed_s = 0.0
                     if is_curr_loading:
-                        status_label = activity_text or "Loading weights…"
+                        status_label = active_op.get("activity") or "Loading weights…"
+                        elapsed_s = active_op.get("elapsed_seconds", 0.0)
 
                     quant = _model_quantization(man, man.id)
                     rt = _model_runtime(man, hw_info)
@@ -1210,7 +1225,7 @@ class TelemetryCollector:
                         "resident_human": f"~{_fmt_bytes(est_b) or '0 B'}",
                         "status": status_label,
                         "is_loading": is_curr_loading,
-                        "elapsed_seconds": elapsed_s if is_curr_loading else 0.0,
+                        "elapsed_seconds": elapsed_s,
                         "quantization": quant,
                         "runtime": rt,
                         "context_length": ctx_len,
@@ -1226,7 +1241,7 @@ class TelemetryCollector:
             ):
                 total_resident = mem_snap.get("active_bytes", 0)
 
-            # Sort currently loading models first so they are never truncated by the slice limit
+            # Sort currently loading/active models first so they are prominent
             available_items.sort(key=lambda m: not m.get("is_loading", False))
 
             return {
@@ -1235,7 +1250,7 @@ class TelemetryCollector:
                 "cache_pool_bytes": cache_pool_bytes,
                 "cache_pool_human": _fmt_bytes(cache_pool_bytes) or "0 B",
                 "resident_models": active_items,
-                "available_models": available_items[:8],
+                "available_models": available_items,
             }
         except Exception:
             return {
