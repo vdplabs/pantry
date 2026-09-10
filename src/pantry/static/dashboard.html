@@ -20,6 +20,8 @@
       --bg-sidebar: #060910;
       --bg-header: rgba(8, 12, 20, 0.85);
       --bg-card: rgba(13, 19, 32, 0.72);
+      --bg-surface: #0e1526;
+      --bg-subtle: rgba(255, 255, 255, 0.04);
       --bg-card-elevated: #111827;
       --bg-card-inner: rgba(0, 0, 0, 0.28);
       --bg-input: rgba(6, 10, 18, 0.65);
@@ -71,6 +73,8 @@
       --bg-sidebar: #ffffff;
       --bg-header: rgba(255, 255, 255, 0.88);
       --bg-card: #ffffff;
+      --bg-surface: #ffffff;
+      --bg-subtle: rgba(15, 23, 42, 0.03);
       --bg-card-elevated: #ffffff;
       --bg-card-inner: #f8fafc;
       --bg-input: #ffffff;
@@ -581,62 +585,78 @@
     .platform-vitals-strip {
       display: grid;
       grid-template-columns: repeat(5, 1fr);
-      gap: 12px;
+      gap: 14px;
       margin: 16px 24px 0 24px;
     }
-    @media (max-width: 1100px) {
+    @media (max-width: 1280px) {
+      .platform-vitals-strip { grid-template-columns: repeat(3, 1fr); }
+    }
+    @media (max-width: 800px) {
       .platform-vitals-strip { grid-template-columns: repeat(2, 1fr); }
     }
-    @media (max-width: 600px) {
+    @media (max-width: 500px) {
       .platform-vitals-strip { grid-template-columns: 1fr; }
     }
     .vital-card {
-      background: var(--bg-card);
+      background: var(--bg-surface);
       border: 1px solid var(--border-card);
-      border-radius: 10px;
-      padding: 10px 14px;
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
       display: flex;
-      align-items: center;
-      gap: 10px;
+      flex-direction: column;
+      gap: 6px;
       box-shadow: var(--shadow-card);
-      transition: border-color 0.15s ease;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     }
     .vital-card:hover {
       border-color: var(--border-highlight);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
     }
-    .vital-icon {
-      font-size: 18px;
-      line-height: 1;
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      background: var(--chip-bg);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      flex-shrink: 0;
+    .vital-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--border-card);
     }
-    .vital-meta {
-      min-width: 0;
-      display: flex;
-      flex-direction: column;
+    .vital-card.accent-glow::before {
+      background: linear-gradient(90deg, var(--accent-primary), #38bdf8);
+    }
+    .vital-card.roi-glow::before {
+      background: linear-gradient(90deg, #10b981, #059669);
     }
     .vital-lbl {
-      font-size: 9.5px;
-      font-weight: 700;
-      color: var(--text-dim);
-      letter-spacing: 0.5px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
       text-transform: uppercase;
-      margin-bottom: 2px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
     }
     .vital-val {
-      font-size: 12px;
-      font-weight: 600;
-      color: var(--text-title);
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
       font-family: var(--mono);
+      letter-spacing: -0.02em;
+      line-height: 1.25;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .vital-sub {
+      font-size: 11.5px;
+      color: var(--text-secondary);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -688,28 +708,31 @@
 
     /* Softer Modern Cards */
     .card {
-      background: var(--bg-card);
+      background: var(--bg-surface);
       border: 1px solid var(--border-card);
-      border-radius: 12px;
-      padding: 16px 18px;
+      border-radius: var(--radius-lg);
+      padding: 18px 20px;
       box-shadow: var(--shadow-card);
-      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
     }
     .card:hover {
-      border-color: var(--border-card-subtle);
+      border-color: var(--border-highlight);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
     }
     .card-header {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 12px;
+      margin-bottom: 14px;
     }
     .card-title {
-      font-size: 13px;
+      font-size: 13.5px;
       font-weight: 600;
       display: flex;
       align-items: center;
-      gap: 7px;
+      gap: 8px;
       color: var(--text-title);
     }
     .card-value {
@@ -2219,40 +2242,30 @@
 
   <!-- Hero Platform Vitals Strip -->
   <div class="platform-vitals-strip">
-    <div class="vital-card">
-      <div class="vital-icon">💻</div>
-      <div class="vital-meta">
-        <div class="vital-lbl">HOST & ARCHITECTURE</div>
-        <div class="vital-val" id="vital-chip-arch">Apple M1 Pro · Unified Memory</div>
-      </div>
+    <div class="vital-card accent-glow">
+      <div class="vital-lbl"><span>💻</span> Host & Architecture</div>
+      <div class="vital-val font-mono" id="vital-chip-arch">Apple M1 Pro</div>
+      <div class="vital-sub" id="vital-chip-arch-sub">Apple Silicon Unified Memory</div>
+    </div>
+    <div class="vital-card roi-glow">
+      <div class="vital-lbl"><span>🧠</span> Unified RAM Pool</div>
+      <div class="vital-val font-mono" id="vital-resident" style="color: var(--accent-emerald);">0 B Resident</div>
+      <div class="vital-sub" id="vital-resident-sub">Total Pool: 16.00 GB</div>
     </div>
     <div class="vital-card">
-      <div class="vital-icon">🧠</div>
-      <div class="vital-meta">
-        <div class="vital-lbl">UNIFIED RAM POOL</div>
-        <div class="vital-val" id="vital-resident">0 B Resident · 16.00 GB Pool</div>
-      </div>
+      <div class="vital-lbl"><span>⚡</span> Inference Pipeline</div>
+      <div class="vital-val font-mono" id="vital-tps">0.0 tok/s</div>
+      <div class="vital-sub" id="vital-tps-sub">Nominal Throughput</div>
     </div>
     <div class="vital-card">
-      <div class="vital-icon">⚡</div>
-      <div class="vital-meta">
-        <div class="vital-lbl">INFERENCE PIPELINE</div>
-        <div class="vital-val" id="vital-tps">0.0 tok/s · Nominal</div>
-      </div>
+      <div class="vital-lbl"><span>🚦</span> Concurrency Queue</div>
+      <div class="vital-val font-mono" id="vital-queue">0 / 4 Active</div>
+      <div class="vital-sub" id="vital-queue-sub">0 Queued in pipeline</div>
     </div>
     <div class="vital-card">
-      <div class="vital-icon">🚦</div>
-      <div class="vital-meta">
-        <div class="vital-lbl">CONCURRENCY QUEUE</div>
-        <div class="vital-val" id="vital-queue">0 / 4 Active · 0 Queued</div>
-      </div>
-    </div>
-    <div class="vital-card">
-      <div class="vital-icon">🧩</div>
-      <div class="vital-meta">
-        <div class="vital-lbl">CAS STORAGE SAVINGS</div>
-        <div class="vital-val" id="vital-cas">0 B Saved (1.0x Dedup)</div>
-      </div>
+      <div class="vital-lbl"><span>🧩</span> CAS Storage Savings</div>
+      <div class="vital-val font-mono" id="vital-cas">0 B Saved</div>
+      <div class="vital-sub" id="vital-cas-sub">1.0x Storage Dedup Ratio</div>
     </div>
   </div>
 
@@ -3722,7 +3735,9 @@
       if (sbHost) sbHost.textContent = data.device.name;
 
       const archEl = document.getElementById('vital-chip-arch');
-      if (archEl) archEl.textContent = `${data.device.name} · ${data.device.architecture || 'Unified Memory'}`;
+      const archSub = document.getElementById('vital-chip-arch-sub');
+      if (archEl) archEl.textContent = data.device.name || 'Apple Silicon';
+      if (archSub) archSub.textContent = data.device.architecture || 'Unified Memory Architecture';
     }
 
     // Server identity
@@ -3841,7 +3856,9 @@
       document.getElementById('metal-pool').textContent = aim.cache_pool_human;
 
       const resVital = document.getElementById('vital-resident');
-      if (resVital) resVital.textContent = `${aim.total_resident_human} Resident · ${mem.total_human} Pool`;
+      const resVitalSub = document.getElementById('vital-resident-sub');
+      if (resVital) resVital.textContent = `${aim.total_resident_human} Resident`;
+      if (resVitalSub) resVitalSub.textContent = `Total Pool: ${mem.total_human}`;
 
       const totalMemBytes = mem.total_bytes || 1;
       const weightBytes = aim.total_resident_bytes || 0;
@@ -3877,7 +3894,9 @@
         document.getElementById('queue-max').textContent = inf.queue.max_concurrency ?? '—';
 
         const qVital = document.getElementById('vital-queue');
-        if (qVital) qVital.textContent = `${inf.queue.active ?? 0} / ${inf.queue.max_concurrency ?? 4} Active · ${inf.queue.queued ?? 0} Queued`;
+        const qVitalSub = document.getElementById('vital-queue-sub');
+        if (qVital) qVital.textContent = `${inf.queue.active ?? 0} / ${inf.queue.max_concurrency ?? 4} Active`;
+        if (qVitalSub) qVitalSub.textContent = `${inf.queue.queued ?? 0} queued in pipeline`;
 
         const queueJobsList = document.getElementById('queue-jobs-list');
         if (queueJobsList) {
@@ -3949,7 +3968,9 @@
       }
 
       const tpsVital = document.getElementById('vital-tps');
-      if (tpsVital) tpsVital.textContent = `${dTPS.toFixed ? dTPS.toFixed(1) : dTPS} tok/s · ${effText}`;
+      const tpsVitalSub = document.getElementById('vital-tps-sub');
+      if (tpsVital) tpsVital.textContent = `${dTPS.toFixed ? dTPS.toFixed(1) : dTPS} tok/s`;
+      if (tpsVitalSub) tpsVitalSub.textContent = effText === 'Nominal' ? 'Nominal Throughput' : `${effText} Efficiency`;
 
       drawSparkline('spark-throughput', inf.decode_history || []);
 
@@ -4022,7 +4043,9 @@
       document.getElementById('cas-saved').textContent = `${data.disk.cas_saved_human} (${data.disk.cas_dedup_ratio}x)`;
 
       const casVital = document.getElementById('vital-cas');
-      if (casVital) casVital.textContent = `${data.disk.cas_saved_human} Saved (${data.disk.cas_dedup_ratio}x Dedup)`;
+      const casVitalSub = document.getElementById('vital-cas-sub');
+      if (casVital) casVital.textContent = `${data.disk.cas_saved_human} Saved`;
+      if (casVitalSub) casVitalSub.textContent = `${data.disk.cas_dedup_ratio}x Storage Deduplication`;
     }
 
     // Network
