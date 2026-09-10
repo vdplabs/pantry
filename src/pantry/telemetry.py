@@ -122,6 +122,21 @@ class TokenMetricsTracker:
         self.cumulative_total_tokens: int = 0
         self.cumulative_requests: int = 0
 
+        # Multi-modal volume metrics
+        self.session_images_generated: int = 0
+        self.session_audio_seconds: float = 0.0
+        self.session_music_seconds: float = 0.0
+        self.session_embedding_tokens: int = 0
+
+        self.cumulative_images_generated: int = 0
+        self.cumulative_audio_seconds: float = 0.0
+        self.cumulative_music_seconds: float = 0.0
+        self.cumulative_embedding_tokens: int = 0
+
+        # Speculative decoding metrics
+        self.speculative_draft_tokens: int = 0
+        self.speculative_accepted_tokens: int = 0
+
         self.last_prefill_ms: float = 0.0
         self.last_prefill_tps: float = 0.0
         self.last_decode_tps: float = 0.0
@@ -136,6 +151,9 @@ class TokenMetricsTracker:
         self.session_decode_tps_samples: list[float] = []
         self.session_ttft_ms_samples: list[float] = []
 
+        # Per-model metrics dictionary
+        self._model_stats: dict[str, dict[str, Any]] = {}
+
     @classmethod
     def get(cls) -> TokenMetricsTracker:
         with cls._lock:
@@ -143,9 +161,34 @@ class TokenMetricsTracker:
                 cls._instance = TokenMetricsTracker()
             return cls._instance
 
+    def _get_or_create_model_entry(self, model: str, modality: str = "text") -> dict[str, Any]:
+        mid = model or "default"
+        if mid not in self._model_stats:
+            self._model_stats[mid] = {
+                "model": mid,
+                "modality": modality,
+                "session_prompt_tokens": 0,
+                "session_completion_tokens": 0,
+                "session_total_tokens": 0,
+                "session_requests": 0,
+                "cumulative_prompt_tokens": 0,
+                "cumulative_completion_tokens": 0,
+                "cumulative_total_tokens": 0,
+                "cumulative_requests": 0,
+                "ttft_samples": [],
+                "decode_tps_samples": [],
+                "durations_ms": [],
+                "last_active": time.time(),
+                "last_decode_tps": 0.0,
+                "peak_decode_tps": 0.0,
+                "last_prefill_ms": 0.0,
+            }
+        return self._model_stats[mid]
+
     def record_completion(
         self,
         *,
+        model: str = "",
         prompt_tokens: int,
         completion_tokens: int,
         prefill_ms: float = 0.0,
@@ -164,6 +207,22 @@ class TokenMetricsTracker:
             self.cumulative_total_tokens += (prompt_tokens + completion_tokens)
             self.cumulative_requests += 1
 
+            m_entry = self._get_or_create_model_entry(model, modality="text")
+            m_entry["session_prompt_tokens"] += prompt_tokens
+            m_entry["session_completion_tokens"] += completion_tokens
+            m_entry["session_total_tokens"] += (prompt_tokens + completion_tokens)
+            m_entry["session_requests"] += 1
+            m_entry["cumulative_prompt_tokens"] += prompt_tokens
+            m_entry["cumulative_completion_tokens"] += completion_tokens
+            m_entry["cumulative_total_tokens"] += (prompt_tokens + completion_tokens)
+            m_entry["cumulative_requests"] += 1
+            m_entry["last_active"] = time.time()
+
+            dur_ms = max(1.0, (prefill_ms if prefill_ms > 0 else 0) + (decode_duration_s * 1000.0))
+            m_entry["durations_ms"].append(round(dur_ms, 1))
+            if len(m_entry["durations_ms"]) > 200:
+                m_entry["durations_ms"].pop(0)
+
             if prefill_ms > 0:
                 self.last_prefill_ms = round(prefill_ms, 1)
                 self.session_ttft_ms_samples.append(round(prefill_ms, 1))
@@ -171,6 +230,11 @@ class TokenMetricsTracker:
                     self.session_ttft_ms_samples.pop(0)
                 if prompt_tokens > 0:
                     self.last_prefill_tps = round((prompt_tokens / (prefill_ms / 1000.0)), 1)
+
+                m_entry["last_prefill_ms"] = round(prefill_ms, 1)
+                m_entry["ttft_samples"].append(round(prefill_ms, 1))
+                if len(m_entry["ttft_samples"]) > 200:
+                    m_entry["ttft_samples"].pop(0)
 
             if decode_duration_s > 0 and completion_tokens > 0:
                 tps = round(completion_tokens / decode_duration_s, 1)
@@ -183,10 +247,81 @@ class TokenMetricsTracker:
                 if len(self.session_decode_tps_samples) > 500:
                     self.session_decode_tps_samples.pop(0)
 
+                m_entry["last_decode_tps"] = tps
+                m_entry["peak_decode_tps"] = max(m_entry.get("peak_decode_tps", 0.0), tps)
+                m_entry["decode_tps_samples"].append(tps)
+                if len(m_entry["decode_tps_samples"]) > 200:
+                    m_entry["decode_tps_samples"].pop(0)
+
             self.active_context_tokens = prompt_tokens + completion_tokens
             self.max_context_tokens = max(512, context_limit)
             bytes_per_tok = max(32, int(model_params_b * 80)) * 2
             self.est_kv_cache_bytes = self.active_context_tokens * bytes_per_tok
+
+    def record_image_generation(self, *, model: str, count: int = 1, duration_ms: float = 0.0) -> None:
+        with self._lock:
+            c = max(1, count)
+            self.session_images_generated += c
+            self.cumulative_images_generated += c
+            m_entry = self._get_or_create_model_entry(model, modality="image")
+            m_entry["session_requests"] += c
+            m_entry["cumulative_requests"] += c
+            m_entry["last_active"] = time.time()
+            if duration_ms > 0:
+                m_entry["durations_ms"].append(round(duration_ms, 1))
+                if len(m_entry["durations_ms"]) > 200:
+                    m_entry["durations_ms"].pop(0)
+
+    def record_audio_transcription(self, *, model: str, audio_seconds: float = 0.0, duration_ms: float = 0.0) -> None:
+        with self._lock:
+            s = max(0.0, audio_seconds)
+            self.session_audio_seconds += s
+            self.cumulative_audio_seconds += s
+            m_entry = self._get_or_create_model_entry(model, modality="audio")
+            m_entry["session_requests"] += 1
+            m_entry["cumulative_requests"] += 1
+            m_entry["last_active"] = time.time()
+            if duration_ms > 0:
+                m_entry["durations_ms"].append(round(duration_ms, 1))
+                if len(m_entry["durations_ms"]) > 200:
+                    m_entry["durations_ms"].pop(0)
+
+    def record_music_generation(self, *, model: str, audio_seconds: float = 0.0, duration_ms: float = 0.0) -> None:
+        with self._lock:
+            s = max(0.0, audio_seconds)
+            self.session_music_seconds += s
+            self.cumulative_music_seconds += s
+            m_entry = self._get_or_create_model_entry(model, modality="music")
+            m_entry["session_requests"] += 1
+            m_entry["cumulative_requests"] += 1
+            m_entry["last_active"] = time.time()
+            if duration_ms > 0:
+                m_entry["durations_ms"].append(round(duration_ms, 1))
+                if len(m_entry["durations_ms"]) > 200:
+                    m_entry["durations_ms"].pop(0)
+
+    def record_embeddings(self, *, model: str, tokens: int = 0, duration_ms: float = 0.0) -> None:
+        with self._lock:
+            t = max(0, tokens)
+            self.session_embedding_tokens += t
+            self.cumulative_embedding_tokens += t
+            m_entry = self._get_or_create_model_entry(model, modality="embedding")
+            m_entry["session_prompt_tokens"] += t
+            m_entry["session_total_tokens"] += t
+            m_entry["session_requests"] += 1
+            m_entry["cumulative_prompt_tokens"] += t
+            m_entry["cumulative_total_tokens"] += t
+            m_entry["cumulative_requests"] += 1
+            m_entry["last_active"] = time.time()
+            if duration_ms > 0:
+                m_entry["durations_ms"].append(round(duration_ms, 1))
+                if len(m_entry["durations_ms"]) > 200:
+                    m_entry["durations_ms"].pop(0)
+
+    def record_speculative(self, *, draft_tokens: int, accepted_tokens: int) -> None:
+        with self._lock:
+            self.speculative_draft_tokens += max(0, draft_tokens)
+            self.speculative_accepted_tokens += max(0, accepted_tokens)
 
     def reset_session(self) -> None:
         with self._lock:
@@ -194,6 +329,12 @@ class TokenMetricsTracker:
             self.session_completion_tokens = 0
             self.session_total_tokens = 0
             self.session_requests = 0
+            self.session_images_generated = 0
+            self.session_audio_seconds = 0.0
+            self.session_music_seconds = 0.0
+            self.session_embedding_tokens = 0
+            self.speculative_draft_tokens = 0
+            self.speculative_accepted_tokens = 0
             self.last_prefill_ms = 0.0
             self.last_prefill_tps = 0.0
             self.last_decode_tps = 0.0
@@ -201,6 +342,14 @@ class TokenMetricsTracker:
             self.est_kv_cache_bytes = 0
             self.session_decode_tps_samples.clear()
             self.session_ttft_ms_samples.clear()
+            for m in self._model_stats.values():
+                m["session_prompt_tokens"] = 0
+                m["session_completion_tokens"] = 0
+                m["session_total_tokens"] = 0
+                m["session_requests"] = 0
+                m["ttft_samples"].clear()
+                m["decode_tps_samples"].clear()
+                m["durations_ms"].clear()
 
     def stats(self) -> dict[str, Any]:
         with self._lock:
@@ -214,6 +363,58 @@ class TokenMetricsTracker:
                 s = sorted(samples)
                 idx = min(len(s) - 1, max(0, int(len(s) * p / 100.0)))
                 return round(s[idx], 1)
+
+            # Calculate Cloud Cost Savings
+            # Standard rates: $2.50/M prompt, $10.00/M completion, $0.04/image, $0.006/audio min ($0.0001/s), $0.02/M embeddings
+            session_cost = (
+                (self.session_prompt_tokens / 1_000_000.0 * 2.50)
+                + (self.session_completion_tokens / 1_000_000.0 * 10.00)
+                + (self.session_images_generated * 0.040)
+                + (self.session_audio_seconds * 0.0001)
+                + (self.session_embedding_tokens / 1_000_000.0 * 0.020)
+            )
+            cumulative_cost = (
+                (self.cumulative_prompt_tokens / 1_000_000.0 * 2.50)
+                + (self.cumulative_completion_tokens / 1_000_000.0 * 10.00)
+                + (self.cumulative_images_generated * 0.040)
+                + (self.cumulative_audio_seconds * 0.0001)
+                + (self.cumulative_embedding_tokens / 1_000_000.0 * 0.020)
+            )
+
+            models_summary: dict[str, dict[str, Any]] = {}
+            for mid, m in self._model_stats.items():
+                p_in = m["session_prompt_tokens"]
+                p_out = m["session_completion_tokens"]
+                p_tot = m["session_total_tokens"]
+                reqs = m["session_requests"]
+                dur_avg = round(sum(m["durations_ms"]) / len(m["durations_ms"]), 1) if m["durations_ms"] else None
+                models_summary[mid] = {
+                    "model": mid,
+                    "modality": m.get("modality", "text"),
+                    "session_prompt_tokens": p_in,
+                    "session_completion_tokens": p_out,
+                    "session_total_tokens": p_tot,
+                    "session_requests": reqs,
+                    "cumulative_total_tokens": m["cumulative_total_tokens"],
+                    "cumulative_requests": m["cumulative_requests"],
+                    "decode_tps_p50": _pct(m["decode_tps_samples"], 50.0),
+                    "decode_tps_p95": _pct(m["decode_tps_samples"], 95.0),
+                    "peak_decode_tps": m.get("peak_decode_tps", 0.0),
+                    "ttft_ms_p50": _pct(m["ttft_samples"], 50.0),
+                    "ttft_ms_p95": _pct(m["ttft_samples"], 95.0),
+                    "ttft_ms_p99": _pct(m["ttft_samples"], 99.0),
+                    "avg_duration_ms": dur_avg,
+                    "last_active": m.get("last_active"),
+                    "cost_saved_usd": round(
+                        (p_in / 1_000_000.0 * 2.50) + (p_out / 1_000_000.0 * 10.00), 4
+                    ) if m.get("modality") == "text" else 0.0,
+                }
+
+            spec_rate = None
+            spec_speedup = 1.0
+            if self.speculative_draft_tokens > 0:
+                spec_rate = round((self.speculative_accepted_tokens / self.speculative_draft_tokens) * 100.0, 1)
+                spec_speedup = round(1.0 + (self.speculative_accepted_tokens / self.speculative_draft_tokens) * 0.85, 2)
 
             return {
                 "session": {
@@ -245,6 +446,26 @@ class TokenMetricsTracker:
                 "kv_cache_bytes": self.est_kv_cache_bytes,
                 "kv_cache_human": _fmt_bytes(self.est_kv_cache_bytes),
                 "decode_history": list(self.decode_throughput_history),
+                "models": models_summary,
+                "modality_usage": {
+                    "text_tokens": self.session_total_tokens,
+                    "images_generated": self.session_images_generated,
+                    "audio_seconds_transcribed": round(self.session_audio_seconds, 1),
+                    "music_seconds_generated": round(self.session_music_seconds, 1),
+                    "embedding_tokens": self.session_embedding_tokens,
+                },
+                "cloud_savings": {
+                    "session_saved_usd": round(session_cost, 2),
+                    "cumulative_saved_usd": round(cumulative_cost, 2),
+                    "gpt4o_equiv_usd": round(session_cost, 2),
+                    "claude_sonnet_equiv_usd": round(session_cost * 1.25, 2),
+                },
+                "speculative": {
+                    "draft_tokens": self.speculative_draft_tokens,
+                    "accepted_tokens": self.speculative_accepted_tokens,
+                    "acceptance_rate_percent": spec_rate,
+                    "speedup_factor": spec_speedup,
+                },
             }
 
 

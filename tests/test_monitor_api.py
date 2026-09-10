@@ -24,6 +24,8 @@ def test_dashboard_endpoint(tmp_path):
     assert "Image Studio" in resp.text
     assert "Music & Audio" in resp.text
     assert "Speech-to-Text" in resp.text
+    assert "Model Performance" in resp.text
+    assert "Usage & Savings" in resp.text
     assert "traffic-lights" not in resp.text
 
     # 2. GET / with text/html Accept header returns dashboard HTML
@@ -87,6 +89,10 @@ def test_monitor_stats_api(tmp_path):
     assert "queued" in data["inference"]["queue"]
     assert "max_concurrency" in data["inference"]["queue"]
     assert "latency_percentiles" in data["inference"]
+    assert "models" in data["inference"]
+    assert "modality_usage" in data["inference"]
+    assert "cloud_savings" in data["inference"]
+    assert "speculative" in data["inference"]
 
     assert "server" in data
     assert "version" in data["server"]
@@ -327,4 +333,66 @@ def test_concurrency_and_health_responsiveness_during_load(tmp_path):
         models_data = models_resp.json()
         assert len(models_data.get("data", [])) > 0
         assert t_models < 0.2
+
+
+def test_model_performance_and_usage_tracking(tmp_path):
+    store = PackageStore(tmp_path)
+    app = create_app(store)
+    client = TestClient(app)
+
+    tracker = TokenMetricsTracker.get()
+    tracker.reset_session()
+
+    # Record LLM chat completion
+    tracker.record_completion(
+        model="qwen2.5-coder-7b",
+        prompt_tokens=2000,
+        completion_tokens=500,
+        prefill_ms=120.0,
+        decode_duration_s=10.0,
+        context_limit=32768,
+        model_params_b=7.0,
+    )
+
+    # Record multi-modal events
+    tracker.record_image_generation(model="z-image-turbo", count=2, duration_ms=1500.0)
+    tracker.record_audio_transcription(model="whisper-large-v3", audio_seconds=45.0, duration_ms=1200.0)
+    tracker.record_embeddings(model="bge-m3", tokens=1000, duration_ms=40.0)
+    tracker.record_speculative(draft_tokens=200, accepted_tokens=150)
+
+    # Verify /v1/monitor/stats
+    resp = client.get("/v1/monitor/stats")
+    assert resp.status_code == 200
+    data = resp.json()
+
+    inf = data["inference"]
+    # 1. Per-model performance
+    assert "qwen2.5-coder-7b" in inf["models"]
+    qwen = inf["models"]["qwen2.5-coder-7b"]
+    assert qwen["session_prompt_tokens"] == 2000
+    assert qwen["session_completion_tokens"] == 500
+    assert qwen["decode_tps_p50"] == 50.0  # 500 / 10s
+    assert qwen["ttft_ms_p50"] == 120.0
+    assert qwen["cost_saved_usd"] > 0
+
+    # 2. Modality usage
+    mod = inf["modality_usage"]
+    assert mod["text_tokens"] == 2500
+    assert mod["images_generated"] == 2
+    assert mod["audio_seconds_transcribed"] == 45.0
+    assert mod["embedding_tokens"] == 1000
+
+    # 3. Cloud savings ROI
+    sav = inf["cloud_savings"]
+    assert sav["session_saved_usd"] > 0.05
+    assert sav["cumulative_saved_usd"] >= sav["session_saved_usd"]
+    assert sav["gpt4o_equiv_usd"] > 0
+
+    # 4. Speculative speedup
+    spec = inf["speculative"]
+    assert spec["draft_tokens"] == 200
+    assert spec["accepted_tokens"] == 150
+    assert spec["acceptance_rate_percent"] == 75.0
+    assert spec["speedup_factor"] > 1.0
+
 

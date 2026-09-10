@@ -62,8 +62,8 @@
       --bar-bg: rgba(255, 255, 255, 0.07);
       --section-border: rgba(255, 255, 255, 0.06);
 
-      --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
-      --mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+      --font: "Myriad Pro", "Lato", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+      --mono: "Myriad Pro", "Lato", "SF Mono", Menlo, Monaco, Consolas, monospace;
     }
 
     [data-theme="light"] {
@@ -1762,6 +1762,254 @@
       object-fit: contain;
       box-shadow: var(--shadow-card);
     }
+
+    /* ANALYTICS & PERFORMANCE / USAGE VIEWS */
+    .analytics-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 1024px) {
+      .analytics-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 640px) {
+      .analytics-kpi-grid { grid-template-columns: 1fr; }
+    }
+    .analytics-kpi-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      position: relative;
+      overflow: hidden;
+    }
+    .analytics-kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--border-card);
+    }
+    .analytics-kpi-card.accent-glow::before {
+      background: linear-gradient(90deg, var(--accent-primary), #38bdf8);
+    }
+    .analytics-kpi-card.roi-glow::before {
+      background: linear-gradient(90deg, #10b981, #059669);
+    }
+    .analytics-kpi-lbl {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .analytics-kpi-val {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+    }
+    .analytics-kpi-sub {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+    }
+
+    /* Analytics Table */
+    .analytics-table-wrap {
+      overflow-x: auto;
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-card);
+      background: var(--bg-surface);
+    }
+    .analytics-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 12.5px;
+    }
+    .analytics-table th {
+      background: var(--bg-subtle);
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-card);
+      white-space: nowrap;
+    }
+    .analytics-table td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-card-subtle);
+      color: var(--text-primary);
+      vertical-align: middle;
+    }
+    .analytics-table tr:last-child td {
+      border-bottom: none;
+    }
+    .analytics-table tr:hover td {
+      background: var(--bg-subtle);
+    }
+    .model-name-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 600;
+    }
+    .modality-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10.5px;
+      padding: 2px 7px;
+      border-radius: 9999px;
+      background: var(--bg-subtle);
+      color: var(--text-secondary);
+      border: 1px solid var(--border-card);
+      font-weight: 500;
+    }
+    .modality-pill.text { background: rgba(59, 130, 246, 0.1); color: #38bdf8; border-color: rgba(56, 189, 248, 0.25); }
+    .modality-pill.image { background: rgba(236, 72, 153, 0.1); color: #f472b6; border-color: rgba(244, 114, 182, 0.25); }
+    .modality-pill.audio { background: rgba(168, 85, 247, 0.1); color: #c084fc; border-color: rgba(192, 132, 252, 0.25); }
+    .modality-pill.music { background: rgba(168, 85, 247, 0.1); color: #c084fc; border-color: rgba(192, 132, 252, 0.25); }
+    .modality-pill.embedding { background: rgba(16, 185, 129, 0.1); color: #34d399; border-color: rgba(52, 211, 153, 0.25); }
+
+    /* ROI Cloud Savings Widget */
+    .roi-hero-card {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(6, 95, 70, 0.04) 100%), var(--bg-surface);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      box-shadow: var(--shadow-card);
+      margin-bottom: 24px;
+    }
+    .roi-hero-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+    .roi-hero-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .roi-hero-badge {
+      background: rgba(16, 185, 129, 0.15);
+      color: #10b981;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 9999px;
+    }
+    .roi-tiers-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+    @media (max-width: 768px) {
+      .roi-tiers-grid { grid-template-columns: 1fr; }
+    }
+    .roi-tier-box {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .roi-tier-title {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .roi-tier-cost {
+      font-size: 22px;
+      font-weight: 700;
+      color: #ef4444;
+      line-height: 1.2;
+    }
+    .roi-tier-cost.free {
+      color: #10b981;
+    }
+    .roi-tier-desc {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* Modality Volume Grid */
+    .modality-volume-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    @media (max-width: 900px) {
+      .modality-volume-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 500px) {
+      .modality-volume-grid { grid-template-columns: 1fr; }
+    }
+    .modality-vol-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-md);
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .modality-vol-lbl {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .modality-vol-val {
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+    .modality-vol-sub {
+      font-size: 11px;
+      color: var(--text-secondary);
+    }
+
+    /* Speculative Speedup Badge */
+    .spec-speedup-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(14, 165, 233, 0.12);
+      color: #0ea5e9;
+      font-weight: 600;
+      font-size: 11.5px;
+    }
+
   </style>
 </head>
 <body>
@@ -1789,6 +2037,18 @@
       <button class="sidebar-nav-item" data-tab="activity" id="tab-btn-activity">
         <span class="nav-icon">📜</span>
         <span class="nav-label">Activity & Logs</span>
+      </button>
+
+      <div class="nav-section-label">ANALYTICS</div>
+      <button class="sidebar-nav-item" data-tab="performance" id="tab-btn-performance">
+        <span class="nav-icon">📈</span>
+        <span class="nav-label">Model Performance</span>
+        <span class="nav-badge">Telemetry</span>
+      </button>
+      <button class="sidebar-nav-item" data-tab="usage" id="tab-btn-usage">
+        <span class="nav-icon">💎</span>
+        <span class="nav-label">Usage & Savings</span>
+        <span class="nav-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">ROI</span>
       </button>
 
       <div class="nav-section-label">STUDIO</div>
@@ -1927,144 +2187,7 @@
     </div>
   </div>
 
-  <!-- DOMAIN 1: AI MODEL RUNTIME & MEMORY FOOTPRINT -->
-  <section class="monitor-section">
-    <div class="section-header">
-      <div class="section-header-left">
-        <div class="section-tag">AI PLATFORM</div>
-        <h2 class="section-title"><span>✨</span> AI Models in Memory</h2>
-        <p class="section-desc">Resident neural network weights mapped into unified RAM for zero-latency inference</p>
-      </div>
-      <div class="section-header-right">
-        <span class="chip font-mono" id="models-footprint">0 B resident</span>
-        <button class="btn-action" id="btn-purge-pool" title="Purge cached memory reuse pool">Purge Pool</button>
-        <button class="btn-action unload" id="btn-unload-all" title="Unload all models from RAM">Unload All</button>
-      </div>
-    </div>
-
-    <!-- Unified Memory Allocation Gauge -->
-    <div class="memory-pool-card card">
-      <div class="pool-header">
-        <div class="pool-label">
-          <span>Metal / CUDA Resident Weights:</span>
-          <strong id="metal-weights">0 B</strong>
-        </div>
-        <div class="pool-label">
-          <span>Reclaimable Reuse Pool:</span>
-          <strong id="metal-pool">0 B</strong>
-        </div>
-      </div>
-      <div class="pool-bar">
-        <div class="pool-fill-weights" id="pool-fill-weights" style="width: 0%;"></div>
-        <div class="pool-fill-cache" id="pool-fill-cache" style="width: 0%;"></div>
-      </div>
-    </div>
-
-    <!-- Modern Model Cards Grid -->
-    <div id="models-container" class="models-grid">
-      <div style="padding: 24px; text-align: center; color: var(--text-muted);">Scanning models...</div>
-    </div>
-  </section>
-
-  <!-- DOMAIN 2: REAL-TIME INFERENCE PIPELINE & TELEMETRY -->
-  <section class="monitor-section">
-    <div class="section-header">
-      <div class="section-header-left">
-        <div class="section-tag">PIPELINE</div>
-        <h2 class="section-title"><span>⚡</span> Inference Pipeline & Telemetry</h2>
-        <p class="section-desc">Real-time token generation, streaming latency percentiles, KV-cache consumption, and request concurrency</p>
-      </div>
-      <div class="section-header-right">
-        <button class="btn-action" id="btn-reset-session">Reset Session</button>
-      </div>
-    </div>
-
-    <div class="inference-grid">
-      <!-- Card A: Generation Throughput & Latency -->
-      <div class="card widget-inference-throughput">
-        <div class="card-header">
-          <div class="card-title"><span>📊</span> Generation Throughput & Latency</div>
-        </div>
-        <div class="metrics-pills">
-          <div class="metric-pill">
-            <div class="lbl">Prefill (TTFT)</div>
-            <div class="num" id="inf-prefill">0 ms · 0 t/s</div>
-          </div>
-          <div class="metric-pill">
-            <div class="lbl">Decode TPS</div>
-            <div class="num" id="inf-decode">0.0 t/s</div>
-          </div>
-          <div class="metric-pill">
-            <div class="lbl">Peak Decode</div>
-            <div class="num" id="inf-peak">0.0 t/s</div>
-          </div>
-        </div>
-
-        <div id="percentiles-section" style="display: none;">
-          <div class="sub-label">Latency Percentiles (Session)</div>
-          <div class="metrics-pills">
-            <div class="metric-pill"><div class="lbl">p50 TPS</div><div class="num" id="pct-p50">—</div></div>
-            <div class="metric-pill"><div class="lbl">p95 TPS</div><div class="num" id="pct-p95">—</div></div>
-            <div class="metric-pill"><div class="lbl">p99 TTFT</div><div class="num" id="pct-ttft-p99">—</div></div>
-          </div>
-        </div>
-
-        <div class="sub-label">Decode Throughput History (t/s)</div>
-        <div class="sparkline-box">
-          <canvas class="sparkline" id="spark-throughput"></canvas>
-        </div>
-
-        <div class="row-meta" id="gpu-efficiency-row" style="display: none; margin-top: 8px;">
-          <span>Power Efficiency</span>
-          <span class="val font-mono" id="gpu-efficiency">— tok/W</span>
-        </div>
-      </div>
-
-      <!-- Card B: Context Window & Execution Queues -->
-      <div class="card widget-inference-context">
-        <div class="card-header">
-          <div class="card-title"><span>📏</span> Context Budget & Concurrency</div>
-        </div>
-
-        <div class="context-wrap">
-          <div class="context-label-row">
-            <span>Active Context Fill</span>
-            <span class="font-mono font-bold" id="ctx-summary">0 / 32,768 (0%)</span>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-fill" id="ctx-progress" style="width: 0%;"></div>
-          </div>
-          <div class="kv-cache-note">
-            Estimated KV Cache: <strong class="font-mono" id="kv-cache">0 B</strong>
-          </div>
-        </div>
-
-        <div id="queue-section" style="display: none; margin-top: 14px;">
-          <div class="sub-label">Request Concurrency Guard</div>
-          <div class="queue-row">
-            <div class="queue-slot"><div class="lbl">Active Slots</div><div class="num" id="queue-active">0</div></div>
-            <div class="queue-slot"><div class="lbl">Queued Requests</div><div class="num" id="queue-queued">0</div></div>
-            <div class="queue-slot"><div class="lbl">Max Concurrency</div><div class="num" id="queue-max">—</div></div>
-          </div>
-        </div>
-
-        <div class="token-totals-grid">
-          <div class="token-box">
-            <div class="token-lbl">THIS SESSION</div>
-            <div class="token-val" id="tok-session-total">0 tokens</div>
-            <div class="token-sub" id="tok-session-meta">P: 0 · C: 0 · 0 reqs</div>
-          </div>
-          <div class="token-box">
-            <div class="token-lbl">ALL-TIME CUMULATIVE</div>
-            <div class="token-val" id="tok-cumul-total">0 tokens</div>
-            <div class="token-sub" id="tok-cumul-meta">P: 0 · C: 0 · 0 reqs</div>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- DOMAIN 3: HARDWARE TELEMETRY & UNIFIED ARCHITECTURE -->
+    <!-- DOMAIN 3: HARDWARE TELEMETRY & UNIFIED ARCHITECTURE -->
   <section class="monitor-section">
     <div class="section-header">
       <div class="section-header-left">
@@ -2167,6 +2290,147 @@
     </div>
   </section>
 
+  <!-- DOMAIN 1: AI MODEL RUNTIME & MEMORY FOOTPRINT -->
+  <section class="monitor-section">
+    <div class="section-header">
+      <div class="section-header-left">
+        <div class="section-tag">AI PLATFORM</div>
+        <h2 class="section-title"><span>✨</span> AI Models in Memory</h2>
+        <p class="section-desc">Resident neural network weights mapped into unified RAM for zero-latency inference</p>
+      </div>
+      <div class="section-header-right">
+        <span class="chip font-mono" id="models-footprint">0 B resident</span>
+        <button class="btn-action" id="btn-purge-pool" title="Purge cached memory reuse pool">Purge Pool</button>
+        <button class="btn-action unload" id="btn-unload-all" title="Unload all models from RAM">Unload All</button>
+      </div>
+    </div>
+
+    <!-- Unified Memory Allocation Gauge -->
+    <div class="memory-pool-card card">
+      <div class="pool-header">
+        <div class="pool-label">
+          <span>Metal / CUDA Resident Weights:</span>
+          <strong id="metal-weights">0 B</strong>
+        </div>
+        <div class="pool-label">
+          <span>Reclaimable Reuse Pool:</span>
+          <strong id="metal-pool">0 B</strong>
+        </div>
+      </div>
+      <div class="pool-bar">
+        <div class="pool-fill-weights" id="pool-fill-weights" style="width: 0%;"></div>
+        <div class="pool-fill-cache" id="pool-fill-cache" style="width: 0%;"></div>
+      </div>
+    </div>
+
+    <!-- Modern Model Cards Grid -->
+    <div id="models-container" class="models-grid">
+      <div style="padding: 24px; text-align: center; color: var(--text-muted);">Scanning models...</div>
+    </div>
+  </section>
+
+  <!-- DOMAIN 2: REAL-TIME INFERENCE PIPELINE & TELEMETRY -->
+  <section class="monitor-section">
+    <div class="section-header">
+      <div class="section-header-left">
+        <div class="section-tag">PIPELINE</div>
+        <h2 class="section-title"><span>⚡</span> Inference Pipeline & Telemetry</h2>
+        <p class="section-desc">Real-time token generation, streaming latency percentiles, KV-cache consumption, and request concurrency</p>
+      </div>
+      <div class="section-header-right" style="display: flex; gap: 8px;">
+        <button class="btn-action" onclick="switchMainTab('performance')">📈 Performance Matrix</button>
+        <button class="btn-action" onclick="switchMainTab('usage')">💎 Usage & ROI</button>
+        <button class="btn-action" id="btn-reset-session">Reset Session</button>
+      </div>
+    </div>
+
+    <div class="inference-grid">
+      <!-- Card A: Generation Throughput & Latency -->
+      <div class="card widget-inference-throughput">
+        <div class="card-header">
+          <div class="card-title"><span>📊</span> Generation Throughput & Latency</div>
+        </div>
+        <div class="metrics-pills">
+          <div class="metric-pill">
+            <div class="lbl">Prefill (TTFT)</div>
+            <div class="num" id="inf-prefill">0 ms · 0 t/s</div>
+          </div>
+          <div class="metric-pill">
+            <div class="lbl">Decode TPS</div>
+            <div class="num" id="inf-decode">0.0 t/s</div>
+          </div>
+          <div class="metric-pill">
+            <div class="lbl">Peak Decode</div>
+            <div class="num" id="inf-peak">0.0 t/s</div>
+          </div>
+        </div>
+
+        <div id="percentiles-section" style="display: none;">
+          <div class="sub-label">Latency Percentiles (Session)</div>
+          <div class="metrics-pills">
+            <div class="metric-pill"><div class="lbl">p50 TPS</div><div class="num" id="pct-p50">—</div></div>
+            <div class="metric-pill"><div class="lbl">p95 TPS</div><div class="num" id="pct-p95">—</div></div>
+            <div class="metric-pill"><div class="lbl">p99 TTFT</div><div class="num" id="pct-ttft-p99">—</div></div>
+          </div>
+        </div>
+
+        <div class="sub-label">Decode Throughput History (t/s)</div>
+        <div class="sparkline-box">
+          <canvas class="sparkline" id="spark-throughput"></canvas>
+        </div>
+
+        <div class="row-meta" id="gpu-efficiency-row" style="display: none; margin-top: 8px;">
+          <span>Power Efficiency</span>
+          <span class="val font-mono" id="gpu-efficiency">— tok/W</span>
+        </div>
+      </div>
+
+      <!-- Card B: Context Window & Execution Queues -->
+      <div class="card widget-inference-context">
+        <div class="card-header">
+          <div class="card-title"><span>📏</span> Context Budget & Concurrency</div>
+        </div>
+
+        <div class="context-wrap">
+          <div class="context-label-row">
+            <span>Active Context Fill</span>
+            <span class="font-mono font-bold" id="ctx-summary">0 / 32,768 (0%)</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="ctx-progress" style="width: 0%;"></div>
+          </div>
+          <div class="kv-cache-note">
+            Estimated KV Cache: <strong class="font-mono" id="kv-cache">0 B</strong>
+          </div>
+        </div>
+
+        <div id="queue-section" style="display: none; margin-top: 14px;">
+          <div class="sub-label">Request Concurrency Guard</div>
+          <div class="queue-row">
+            <div class="queue-slot"><div class="lbl">Active Slots</div><div class="num" id="queue-active">0</div></div>
+            <div class="queue-slot"><div class="lbl">Queued Requests</div><div class="num" id="queue-queued">0</div></div>
+            <div class="queue-slot"><div class="lbl">Max Concurrency</div><div class="num" id="queue-max">—</div></div>
+          </div>
+        </div>
+
+        <div class="token-totals-grid">
+          <div class="token-box">
+            <div class="token-lbl">THIS SESSION</div>
+            <div class="token-val" id="tok-session-total">0 tokens</div>
+            <div class="token-sub" id="tok-session-meta">P: 0 · C: 0 · 0 reqs</div>
+          </div>
+          <div class="token-box">
+            <div class="token-lbl">ALL-TIME CUMULATIVE</div>
+            <div class="token-val" id="tok-cumul-total">0 tokens</div>
+            <div class="token-sub" id="tok-cumul-meta">P: 0 · C: 0 · 0 reqs</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+
+
   <!-- DOMAIN 4: OBSERVABILITY & REQUEST TRACING -->
   <section class="monitor-section">
     <div class="section-header">
@@ -2204,7 +2468,264 @@
 
   </div> <!-- /tab-view-monitor -->
 
-<!-- VIEW 2: MULTI-MODAL PLAYGROUND -->
+<!-- VIEW: MODEL PERFORMANCE -->
+  <div id="tab-view-performance" class="tab-view" style="display: none;">
+    <section class="monitor-section">
+      <div class="section-header">
+        <div class="section-header-left">
+          <div class="section-tag">BENCHMARKS</div>
+          <h2 class="section-title"><span>📈</span> Model Performance Intelligence</h2>
+          <p class="section-desc">Per-model latency percentiles, decode throughput, speculative decoding gains, and context scaling benchmarks</p>
+        </div>
+        <div class="section-header-right" style="display: flex; gap: 8px;">
+          <button class="btn-action" onclick="switchMainTab('usage')">💎 View Usage & Savings →</button>
+        </div>
+      </div>
+
+      <!-- Hero KPI Strip -->
+      <div class="analytics-kpi-grid">
+        <div class="analytics-kpi-card accent-glow">
+          <div class="analytics-kpi-lbl"><span>📦</span> Models Benchmarked</div>
+          <div class="analytics-kpi-val font-mono" id="perf-kpi-models">0</div>
+          <div class="analytics-kpi-sub">Tracked in runtime</div>
+        </div>
+        <div class="analytics-kpi-card">
+          <div class="analytics-kpi-lbl"><span>⚡</span> Peak Decode Speed</div>
+          <div class="analytics-kpi-val font-mono" id="perf-kpi-peak-tps">0.0 <span style="font-size: 14px; font-weight: 500;">tok/s</span></div>
+          <div class="analytics-kpi-sub">Highest recorded throughput</div>
+        </div>
+        <div class="analytics-kpi-card">
+          <div class="analytics-kpi-lbl"><span>⏱️</span> Best Time to First Token</div>
+          <div class="analytics-kpi-val font-mono" id="perf-kpi-best-ttft">—</div>
+          <div class="analytics-kpi-sub">p50 prefill latency</div>
+        </div>
+        <div class="analytics-kpi-card roi-glow">
+          <div class="analytics-kpi-lbl"><span>🔋</span> Energy Efficiency</div>
+          <div class="analytics-kpi-val font-mono" id="perf-kpi-efficiency">— <span style="font-size: 14px; font-weight: 500;">tok/W</span></div>
+          <div class="analytics-kpi-sub">Tokens generated per Watt</div>
+        </div>
+      </div>
+
+      <!-- Main Benchmark Matrix Table -->
+      <div class="card" style="margin-bottom: 24px;">
+        <div class="card-header">
+          <div class="card-title"><span>📋</span> Per-Model Benchmark Matrix</div>
+          <div class="chip font-mono" id="perf-table-count">0 models recorded</div>
+        </div>
+        <div class="analytics-table-wrap">
+          <table class="analytics-table">
+            <thead>
+              <tr>
+                <th>Model Identifier</th>
+                <th>Modality</th>
+                <th>Decode TPS (p50 / p95)</th>
+                <th>Peak TPS</th>
+                <th>TTFT Prefill (p50 / p95)</th>
+                <th>Avg Request Latency</th>
+                <th>Invocations</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="perf-table-body">
+              <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px 16px;">
+                  No inference runs recorded yet. Generate tokens via the <a href="javascript:void(0)" onclick="switchMainTab('playground')" style="color: var(--accent-primary); text-decoration: underline;">Playground</a> or API to populate benchmarks.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 2-Column Auxiliary Cards: Speculative Decoding & Context Window Scaling -->
+      <div class="hardware-grid">
+        <!-- Speculative Decoding Acceleration -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><span>🚀</span> Speculative Decoding Acceleration</div>
+            <span class="spec-speedup-badge" id="perf-spec-badge">1.00x Speedup</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">
+            Dual-model speculative inference pairs a compact draft model with a larger target model to accelerate token generation without quality degradation.
+          </p>
+          <div class="row-meta">
+            <span>Draft Speculative Tokens Proposed</span>
+            <span class="val font-mono" id="perf-spec-draft">0</span>
+          </div>
+          <div class="row-meta">
+            <span>Target Accepted Tokens</span>
+            <span class="val font-mono" id="perf-spec-accepted">0</span>
+          </div>
+          <div class="row-meta">
+            <span>Draft Acceptance Rate</span>
+            <span class="val font-mono" id="perf-spec-rate">—</span>
+          </div>
+          <div class="progress-bar" style="margin-top: 8px;">
+            <div class="progress-fill" id="perf-spec-fill" style="width: 0%; background: linear-gradient(90deg, var(--accent-primary), #38bdf8);"></div>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            Supported via <code>--speculative-draft</code> on compatible model architectures.
+          </div>
+        </div>
+
+        <!-- Context Scaling & Memory Overhead -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><span>📏</span> Context Scaling & KV-Cache Footprint</div>
+            <span class="status-badge ok" id="perf-kv-badge">Dynamic Allocation</span>
+          </div>
+          <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">
+            Key-Value Cache memory footprint scales linearly with context depth and active batch concurrency.
+          </p>
+          <div class="row-meta">
+            <span>Active Session Context Length</span>
+            <span class="val font-mono" id="perf-active-ctx">0 tokens</span>
+          </div>
+          <div class="row-meta">
+            <span>Configured Max Context Ceiling</span>
+            <span class="val font-mono" id="perf-max-ctx">32,768 tokens</span>
+          </div>
+          <div class="progress-bar" style="margin-top: 8px;">
+            <div class="progress-fill" id="perf-ctx-fill" style="width: 0%;"></div>
+          </div>
+          <div class="row-meta" style="margin-top: 12px;">
+            <span>Estimated KV-Cache RAM Overhead</span>
+            <span class="val font-mono" id="perf-kv-ram">0 B</span>
+          </div>
+          <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+            Unified RAM zero-copy avoids GPU-CPU bus transfer bottlenecks during attention computation.
+          </div>
+        </div>
+      </div>
+    </section>
+  </div> <!-- /tab-view-performance -->
+
+  <!-- VIEW: USAGE & COST SAVINGS -->
+  <div id="tab-view-usage" class="tab-view" style="display: none;">
+    <section class="monitor-section">
+      <div class="section-header">
+        <div class="section-header-left">
+          <div class="section-tag">ACCOUNTING & ROI</div>
+          <h2 class="section-title"><span>💎</span> Token Usage & Cloud Savings (ROI)</h2>
+          <p class="section-desc">Audit token throughput, multi-modal compute consumption, and compute cost savings vs commercial cloud APIs</p>
+        </div>
+        <div class="section-header-right" style="display: flex; gap: 8px;">
+          <button class="btn-action" onclick="switchMainTab('performance')">📈 View Performance Matrix →</button>
+        </div>
+      </div>
+
+      <!-- Hero KPI Strip -->
+      <div class="analytics-kpi-grid">
+        <div class="analytics-kpi-card">
+          <div class="analytics-kpi-lbl"><span>🔢</span> Total Tokens Processed</div>
+          <div class="analytics-kpi-val font-mono" id="usage-kpi-tokens">0</div>
+          <div class="analytics-kpi-sub" id="usage-kpi-tokens-sub">0 in · 0 out</div>
+        </div>
+        <div class="analytics-kpi-card">
+          <div class="analytics-kpi-lbl"><span>⚡</span> Total API Requests</div>
+          <div class="analytics-kpi-val font-mono" id="usage-kpi-requests">0</div>
+          <div class="analytics-kpi-sub">Session invocations</div>
+        </div>
+        <div class="analytics-kpi-card roi-glow">
+          <div class="analytics-kpi-lbl"><span>💰</span> Estimated Session Savings</div>
+          <div class="analytics-kpi-val font-mono" style="color: #10b981;" id="usage-kpi-saved">$0.00</div>
+          <div class="analytics-kpi-sub">vs commercial cloud APIs</div>
+        </div>
+        <div class="analytics-kpi-card accent-glow">
+          <div class="analytics-kpi-lbl"><span>🏛️</span> Cumulative Savings</div>
+          <div class="analytics-kpi-val font-mono" id="usage-kpi-cum-saved">$0.00</div>
+          <div class="analytics-kpi-sub">All-time local AI ROI</div>
+        </div>
+      </div>
+
+      <!-- Cloud Cost Savings Comparison Widget -->
+      <div class="roi-hero-card">
+        <div class="roi-hero-header">
+          <div>
+            <div class="roi-hero-title"><span>🛡️</span> Local Inference Return on Investment (ROI)</div>
+            <div style="font-size: 12.5px; color: var(--text-secondary); margin-top: 4px;">
+              Pantry runs on your local hardware with <strong>$0.00</strong> cloud API subscription or token egress fees.
+            </div>
+          </div>
+          <span class="roi-hero-badge">100% Free · Private & Offline</span>
+        </div>
+        <div class="roi-tiers-grid">
+          <div class="roi-tier-box">
+            <div class="roi-tier-title">OpenAI GPT-4o Equivalent</div>
+            <div class="roi-tier-cost font-mono" id="roi-gpt4o-cost">$0.00</div>
+            <div class="roi-tier-desc">Estimated at $2.50/M input + $10.00/M output tokens</div>
+          </div>
+          <div class="roi-tier-box">
+            <div class="roi-tier-title">Anthropic Claude 3.5 Sonnet Equivalent</div>
+            <div class="roi-tier-cost font-mono" id="roi-claude-cost">$0.00</div>
+            <div class="roi-tier-desc">Estimated at $3.00/M input + $15.00/M output tokens</div>
+          </div>
+          <div class="roi-tier-box" style="border-color: rgba(16, 185, 129, 0.35); background: rgba(16, 185, 129, 0.06);">
+            <div class="roi-tier-title" style="color: #10b981;">Pantry Local AI Cost</div>
+            <div class="roi-tier-cost font-mono free">$0.00</div>
+            <div class="roi-tier-desc" style="color: var(--text-secondary);">Unlimited local generation powered by Apple Silicon & CUDA</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Modality Volume Distribution Cards -->
+      <div class="modality-volume-grid">
+        <div class="modality-vol-card">
+          <div class="modality-vol-lbl"><span>💬</span> LLM Text Generation</div>
+          <div class="modality-vol-val font-mono" id="mod-vol-text">0 tokens</div>
+          <div class="modality-vol-sub" id="mod-vol-text-sub">Prompt & completion</div>
+        </div>
+        <div class="modality-vol-card">
+          <div class="modality-vol-lbl"><span>🎨</span> Diffusion Images</div>
+          <div class="modality-vol-val font-mono" id="mod-vol-images">0 images</div>
+          <div class="modality-vol-sub">Rendered via Image Studio</div>
+        </div>
+        <div class="modality-vol-card">
+          <div class="modality-vol-lbl"><span>🎙️</span> Speech-to-Text</div>
+          <div class="modality-vol-val font-mono" id="mod-vol-audio">0.0s</div>
+          <div class="modality-vol-sub">Transcribed audio duration</div>
+        </div>
+        <div class="modality-vol-card">
+          <div class="modality-vol-lbl"><span>🔢</span> Vector Embeddings</div>
+          <div class="modality-vol-val font-mono" id="mod-vol-embed">0 tokens</div>
+          <div class="modality-vol-sub">Vectorized inputs</div>
+        </div>
+      </div>
+
+      <!-- Per-Model Token Accounting Table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><span>📊</span> Per-Model Token Accounting Ledger</div>
+          <div class="chip font-mono" id="usage-table-count">0 models recorded</div>
+        </div>
+        <div class="analytics-table-wrap">
+          <table class="analytics-table">
+            <thead>
+              <tr>
+                <th>Model Identifier</th>
+                <th>Modality</th>
+                <th>Invocations</th>
+                <th>Prompt Tokens (In)</th>
+                <th>Completion Tokens (Out)</th>
+                <th>Total Tokens</th>
+                <th>Share of Traffic</th>
+                <th>Est. Cloud Value</th>
+              </tr>
+            </thead>
+            <tbody id="usage-table-body">
+              <tr>
+                <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px 16px;">
+                  No token usage recorded yet. Make inference requests via the <a href="javascript:void(0)" onclick="switchMainTab('playground')" style="color: var(--accent-primary); text-decoration: underline;">Playground</a> or API to populate this ledger.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </div> <!-- /tab-view-usage -->
+
+  <!-- VIEW 2: MULTI-MODAL PLAYGROUND -->
   <div id="tab-view-playground" class="tab-view" style="display: none;">
     <div class="pg-container">
       <!-- Playground Modality Tabs -->
@@ -3473,6 +3994,226 @@
         }).join('');
       }}
     }
+
+
+  function renderPerformance(data) {
+    if (!data) return;
+    const inf = data.inference || {};
+    const models = inf.models || {};
+    const modelKeys = Object.keys(models);
+
+    // Update KPI strip
+    const kpiModels = document.getElementById('perf-kpi-models');
+    if (kpiModels) kpiModels.textContent = modelKeys.length > 0 ? `${modelKeys.length} Model${modelKeys.length === 1 ? '' : 's'}` : '0';
+
+    const kpiPeak = document.getElementById('perf-kpi-peak-tps');
+    if (kpiPeak) kpiPeak.innerHTML = `${(inf.peak_decode_tps || 0).toFixed(1)} <span style="font-size: 14px; font-weight: 500;">tok/s</span>`;
+
+    const kpiBestTtft = document.getElementById('perf-kpi-best-ttft');
+    if (kpiBestTtft) {
+      let bestTtft = null;
+      for (const k of modelKeys) {
+        const m = models[k];
+        if (m.ttft_ms_p50 != null) {
+          if (bestTtft === null || m.ttft_ms_p50 < bestTtft) bestTtft = m.ttft_ms_p50;
+        }
+      }
+      kpiBestTtft.textContent = bestTtft !== null ? `${bestTtft} ms` : (inf.prefill_ms > 0 ? `${inf.prefill_ms} ms` : '—');
+    }
+
+    const kpiEff = document.getElementById('perf-kpi-efficiency');
+    if (kpiEff) {
+      const effEl = document.getElementById('gpu-efficiency');
+      kpiEff.innerHTML = (effEl && effEl.textContent) ? effEl.textContent : '— <span style="font-size: 14px; font-weight: 500;">tok/W</span>';
+    }
+
+    // Benchmark Table
+    const tbody = document.getElementById('perf-table-body');
+    const countChip = document.getElementById('perf-table-count');
+    if (countChip) countChip.textContent = `${modelKeys.length} model${modelKeys.length === 1 ? '' : 's'} recorded`;
+
+    if (tbody) {
+      if (modelKeys.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px 16px;">
+              No inference runs recorded yet. Generate tokens via the <a href="javascript:void(0)" onclick="switchMainTab('playground')" style="color: var(--accent-primary); text-decoration: underline;">Playground</a> or API to populate benchmarks.
+            </td>
+          </tr>
+        `;
+      } else {
+        tbody.innerHTML = modelKeys.map(k => {
+          const m = models[k];
+          const mod = m.modality || 'text';
+          const p50 = m.decode_tps_p50 != null ? `${m.decode_tps_p50} t/s` : '—';
+          const p95 = m.decode_tps_p95 != null ? `${m.decode_tps_p95} t/s` : '—';
+          const peak = m.peak_decode_tps ? `${m.peak_decode_tps.toFixed(1)} t/s` : '—';
+          const ttft50 = m.ttft_ms_p50 != null ? `${m.ttft_ms_p50} ms` : '—';
+          const ttft95 = m.ttft_ms_p95 != null ? `${m.ttft_ms_p95} ms` : '—';
+          const avgDur = m.avg_duration_ms != null ? `${m.avg_duration_ms} ms` : '—';
+          const reqs = `${m.session_requests || 0} / ${m.cumulative_requests || 0}`;
+
+          let modIcon = '💬';
+          if (mod === 'image') modIcon = '🎨';
+          else if (mod === 'audio') modIcon = '🎙️';
+          else if (mod === 'music') modIcon = '🎵';
+          else if (mod === 'embedding') modIcon = '🔢';
+
+          return `
+            <tr>
+              <td>
+                <div class="model-name-cell">
+                  <span style="font-size: 14px;">${modIcon}</span>
+                  <span class="font-mono">${escapeHtml(m.model)}</span>
+                </div>
+              </td>
+              <td><span class="modality-pill ${mod}">${mod.toUpperCase()}</span></td>
+              <td class="font-mono">${p50} <span style="color: var(--text-muted); font-size: 10.5px;">/ ${p95}</span></td>
+              <td class="font-mono" style="color: var(--accent-primary); font-weight: 600;">${peak}</td>
+              <td class="font-mono">${ttft50} <span style="color: var(--text-muted); font-size: 10.5px;">/ ${ttft95}</span></td>
+              <td class="font-mono">${avgDur}</td>
+              <td class="font-mono">${reqs}</td>
+              <td>
+                <button class="btn-action" style="padding: 3px 8px; font-size: 11px;" onclick="launchInPlayground('${escapeHtml(m.model)}', '${mod}')">
+                  ⚡ Playground
+                </button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    // Speculative card
+    const spec = inf.speculative || {};
+    const specBadge = document.getElementById('perf-spec-badge');
+    const specDraft = document.getElementById('perf-spec-draft');
+    const specAcc = document.getElementById('perf-spec-accepted');
+    const specRate = document.getElementById('perf-spec-rate');
+    const specFill = document.getElementById('perf-spec-fill');
+
+    if (specBadge) specBadge.textContent = `${(spec.speedup_factor || 1.0).toFixed(2)}x Speedup`;
+    if (specDraft) specDraft.textContent = (spec.draft_tokens || 0).toLocaleString();
+    if (specAcc) specAcc.textContent = (spec.accepted_tokens || 0).toLocaleString();
+    if (specRate) specRate.textContent = spec.acceptance_rate_percent != null ? `${spec.acceptance_rate_percent}%` : '— (Inactive)';
+    if (specFill) specFill.style.width = `${Math.min(100, spec.acceptance_rate_percent || 0)}%`;
+
+    // Context & KV Cache card
+    const ctx = inf.context_fill || {};
+    const perfActCtx = document.getElementById('perf-active-ctx');
+    const perfMaxCtx = document.getElementById('perf-max-ctx');
+    const perfCtxFill = document.getElementById('perf-ctx-fill');
+    const perfKvRam = document.getElementById('perf-kv-ram');
+
+    if (perfActCtx) perfActCtx.textContent = `${(ctx.active_tokens || 0).toLocaleString()} tokens`;
+    if (perfMaxCtx) perfMaxCtx.textContent = `${(ctx.max_tokens || 32768).toLocaleString()} tokens`;
+    if (perfCtxFill) perfCtxFill.style.width = `${Math.min(100, ctx.percent || 0)}%`;
+    if (perfKvRam) perfKvRam.textContent = inf.kv_cache_human || '0 B';
+  }
+
+  function renderUsage(data) {
+    if (!data) return;
+    const inf = data.inference || {};
+    const sess = inf.session || {};
+    const savings = inf.cloud_savings || {};
+    const modUsage = inf.modality_usage || {};
+    const models = inf.models || {};
+    const modelKeys = Object.keys(models);
+
+    // Hero KPI Strip
+    const kpiTok = document.getElementById('usage-kpi-tokens');
+    const kpiTokSub = document.getElementById('usage-kpi-tokens-sub');
+    if (kpiTok) kpiTok.textContent = (sess.total_tokens || 0).toLocaleString();
+    if (kpiTokSub) kpiTokSub.textContent = `${(sess.prompt_tokens || 0).toLocaleString()} in · ${(sess.completion_tokens || 0).toLocaleString()} out`;
+
+    const kpiReq = document.getElementById('usage-kpi-requests');
+    if (kpiReq) kpiReq.textContent = (sess.requests || 0).toLocaleString();
+
+    const kpiSaved = document.getElementById('usage-kpi-saved');
+    if (kpiSaved) kpiSaved.textContent = `$${(savings.session_saved_usd || 0.00).toFixed(2)}`;
+
+    const kpiCumSaved = document.getElementById('usage-kpi-cum-saved');
+    if (kpiCumSaved) kpiCumSaved.textContent = `$${(savings.cumulative_saved_usd || 0.00).toFixed(2)}`;
+
+    // ROI Cloud Comparison Tiers
+    const gpt4o = document.getElementById('roi-gpt4o-cost');
+    const claude = document.getElementById('roi-claude-cost');
+    if (gpt4o) gpt4o.textContent = `$${(savings.gpt4o_equiv_usd || 0.00).toFixed(2)}`;
+    if (claude) claude.textContent = `$${(savings.claude_sonnet_equiv_usd || 0.00).toFixed(2)}`;
+
+    // Modality distribution
+    const mText = document.getElementById('mod-vol-text');
+    const mTextSub = document.getElementById('mod-vol-text-sub');
+    const mImg = document.getElementById('mod-vol-images');
+    const mAud = document.getElementById('mod-vol-audio');
+    const mEmb = document.getElementById('mod-vol-embed');
+
+    if (mText) mText.textContent = `${(modUsage.text_tokens || 0).toLocaleString()} tokens`;
+    if (mTextSub) mTextSub.textContent = `${(sess.prompt_tokens || 0).toLocaleString()} in · ${(sess.completion_tokens || 0).toLocaleString()} out`;
+    if (mImg) mImg.textContent = `${(modUsage.images_generated || 0).toLocaleString()} image${modUsage.images_generated === 1 ? '' : 's'}`;
+    if (mAud) mAud.textContent = `${(modUsage.audio_seconds_transcribed || 0).toFixed(1)}s`;
+    if (mEmb) mEmb.textContent = `${(modUsage.embedding_tokens || 0).toLocaleString()} tokens`;
+
+    // Per-Model Ledger Table
+    const tbody = document.getElementById('usage-table-body');
+    const countChip = document.getElementById('usage-table-count');
+    if (countChip) countChip.textContent = `${modelKeys.length} model${modelKeys.length === 1 ? '' : 's'} recorded`;
+
+    const totalSessionTok = sess.total_tokens || 1;
+
+    if (tbody) {
+      if (modelKeys.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px 16px;">
+              No token usage recorded yet. Make inference requests via the <a href="javascript:void(0)" onclick="switchMainTab('playground')" style="color: var(--accent-primary); text-decoration: underline;">Playground</a> or API to populate this ledger.
+            </td>
+          </tr>
+        `;
+      } else {
+        tbody.innerHTML = modelKeys.map(k => {
+          const m = models[k];
+          const mod = m.modality || 'text';
+          const pIn = m.session_prompt_tokens || 0;
+          const pOut = m.session_completion_tokens || 0;
+          const pTot = m.session_total_tokens || 0;
+          const reqs = m.session_requests || 0;
+          const share = totalSessionTok > 0 ? ((pTot / totalSessionTok) * 100.0).toFixed(1) : '0.0';
+          const saved = `$${(m.cost_saved_usd || 0.00).toFixed(4)}`;
+
+          let modIcon = '💬';
+          if (mod === 'image') modIcon = '🎨';
+          else if (mod === 'audio') modIcon = '🎙️';
+          else if (mod === 'music') modIcon = '🎵';
+          else if (mod === 'embedding') modIcon = '🔢';
+
+          return `
+            <tr>
+              <td>
+                <div class="model-name-cell">
+                  <span style="font-size: 14px;">${modIcon}</span>
+                  <span class="font-mono">${escapeHtml(m.model)}</span>
+                </div>
+              </td>
+              <td><span class="modality-pill ${mod}">${mod.toUpperCase()}</span></td>
+              <td class="font-mono">${reqs.toLocaleString()}</td>
+              <td class="font-mono">${pIn.toLocaleString()}</td>
+              <td class="font-mono">${pOut.toLocaleString()}</td>
+              <td class="font-mono" style="font-weight: 600;">${pTot.toLocaleString()}</td>
+              <td>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                  <div class="progress-bar" style="width: 60px; height: 5px;">
+                    <div class="progress-fill" style="width: ${share}%;"></div>
+                  </div>
+                  <span class="font-mono" style="font-size: 11px;">${share}%</span>
+                </div>
+              </td>
+              <td class="font-mono" style="color: #10b981; font-weight: 600;">${saved}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
   }
 
   // Interactive Actions
@@ -3537,6 +4278,8 @@
   const viewTitles = {
     monitor: { title: 'System Monitor', sub: 'Real-time hardware telemetry & inference performance' },
     activity: { title: 'Activity & Audit Log', sub: 'Live streaming lifecycle feed & request telemetry' },
+    performance: { title: 'Model Performance', sub: 'Inference latency, TTFT, decode throughput & benchmark telemetry' },
+    usage: { title: 'Usage & Cost Savings', sub: 'Token consumption, multi-modal volume & cloud ROI savings calculator' },
     playground: { title: 'Playground', sub: 'Multi-modal generation studio (Chat, Vision, Audio, STT)' },
     packs: { title: 'Model Packs & Registry', sub: 'Browse, inspect, and download optimized model packages' },
     governance: { title: 'Governance & Policy', sub: 'Enterprise privacy, CAS deduplication audit & safety guardrails' }
@@ -3560,7 +4303,7 @@
       }
     });
 
-    const allViews = ['monitor', 'playground', 'packs', 'governance'];
+    const allViews = ['monitor', 'performance', 'usage', 'playground', 'packs', 'governance'];
     allViews.forEach(v => {
       const el = document.getElementById(`tab-view-${v}`);
       if (el) el.style.display = (v === tab) ? 'block' : 'none';

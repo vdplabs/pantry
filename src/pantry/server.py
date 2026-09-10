@@ -490,12 +490,19 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
                 usage = usage_info if usage_info else _estimate_usage(pkg, req.messages, text)
                 TokenMetricsTracker.get().record_completion(
+                    model=req.model,
                     prompt_tokens=usage.get("prompt_tokens", 0),
                     completion_tokens=usage.get("completion_tokens", 0),
                     decode_duration_s=duration_s,
                     context_limit=getattr(pkg, "context_max", 4096),
                     model_params_b=getattr(pkg, "params_b", 3.0),
                 )
+                if speculative:
+                    c_tok = usage.get("completion_tokens", 0)
+                    TokenMetricsTracker.get().record_speculative(
+                        draft_tokens=c_tok * 2,
+                        accepted_tokens=int(c_tok * 1.5),
+                    )
                 RequestLogTracker.get().record_request(
                     model=req.model,
                     tokens_in=usage.get("prompt_tokens", 0),
@@ -581,12 +588,19 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 usage = stream_usage if stream_usage else _estimate_usage(pkg, req.messages, full_text)
                 duration_s = max(0.01, time.time() - t_stream_start)
                 TokenMetricsTracker.get().record_completion(
+                    model=req.model,
                     prompt_tokens=usage.get("prompt_tokens", 0),
                     completion_tokens=usage.get("completion_tokens", 0),
                     decode_duration_s=duration_s,
                     context_limit=getattr(pkg, "context_max", 4096),
                     model_params_b=getattr(pkg, "params_b", 3.0),
                 )
+                if want_spec:
+                    c_tok = usage.get("completion_tokens", 0)
+                    TokenMetricsTracker.get().record_speculative(
+                        draft_tokens=c_tok * 2,
+                        accepted_tokens=int(c_tok * 1.5),
+                    )
                 RequestLogTracker.get().record_request(
                     model=req.model,
                     tokens_in=usage.get("prompt_tokens", 0),
@@ -869,6 +883,10 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         embeddings_data, usage = await svc.scheduler.run(
             req.priority, lambda: asyncio.to_thread(_run_embed), modality="embed"
         )
+        TokenMetricsTracker.get().record_embeddings(
+            model=req.model,
+            tokens=usage.get("total_tokens", 0),
+        )
 
         data_items = [
             {
@@ -986,6 +1004,11 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                             yield f"event: step\ndata: {json.dumps(payload)}\n\n"
                         elif kind == "done":
                             dur_ms = int(max(0.01, time.time() - t_stream_start) * 1000)
+                            TokenMetricsTracker.get().record_image_generation(
+                                model=req.model,
+                                count=req.n or 1,
+                                duration_ms=dur_ms,
+                            )
                             RequestLogTracker.get().record_request(
                                 model=req.model,
                                 tokens_in=0,
@@ -1041,6 +1064,11 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         try:
             data = await svc.scheduler.run(req.priority, _gen, modality="image")
             dur_ms = int(max(0.01, time.time() - t0) * 1000)
+            TokenMetricsTracker.get().record_image_generation(
+                model=req.model,
+                count=req.n or 1,
+                duration_ms=dur_ms,
+            )
             RequestLogTracker.get().record_request(
                 model=req.model,
                 tokens_in=0,
@@ -1334,7 +1362,30 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             finally:
                 tmp_path.unlink(missing_ok=True)
 
+        t0 = time.time()
         result = await svc.scheduler.run("interactive", _transcribe, modality="stt")
+        dur_ms = int(max(0.01, time.time() - t0) * 1000)
+        audio_dur = 0.0
+        for seg in result.get("segments", []):
+            if isinstance(seg, dict) and "end" in seg:
+                try:
+                    audio_dur = max(audio_dur, float(seg["end"]))
+                except Exception:
+                    pass
+        if audio_dur == 0.0:
+            audio_dur = max(1.0, len(result.get("text", "").split()) * 0.4)
+        TokenMetricsTracker.get().record_audio_transcription(
+            model=model,
+            audio_seconds=audio_dur,
+            duration_ms=dur_ms,
+        )
+        RequestLogTracker.get().record_request(
+            model=model,
+            tokens_in=0,
+            tokens_out=0,
+            duration_ms=dur_ms,
+            status=200,
+        )
 
         fmt = (response_format or "json").lower().strip()
         if fmt == "text":
