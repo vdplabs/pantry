@@ -124,11 +124,13 @@ class TokenMetricsTracker:
 
         # Multi-modal volume metrics
         self.session_images_generated: int = 0
+        self.session_videos_generated: int = 0
         self.session_audio_seconds: float = 0.0
         self.session_music_seconds: float = 0.0
         self.session_embedding_tokens: int = 0
 
         self.cumulative_images_generated: int = 0
+        self.cumulative_videos_generated: int = 0
         self.cumulative_audio_seconds: float = 0.0
         self.cumulative_music_seconds: float = 0.0
         self.cumulative_embedding_tokens: int = 0
@@ -263,7 +265,33 @@ class TokenMetricsTracker:
             c = max(1, count)
             self.session_images_generated += c
             self.cumulative_images_generated += c
+            self.session_requests += c
+            self.cumulative_requests += c
             m_entry = self._get_or_create_model_entry(model, modality="image")
+            m_entry["session_requests"] += c
+            m_entry["cumulative_requests"] += c
+            m_entry["last_active"] = time.time()
+            if duration_ms > 0:
+                m_entry["durations_ms"].append(round(duration_ms, 1))
+                if len(m_entry["durations_ms"]) > 200:
+                    m_entry["durations_ms"].pop(0)
+
+    def record_video_generation(
+        self,
+        *,
+        model: str,
+        count: int = 1,
+        duration_ms: float = 0.0,
+        frames: int = 0,
+        video_seconds: float = 0.0,
+    ) -> None:
+        with self._lock:
+            c = max(1, count)
+            self.session_videos_generated += c
+            self.cumulative_videos_generated += c
+            self.session_requests += c
+            self.cumulative_requests += c
+            m_entry = self._get_or_create_model_entry(model, modality="video")
             m_entry["session_requests"] += c
             m_entry["cumulative_requests"] += c
             m_entry["last_active"] = time.time()
@@ -277,6 +305,8 @@ class TokenMetricsTracker:
             s = max(0.0, audio_seconds)
             self.session_audio_seconds += s
             self.cumulative_audio_seconds += s
+            self.session_requests += 1
+            self.cumulative_requests += 1
             m_entry = self._get_or_create_model_entry(model, modality="audio")
             m_entry["session_requests"] += 1
             m_entry["cumulative_requests"] += 1
@@ -291,6 +321,8 @@ class TokenMetricsTracker:
             s = max(0.0, audio_seconds)
             self.session_music_seconds += s
             self.cumulative_music_seconds += s
+            self.session_requests += 1
+            self.cumulative_requests += 1
             m_entry = self._get_or_create_model_entry(model, modality="music")
             m_entry["session_requests"] += 1
             m_entry["cumulative_requests"] += 1
@@ -305,6 +337,8 @@ class TokenMetricsTracker:
             t = max(0, tokens)
             self.session_embedding_tokens += t
             self.cumulative_embedding_tokens += t
+            self.session_requests += 1
+            self.cumulative_requests += 1
             m_entry = self._get_or_create_model_entry(model, modality="embedding")
             m_entry["session_prompt_tokens"] += t
             m_entry["session_total_tokens"] += t
@@ -330,6 +364,7 @@ class TokenMetricsTracker:
             self.session_total_tokens = 0
             self.session_requests = 0
             self.session_images_generated = 0
+            self.session_videos_generated = 0
             self.session_audio_seconds = 0.0
             self.session_music_seconds = 0.0
             self.session_embedding_tokens = 0
@@ -365,19 +400,29 @@ class TokenMetricsTracker:
                 return round(s[idx], 1)
 
             # Calculate Cloud Cost Savings
-            # Standard rates: $2.50/M prompt, $10.00/M completion, $0.04/image, $0.006/audio min ($0.0001/s), $0.02/M embeddings
+            # Standard commercial rates:
+            # - Text: $2.50/M prompt, $10.00/M completion
+            # - Images: $0.040 per generated image (DALL-E 3 / Flux Pro equivalent)
+            # - Videos: $0.200 per generated video clip (Runway Gen-3 / Luma Dream Machine equivalent)
+            # - Audio: $0.006 per transcribed minute ($0.0001/sec)
+            # - Music: $0.030 per minute ($0.0005/sec)
+            # - Embeddings: $0.020/M tokens
             session_cost = (
                 (self.session_prompt_tokens / 1_000_000.0 * 2.50)
                 + (self.session_completion_tokens / 1_000_000.0 * 10.00)
                 + (self.session_images_generated * 0.040)
+                + (self.session_videos_generated * 0.200)
                 + (self.session_audio_seconds * 0.0001)
+                + (self.session_music_seconds * 0.0005)
                 + (self.session_embedding_tokens / 1_000_000.0 * 0.020)
             )
             cumulative_cost = (
                 (self.cumulative_prompt_tokens / 1_000_000.0 * 2.50)
                 + (self.cumulative_completion_tokens / 1_000_000.0 * 10.00)
                 + (self.cumulative_images_generated * 0.040)
+                + (self.cumulative_videos_generated * 0.200)
                 + (self.cumulative_audio_seconds * 0.0001)
+                + (self.cumulative_music_seconds * 0.0005)
                 + (self.cumulative_embedding_tokens / 1_000_000.0 * 0.020)
             )
 
@@ -387,10 +432,28 @@ class TokenMetricsTracker:
                 p_out = m["session_completion_tokens"]
                 p_tot = m["session_total_tokens"]
                 reqs = m["session_requests"]
+                mod = m.get("modality", "text")
                 dur_avg = round(sum(m["durations_ms"]) / len(m["durations_ms"]), 1) if m["durations_ms"] else None
+
+                # Calculate per-model cost saved based on its specific modality
+                if mod == "text":
+                    m_saved = (p_in / 1_000_000.0 * 2.50) + (p_out / 1_000_000.0 * 10.00)
+                elif mod == "image":
+                    m_saved = reqs * 0.040
+                elif mod == "video":
+                    m_saved = reqs * 0.200
+                elif mod in {"audio", "stt"}:
+                    m_saved = reqs * 0.006
+                elif mod == "music":
+                    m_saved = reqs * 0.015
+                elif mod == "embedding":
+                    m_saved = p_in / 1_000_000.0 * 0.020
+                else:
+                    m_saved = 0.0
+
                 models_summary[mid] = {
                     "model": mid,
-                    "modality": m.get("modality", "text"),
+                    "modality": mod,
                     "session_prompt_tokens": p_in,
                     "session_completion_tokens": p_out,
                     "session_total_tokens": p_tot,
@@ -405,9 +468,7 @@ class TokenMetricsTracker:
                     "ttft_ms_p99": _pct(m["ttft_samples"], 99.0),
                     "avg_duration_ms": dur_avg,
                     "last_active": m.get("last_active"),
-                    "cost_saved_usd": round(
-                        (p_in / 1_000_000.0 * 2.50) + (p_out / 1_000_000.0 * 10.00), 4
-                    ) if m.get("modality") == "text" else 0.0,
+                    "cost_saved_usd": round(m_saved, 4),
                 }
 
             spec_rate = None
@@ -450,6 +511,7 @@ class TokenMetricsTracker:
                 "modality_usage": {
                     "text_tokens": self.session_total_tokens,
                     "images_generated": self.session_images_generated,
+                    "videos_generated": self.session_videos_generated,
                     "audio_seconds_transcribed": round(self.session_audio_seconds, 1),
                     "music_seconds_generated": round(self.session_music_seconds, 1),
                     "embedding_tokens": self.session_embedding_tokens,

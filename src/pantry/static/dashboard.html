@@ -2022,7 +2022,7 @@
     /* Modality Volume Grid */
     .modality-volume-grid {
       display: grid;
-      grid-template-columns: repeat(4, 1fr);
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
       gap: 14px;
       margin-bottom: 24px;
     }
@@ -2742,6 +2742,11 @@
           <div class="modality-vol-lbl"><span>🎨</span> Diffusion Images</div>
           <div class="modality-vol-val font-mono" id="mod-vol-images">0 images</div>
           <div class="modality-vol-sub">Rendered via Image Studio</div>
+        </div>
+        <div class="modality-vol-card">
+          <div class="modality-vol-lbl"><span>🎬</span> Video Clips</div>
+          <div class="modality-vol-val font-mono" id="mod-vol-video">0 clips</div>
+          <div class="modality-vol-sub">Rendered via Video Studio</div>
         </div>
         <div class="modality-vol-card">
           <div class="modality-vol-lbl"><span>🎙️</span> Speech-to-Text</div>
@@ -4152,8 +4157,13 @@
             </div>
           `;
         }).join('');
-      }}
+      }
     }
+
+    // 7. Update Analytics Views
+    renderPerformance(data);
+    renderUsage(data);
+  }
 
 
   function renderPerformance(data) {
@@ -4167,7 +4177,24 @@
     if (kpiModels) kpiModels.textContent = modelKeys.length > 0 ? `${modelKeys.length} Model${modelKeys.length === 1 ? '' : 's'}` : '0';
 
     const kpiPeak = document.getElementById('perf-kpi-peak-tps');
-    if (kpiPeak) kpiPeak.innerHTML = `${(inf.peak_decode_tps || 0).toFixed(1)} <span style="font-size: 14px; font-weight: 500;">tok/s</span>`;
+    if (kpiPeak) {
+      if (inf.peak_decode_tps && inf.peak_decode_tps > 0) {
+        kpiPeak.innerHTML = `${inf.peak_decode_tps.toFixed(1)} <span style="font-size: 14px; font-weight: 500;">tok/s</span>`;
+      } else {
+        let bestDur = null;
+        for (const k of modelKeys) {
+          const m = models[k];
+          if (m.avg_duration_ms) {
+            if (bestDur === null || m.avg_duration_ms < bestDur) bestDur = m.avg_duration_ms;
+          }
+        }
+        if (bestDur !== null) {
+          kpiPeak.innerHTML = bestDur >= 1000 ? `${(bestDur / 1000).toFixed(1)}s <span style="font-size: 14px; font-weight: 500;">/ gen</span>` : `${Math.round(bestDur)}ms <span style="font-size: 14px; font-weight: 500;">/ gen</span>`;
+        } else {
+          kpiPeak.innerHTML = `0.0 <span style="font-size: 14px; font-weight: 500;">tok/s</span>`;
+        }
+      }
+    }
 
     const kpiBestTtft = document.getElementById('perf-kpi-best-ttft');
     if (kpiBestTtft) {
@@ -4205,16 +4232,42 @@
         tbody.innerHTML = modelKeys.map(k => {
           const m = models[k];
           const mod = m.modality || 'text';
-          const p50 = m.decode_tps_p50 != null ? `${m.decode_tps_p50} t/s` : '—';
-          const p95 = m.decode_tps_p95 != null ? `${m.decode_tps_p95} t/s` : '—';
-          const peak = m.peak_decode_tps ? `${m.peak_decode_tps.toFixed(1)} t/s` : '—';
-          const ttft50 = m.ttft_ms_p50 != null ? `${m.ttft_ms_p50} ms` : '—';
-          const ttft95 = m.ttft_ms_p95 != null ? `${m.ttft_ms_p95} ms` : '—';
-          const avgDur = m.avg_duration_ms != null ? `${m.avg_duration_ms} ms` : '—';
+          const isImg = mod === 'image';
+          const isVid = mod === 'video';
+          const isAud = mod === 'audio' || mod === 'music';
+
+          const avgDur = m.avg_duration_ms != null ? (m.avg_duration_ms >= 1000 ? `${(m.avg_duration_ms / 1000).toFixed(1)}s` : `${Math.round(m.avg_duration_ms)} ms`) : '—';
+          let p50 = m.decode_tps_p50 != null ? `${m.decode_tps_p50} t/s` : '—';
+          let p95 = m.decode_tps_p95 != null ? `${m.decode_tps_p95} t/s` : '—';
+          let peak = m.peak_decode_tps ? `${m.peak_decode_tps.toFixed(1)} t/s` : '—';
+          let ttft50 = m.ttft_ms_p50 != null ? `${m.ttft_ms_p50} ms` : '—';
+          let ttft95 = m.ttft_ms_p95 != null ? `${m.ttft_ms_p95} ms` : '—';
+
+          if (isImg) {
+            p50 = avgDur;
+            p95 = 'image';
+            peak = avgDur;
+            ttft50 = 'Diffusion';
+            ttft95 = 'mflux';
+          } else if (isVid) {
+            p50 = avgDur;
+            p95 = 'clip';
+            peak = avgDur;
+            ttft50 = 'DiT Gen';
+            ttft95 = 'ltx';
+          } else if (isAud) {
+            p50 = avgDur;
+            p95 = 'audio';
+            peak = avgDur;
+            ttft50 = 'Whisper';
+            ttft95 = 'mlx';
+          }
+
           const reqs = `${m.session_requests || 0} / ${m.cumulative_requests || 0}`;
 
           let modIcon = '💬';
           if (mod === 'image') modIcon = '🎨';
+          else if (mod === 'video') modIcon = '🎬';
           else if (mod === 'audio') modIcon = '🎙️';
           else if (mod === 'music') modIcon = '🎵';
           else if (mod === 'embedding') modIcon = '🔢';
@@ -4284,10 +4337,22 @@
     const kpiTok = document.getElementById('usage-kpi-tokens');
     const kpiTokSub = document.getElementById('usage-kpi-tokens-sub');
     if (kpiTok) kpiTok.textContent = (sess.total_tokens || 0).toLocaleString();
-    if (kpiTokSub) kpiTokSub.textContent = `${(sess.prompt_tokens || 0).toLocaleString()} in · ${(sess.completion_tokens || 0).toLocaleString()} out`;
+    if (kpiTokSub) {
+      if (sess.total_tokens > 0) {
+        kpiTokSub.textContent = `${(sess.prompt_tokens || 0).toLocaleString()} in · ${(sess.completion_tokens || 0).toLocaleString()} out`;
+      } else {
+        const parts = [];
+        if (modUsage.images_generated) parts.push(`${modUsage.images_generated} img`);
+        if (modUsage.videos_generated) parts.push(`${modUsage.videos_generated} vid`);
+        if (modUsage.audio_seconds_transcribed) parts.push(`${modUsage.audio_seconds_transcribed.toFixed(0)}s audio`);
+        if (modUsage.music_seconds_generated) parts.push(`${modUsage.music_seconds_generated.toFixed(0)}s music`);
+        kpiTokSub.textContent = parts.length > 0 ? parts.join(' · ') : '0 in · 0 out';
+      }
+    }
 
+    const totalReqs = sess.requests || modelKeys.reduce((acc, k) => acc + (models[k].session_requests || 0), 0);
     const kpiReq = document.getElementById('usage-kpi-requests');
-    if (kpiReq) kpiReq.textContent = (sess.requests || 0).toLocaleString();
+    if (kpiReq) kpiReq.textContent = (totalReqs || 0).toLocaleString();
 
     const kpiSaved = document.getElementById('usage-kpi-saved');
     if (kpiSaved) kpiSaved.textContent = `$${(savings.session_saved_usd || 0.00).toFixed(2)}`;
@@ -4305,12 +4370,14 @@
     const mText = document.getElementById('mod-vol-text');
     const mTextSub = document.getElementById('mod-vol-text-sub');
     const mImg = document.getElementById('mod-vol-images');
+    const mVid = document.getElementById('mod-vol-video');
     const mAud = document.getElementById('mod-vol-audio');
     const mEmb = document.getElementById('mod-vol-embed');
 
     if (mText) mText.textContent = `${(modUsage.text_tokens || 0).toLocaleString()} tokens`;
     if (mTextSub) mTextSub.textContent = `${(sess.prompt_tokens || 0).toLocaleString()} in · ${(sess.completion_tokens || 0).toLocaleString()} out`;
     if (mImg) mImg.textContent = `${(modUsage.images_generated || 0).toLocaleString()} image${modUsage.images_generated === 1 ? '' : 's'}`;
+    if (mVid) mVid.textContent = `${(modUsage.videos_generated || 0).toLocaleString()} clip${modUsage.videos_generated === 1 ? '' : 's'}`;
     if (mAud) mAud.textContent = `${(modUsage.audio_seconds_transcribed || 0).toFixed(1)}s`;
     if (mEmb) mEmb.textContent = `${(modUsage.embedding_tokens || 0).toLocaleString()} tokens`;
 
@@ -4319,7 +4386,7 @@
     const countChip = document.getElementById('usage-table-count');
     if (countChip) countChip.textContent = `${modelKeys.length} model${modelKeys.length === 1 ? '' : 's'} recorded`;
 
-    const totalSessionTok = sess.total_tokens || 1;
+    const effReqBase = totalReqs > 0 ? totalReqs : 1;
 
     if (tbody) {
       if (modelKeys.length === 0) {
@@ -4338,11 +4405,30 @@
           const pOut = m.session_completion_tokens || 0;
           const pTot = m.session_total_tokens || 0;
           const reqs = m.session_requests || 0;
-          const share = totalSessionTok > 0 ? ((pTot / totalSessionTok) * 100.0).toFixed(1) : '0.0';
-          const saved = `$${(m.cost_saved_usd || 0.00).toFixed(4)}`;
+          const share = effReqBase > 0 ? ((reqs / effReqBase) * 100.0).toFixed(1) : '0.0';
+          const saved = `$${(m.cost_saved_usd != null ? m.cost_saved_usd : 0.00).toFixed(2)}`;
+
+          let pInStr = pIn ? pIn.toLocaleString() : '—';
+          let pOutStr = pOut ? pOut.toLocaleString() : '—';
+          let pTotStr = pTot ? pTot.toLocaleString() : '—';
+
+          if (mod === 'image') {
+            pInStr = '—';
+            pOutStr = `${reqs} img`;
+            pTotStr = '—';
+          } else if (mod === 'video') {
+            pInStr = '—';
+            pOutStr = `${reqs} clip${reqs === 1 ? '' : 's'}`;
+            pTotStr = '—';
+          } else if (mod === 'audio' || mod === 'music') {
+            pInStr = '—';
+            pOutStr = m.audio_seconds ? `${m.audio_seconds.toFixed(1)}s` : `${reqs} req`;
+            pTotStr = '—';
+          }
 
           let modIcon = '💬';
           if (mod === 'image') modIcon = '🎨';
+          else if (mod === 'video') modIcon = '🎬';
           else if (mod === 'audio') modIcon = '🎙️';
           else if (mod === 'music') modIcon = '🎵';
           else if (mod === 'embedding') modIcon = '🔢';
@@ -4357,9 +4443,9 @@
               </td>
               <td><span class="modality-pill ${mod}">${mod.toUpperCase()}</span></td>
               <td class="font-mono">${reqs.toLocaleString()}</td>
-              <td class="font-mono">${pIn.toLocaleString()}</td>
-              <td class="font-mono">${pOut.toLocaleString()}</td>
-              <td class="font-mono" style="font-weight: 600;">${pTot.toLocaleString()}</td>
+              <td class="font-mono">${pInStr}</td>
+              <td class="font-mono">${pOutStr}</td>
+              <td class="font-mono" style="font-weight: 600;">${pTotStr}</td>
               <td>
                 <div style="display: flex; align-items: center; gap: 6px;">
                   <div class="progress-bar" style="width: 60px; height: 5px;">
@@ -4489,6 +4575,12 @@
 
     if (tab === 'playground') {
       fetchPlaygroundModels();
+    }
+    if (tab === 'performance' && lastStats) {
+      renderPerformance(lastStats);
+    }
+    if (tab === 'usage' && lastStats) {
+      renderUsage(lastStats);
     }
   }
 

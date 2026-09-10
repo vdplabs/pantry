@@ -356,6 +356,7 @@ def test_model_performance_and_usage_tracking(tmp_path):
 
     # Record multi-modal events
     tracker.record_image_generation(model="z-image-turbo", count=2, duration_ms=1500.0)
+    tracker.record_video_generation(model="ltx-video-2b", count=1, duration_ms=8000.0, frames=24, video_seconds=4.0)
     tracker.record_audio_transcription(model="whisper-large-v3", audio_seconds=45.0, duration_ms=1200.0)
     tracker.record_embeddings(model="bge-m3", tokens=1000, duration_ms=40.0)
     tracker.record_speculative(draft_tokens=200, accepted_tokens=150)
@@ -375,16 +376,26 @@ def test_model_performance_and_usage_tracking(tmp_path):
     assert qwen["ttft_ms_p50"] == 120.0
     assert qwen["cost_saved_usd"] > 0
 
+    assert "ltx-video-2b" in inf["models"]
+    vid = inf["models"]["ltx-video-2b"]
+    assert vid["modality"] == "video"
+    assert vid["session_requests"] == 1
+    assert vid["cost_saved_usd"] == 0.20
+
     # 2. Modality usage
     mod = inf["modality_usage"]
     assert mod["text_tokens"] == 2500
     assert mod["images_generated"] == 2
+    assert mod["videos_generated"] == 1
     assert mod["audio_seconds_transcribed"] == 45.0
     assert mod["embedding_tokens"] == 1000
 
+    # Verify total requests across modalities: 1 text + 2 images + 1 video + 1 audio + 1 embedding = 6
+    assert inf["session"]["requests"] == 6
+
     # 3. Cloud savings ROI
     sav = inf["cloud_savings"]
-    assert sav["session_saved_usd"] > 0.05
+    assert sav["session_saved_usd"] > 0.25
     assert sav["cumulative_saved_usd"] >= sav["session_saved_usd"]
     assert sav["gpt4o_equiv_usd"] > 0
 

@@ -1289,12 +1289,38 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         async def _gen() -> list[dict]:
             return await asyncio.to_thread(_video_fn)
 
-        data = await svc.scheduler.run(req.priority, _gen, modality="video", model=req.model, description="Generating video / rendering frames…")
-        elapsed = round(time.time() - t0, 2)
-        print(
-            f"[pantry.server] POST /v1/video/generations completed successfully in {elapsed}s for '{pkg.id}'",
-            flush=True,
-        )
+        try:
+            data = await svc.scheduler.run(req.priority, _gen, modality="video", model=req.model, description="Generating video / rendering frames…")
+            elapsed = round(time.time() - t0, 2)
+            dur_ms = int(max(0.01, time.time() - t0) * 1000)
+            TokenMetricsTracker.get().record_video_generation(
+                model=req.model,
+                count=1,
+                duration_ms=dur_ms,
+                frames=req.frames,
+                video_seconds=req.frames / max(1, req.fps),
+            )
+            RequestLogTracker.get().record_request(
+                model=req.model,
+                tokens_in=0,
+                tokens_out=0,
+                duration_ms=dur_ms,
+                status=200,
+            )
+            print(
+                f"[pantry.server] POST /v1/video/generations completed successfully in {elapsed}s for '{pkg.id}'",
+                flush=True,
+            )
+        except Exception as exc:
+            dur_ms = int(max(0.01, time.time() - t0) * 1000)
+            RequestLogTracker.get().record_request(
+                model=req.model,
+                tokens_in=0,
+                tokens_out=0,
+                duration_ms=dur_ms,
+                status=500,
+            )
+            raise exc
 
         want_shm = (req.response_format or "").lower() == "shm" or request.headers.get("x-pantry-transport", "").lower() == "shm"
         if want_shm:
