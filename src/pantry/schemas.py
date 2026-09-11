@@ -87,6 +87,7 @@ class CapabilityRequest(BaseModel):
     template_family: str | None = None
     tool_protocol: str | None = None
     prefer_speculative: bool = False
+    draft_model: str | None = None
     # When set, resolve will not cross this family.
     pin_family: str | None = None
     # Task-specific intent (coding, reasoning, chat, general, embed)
@@ -184,6 +185,8 @@ def normalize_message_content(content: str | list[Any] | None) -> str:
 
 
 class CompleteRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     model: str = "chat-standard"
     messages: list[ChatMessage]
     stream: bool = False
@@ -194,6 +197,8 @@ class CompleteRequest(BaseModel):
     priority: str = "interactive"  # interactive | batch
     # When true (or model alias chat-fast), use draft_package_id if weights are ready.
     prefer_speculative: bool = False
+    draft_model: str | None = Field(default=None, alias="draft_package_id")
+    num_draft_tokens: int | None = None
     tools: list[dict[str, Any]] | None = None
     tool_choice: str | dict[str, Any] | None = None
 
@@ -201,6 +206,52 @@ class CompleteRequest(BaseModel):
         if self.max_tokens is not None:
             return self.max_tokens
         return self.max_completion_tokens
+
+
+class SpeculativePairInfo(BaseModel):
+    target_package_id: str
+    draft_package_id: str
+    target_title: str
+    draft_title: str
+    target_family: str
+    draft_family: str
+    target_ram_gb: float
+    draft_ram_gb: float
+    composite_ram_gb: float
+    ready: bool
+    feasible_on_hardware: bool
+    estimated_target_tps: float
+    estimated_speculative_tps: float
+    estimated_speedup: float
+    source: str = "curated"  # "curated" or "discovered"
+
+
+class SpeculativeBenchmarkRequest(BaseModel):
+    target_model: str = "chat-standard"
+    draft_model: str | None = None
+    prompt: str = "Explain quantum computing in simple terms with two analogies."
+    max_tokens: int = 64
+    num_draft_tokens: int = 2
+    temperature: float = 0.0
+
+
+class SpeculativeBenchmarkResponse(BaseModel):
+    target_model: str
+    draft_model: str
+    target_package_id: str
+    draft_package_id: str
+    standalone_tokens: int
+    standalone_duration_s: float
+    standalone_tps: float
+    speculative_tokens: int
+    speculative_duration_s: float
+    speculative_tps: float
+    speedup: float
+    accepted_tokens: int
+    draft_tokens: int
+    acceptance_rate: float
+    hardware_chip: str
+    dynamic_ceiling_gb: float
 
 
 class PullBody(BaseModel):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 import os
 import threading
 import time
@@ -11,6 +12,8 @@ from collections.abc import AsyncIterator
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from fastapi import (
     BackgroundTasks,
@@ -44,10 +47,14 @@ from pantry.schemas import (
     LoadBody,
     PackageManifest,
     PullBody,
+    QualityTier,
     RebindPackBody,
     StoragePruneRequest,
     StoragePruneResponse,
     StorageStatsResponse,
+    SpeculativeBenchmarkRequest,
+    SpeculativeBenchmarkResponse,
+    SpeculativePairInfo,
     UnloadBody,
     VideoGenerateRequest,
 )
@@ -568,18 +575,19 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
             )
         runtime = svc.runtimes.for_manifest(pkg)
-        want_spec = bool(req.prefer_speculative) or req.model.strip() in {
-            "chat-fast",
-            "chat-speculative",
-        }
+        want_spec = (
+            bool(req.prefer_speculative)
+            or req.model.strip() in {"chat-fast", "chat-speculative"}
+            or req.draft_model is not None
+        )
         from pantry.runtime import resolve_draft_path
 
         draft_path, draft_id = resolve_draft_path(
-            store, pkg, prefer_speculative=want_spec
+            store, pkg, prefer_speculative=want_spec, draft_model=req.draft_model
         )
         speculative = draft_path is not None
 
-        usage_info: dict[str, int] = {}
+        usage_info: dict[str, Any] = {}
 
         async def _complete() -> str:
             with svc.tracking_load(pkg.id, "Generating chat response…", modality="text"):
@@ -589,6 +597,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     max_tokens=req.effective_max_tokens(),
                     temperature=req.temperature,
                     prefer_speculative=want_spec,
+                    draft_model=req.draft_model,
+                    num_draft_tokens=req.num_draft_tokens,
                     usage=usage_info,
                     tools=req.tools,
                 )
@@ -617,11 +627,18 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     model_params_b=getattr(pkg, "params_b", 3.0),
                 )
                 if speculative:
-                    c_tok = usage.get("completion_tokens", 0)
-                    TokenMetricsTracker.get().record_speculative(
-                        draft_tokens=c_tok * 2,
-                        accepted_tokens=int(c_tok * 1.5),
-                    )
+                    spec_info = usage.get("speculative") if isinstance(usage.get("speculative"), dict) else None
+                    if spec_info:
+                        TokenMetricsTracker.get().record_speculative(
+                            draft_tokens=spec_info.get("draft_tokens", 0),
+                            accepted_tokens=spec_info.get("accepted_tokens", 0),
+                        )
+                    else:
+                        c_tok = usage.get("completion_tokens", 0)
+                        TokenMetricsTracker.get().record_speculative(
+                            draft_tokens=c_tok * 2,
+                            accepted_tokens=int(c_tok * 1.5),
+                        )
                 RequestLogTracker.get().record_request(
                     model=req.model,
                     tokens_in=usage.get("prompt_tokens", 0),
@@ -629,7 +646,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     duration_ms=int(duration_s * 1000),
                     status=200,
                 )
-                return {
+                res: dict[str, Any] = {
                     "id": f"chatcmpl-{uuid.uuid4().hex[:12]}",
                     "object": "chat.completion",
                     "created": int(time.time()),
@@ -646,6 +663,9 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     ],
                     "usage": usage,
                 }
+                if speculative and isinstance(usage.get("speculative"), dict):
+                    res["speculative_details"] = usage["speculative"]
+                return res
             except Exception as exc:
                 dur_ms = int(max(0.01, time.time() - t0) * 1000)
                 st = getattr(exc, "status_code", 500)
@@ -663,7 +683,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             created = int(time.time())
             t_stream_start = time.time()
             assembled: list[str] = []
-            stream_usage: dict[str, int] = {}
+            stream_usage: dict[str, Any] = {}
             svc.active_streams += 1
 
             async def _locked_stream() -> AsyncIterator[str]:
@@ -675,6 +695,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                             max_tokens=req.effective_max_tokens(),
                             temperature=req.temperature,
                             prefer_speculative=want_spec,
+                            draft_model=req.draft_model,
+                            num_draft_tokens=req.num_draft_tokens,
                             usage=stream_usage,
                             tools=req.tools,
                         ):
@@ -714,12 +736,19 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     context_limit=getattr(pkg, "context_max", 4096),
                     model_params_b=getattr(pkg, "params_b", 3.0),
                 )
-                if want_spec:
-                    c_tok = usage.get("completion_tokens", 0)
-                    TokenMetricsTracker.get().record_speculative(
-                        draft_tokens=c_tok * 2,
-                        accepted_tokens=int(c_tok * 1.5),
-                    )
+                if speculative:
+                    spec_info = usage.get("speculative") if isinstance(usage.get("speculative"), dict) else None
+                    if spec_info:
+                        TokenMetricsTracker.get().record_speculative(
+                            draft_tokens=spec_info.get("draft_tokens", 0),
+                            accepted_tokens=spec_info.get("accepted_tokens", 0),
+                        )
+                    else:
+                        c_tok = usage.get("completion_tokens", 0)
+                        TokenMetricsTracker.get().record_speculative(
+                            draft_tokens=c_tok * 2,
+                            accepted_tokens=int(c_tok * 1.5),
+                        )
                 RequestLogTracker.get().record_request(
                     model=req.model,
                     tokens_in=usage.get("prompt_tokens", 0),
@@ -734,7 +763,11 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     "model": req.model,
                     "choices": [{"index": 0, "delta": {}, "finish_reason": finish_reason}],
                     "usage": usage,
+                    "speculative": speculative,
+                    "draft_package_id": draft_id,
                 }
+                if speculative and isinstance(usage.get("speculative"), dict):
+                    done["speculative_details"] = usage["speculative"]
                 yield f"data: {json.dumps(done)}\n\n".encode()
                 yield b"data: [DONE]\n\n"
             except Exception as exc:
@@ -752,6 +785,149 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 svc.active_streams = max(0, svc.active_streams - 1)
 
         return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+    @app.get("/v1/speculative/pairs")
+    def speculative_pairs() -> dict[str, Any]:
+        from pantry.hardware import get_apple_silicon_device_info
+        from pantry.memory import get_available_unified_dram
+        from pantry.resolve import discover_speculative_pairs
+
+        ceiling_gb = get_available_unified_dram() / (1024.0**3)
+        dev_info = get_apple_silicon_device_info()
+        pairs = discover_speculative_pairs(
+            store.list_manifests(),
+            is_ready=store.weights_ready,
+            dynamic_ceiling_gb=ceiling_gb,
+            chip_name=dev_info.get("device_name"),
+        )
+        return {
+            "object": "list",
+            "dynamic_ceiling_gb": ceiling_gb,
+            "chip_name": dev_info.get("device_name", "Apple Silicon"),
+            "data": [p.model_dump() for p in pairs],
+        }
+
+    @app.post("/v1/speculative/benchmark")
+    async def speculative_benchmark(req: SpeculativeBenchmarkRequest) -> SpeculativeBenchmarkResponse:
+        from pantry.hardware import get_apple_silicon_device_info
+        from pantry.memory import get_available_unified_dram
+        from pantry.resolve import find_by_model_string
+
+        target_pkg = store.load_manifest(req.target_model)
+        if target_pkg is None:
+            target_pkg = find_by_model_string(
+                req.target_model, store.list_manifests(), is_ready=store.weights_ready
+            )
+        if target_pkg is None:
+            raise HTTPException(status_code=404, detail=f"Target model '{req.target_model}' not found")
+        if not store.weights_ready(target_pkg):
+            raise HTTPException(status_code=409, detail=f"Weights not pulled for target '{target_pkg.id}'")
+
+        draft_model_str = req.draft_model or target_pkg.runtime.draft_package_id
+        draft_pkg = None
+        if draft_model_str:
+            draft_pkg = store.load_manifest(draft_model_str)
+            if draft_pkg is None:
+                draft_pkg = find_by_model_string(
+                    draft_model_str, store.list_manifests(), is_ready=store.weights_ready
+                )
+        if draft_pkg is None:
+            fam = (target_pkg.family or "").lower()
+            candidates = [
+                p
+                for p in store.list_manifests()
+                if p.id != target_pkg.id
+                and "text" in p.modalities
+                and (p.family or "").lower() == fam
+                and (p.ram_gb_min or 0) < (target_pkg.ram_gb_min or 0)
+                and store.weights_ready(p)
+            ]
+            if candidates:
+                candidates.sort(
+                    key=lambda p: (
+                        0 if p.quality_tier == QualityTier.compact else 1,
+                        p.ram_gb_min,
+                    )
+                )
+                draft_pkg = candidates[0]
+
+        if draft_pkg is None:
+            raise HTTPException(
+                status_code=400,
+                detail=f"No compatible ready draft model found for '{target_pkg.id}'",
+            )
+        if not store.weights_ready(draft_pkg):
+            raise HTTPException(
+                status_code=409,
+                detail=f"Weights not pulled for draft model '{draft_pkg.id}'",
+            )
+
+        rt = svc.runtimes.for_manifest(target_pkg)
+        messages = [ChatMessage(role="user", content=req.prompt)]
+
+        u_standalone: dict[str, Any] = {}
+        t0 = time.perf_counter()
+        with svc.tracking_load(target_pkg.id, "Benchmarking standalone target model…", modality="text"):
+            await rt.complete(
+                target_pkg,
+                messages,
+                max_tokens=req.max_tokens,
+                temperature=req.temperature,
+                prefer_speculative=False,
+                usage=u_standalone,
+            )
+        dur_standalone = max(0.001, time.perf_counter() - t0)
+        c_standalone = u_standalone.get("completion_tokens", 0)
+        tps_standalone = round(c_standalone / dur_standalone, 2)
+
+        u_spec: dict[str, Any] = {}
+        t1 = time.perf_counter()
+        with svc.tracking_load(
+            target_pkg.id,
+            f"Benchmarking speculative decoding (+{draft_pkg.id})…",
+            modality="text",
+        ):
+            await rt.complete(
+                target_pkg,
+                messages,
+                max_tokens=req.max_tokens,
+                temperature=req.temperature,
+                prefer_speculative=True,
+                draft_model=draft_pkg.id,
+                num_draft_tokens=req.num_draft_tokens,
+                usage=u_spec,
+            )
+        dur_spec = max(0.001, time.perf_counter() - t1)
+        c_spec = u_spec.get("completion_tokens", 0)
+        tps_spec = round(c_spec / dur_spec, 2)
+        speedup = round(tps_spec / tps_standalone if tps_standalone > 0 else 1.0, 2)
+
+        spec_data = u_spec.get("speculative") or {}
+        acc_tokens = spec_data.get("accepted_tokens", 0)
+        drafted_tokens = spec_data.get("draft_tokens", c_spec * req.num_draft_tokens)
+        acc_rate = spec_data.get("acceptance_rate", round(acc_tokens / max(1, drafted_tokens), 3))
+
+        dev_info = get_apple_silicon_device_info()
+        ceiling_gb = get_available_unified_dram() / (1024.0**3)
+
+        return SpeculativeBenchmarkResponse(
+            target_model=req.target_model,
+            draft_model=draft_pkg.id,
+            target_package_id=target_pkg.id,
+            draft_package_id=draft_pkg.id,
+            standalone_tokens=c_standalone,
+            standalone_duration_s=round(dur_standalone, 3),
+            standalone_tps=tps_standalone,
+            speculative_tokens=c_spec,
+            speculative_duration_s=round(dur_spec, 3),
+            speculative_tps=tps_spec,
+            speedup=speedup,
+            accepted_tokens=acc_tokens,
+            draft_tokens=drafted_tokens,
+            acceptance_rate=acc_rate,
+            hardware_chip=dev_info.get("device_name", "Apple Silicon"),
+            dynamic_ceiling_gb=ceiling_gb,
+        )
 
     @app.post("/v1/responses")
     async def responses(request: Request) -> Any:
@@ -1133,6 +1309,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                                     item.pop("b64_json", None)
                         loop.call_soon_threadsafe(queue.put_nowait, ("done", gen_data))
                     except Exception as exc:
+                        logger.exception("Image generation background worker failed: %s", exc)
                         loop.call_soon_threadsafe(queue.put_nowait, ("error", exc))
 
                 task = asyncio.create_task(_worker_task())
@@ -1173,7 +1350,23 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                                 duration_ms=dur_ms,
                                 status=500,
                             )
-                            err_payload = {"type": "error", "error": payload}
+                            if isinstance(payload, Exception):
+                                err_msg = str(payload)
+                                err_type = payload.__class__.__name__
+                            elif isinstance(payload, dict):
+                                err_msg = str(payload.get("message", payload))
+                                err_type = str(payload.get("type", "RuntimeError"))
+                            else:
+                                err_msg = str(payload)
+                                err_type = "RuntimeError"
+                            err_payload = {
+                                "type": "error",
+                                "error": {
+                                    "message": err_msg,
+                                    "type": err_type,
+                                },
+                                "message": err_msg,
+                            }
                             yield f"event: error\ndata: {json.dumps(err_payload)}\n\n"
                             break
                     await task

@@ -323,14 +323,23 @@ class MFluxImageRuntime:
         if model_warm:
             return
 
+        force = (
+            os.environ.get("PANTRY_FORCE_IMAGE_LOAD", "").lower() in {"1", "true", "yes"}
+            or os.environ.get("PANTRY_IGNORE_SWAP", "").lower() in {"1", "true", "yes"}
+        )
+        if force:
+            return
+
+        max_swap_gb = float(os.environ.get("PANTRY_IMAGE_MAX_SWAP_GB", "8.0"))
         swap = _swap_used_gb()
-        if swap is not None and swap >= 8.0:
+        if swap is not None and swap >= max_swap_gb:
             raise RuntimeError(
                 f"refusing cold image load: this Mac already has ~{swap:.1f} GB of swap in use. "
                 "Z-Image / FLUX cold-starts are unreliable under that pressure — Metal will "
                 "often GPU-timeout while compiling shaders. Free memory first: "
                 "`pantry unload`, quit heavy apps, wait for `sysctl vm.swapusage` to drop, "
-                "or reboot. Once an image pack is warm (menu bar → Loaded), retries are allowed "
+                "or reboot (or set PANTRY_IMAGE_MAX_SWAP_GB=16 / PANTRY_FORCE_IMAGE_LOAD=1 to bypass). "
+                "Once an image pack is warm (menu bar → Loaded), retries are allowed "
                 "even with residual swap."
             )
 

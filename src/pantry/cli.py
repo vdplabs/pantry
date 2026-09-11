@@ -1040,6 +1040,317 @@ def pack_delete_cmd(
 
 app.add_typer(pack_app, name="pack")
 
+speculative_app = typer.Typer(
+    name="speculative",
+    help="Speculative decoding candidate pair status, benchmarking, and management",
+)
+
+
+@speculative_app.command("list")
+def spec_list_cmd(
+    as_json: bool = typer.Option(False, "--json", "--as-json", help="Output JSON array"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
+) -> None:
+    """List speculative candidate pairs, hardware feasibility, and speedups."""
+    import httpx
+    from pantry.hardware import get_apple_silicon_device_info
+    from pantry.memory import get_available_unified_dram
+    from pantry.resolve import discover_speculative_pairs
+
+    pairs_data: list[dict] = []
+    ceiling_gb: float = get_available_unified_dram() / (1024.0**3)
+    chip: str = get_apple_silicon_device_info().get("device_name", "Apple Silicon")
+
+    try:
+        r = httpx.get(f"http://{host}:{port}/v1/speculative/pairs", timeout=3.0)
+        if r.status_code == 200:
+            resp = r.json()
+            pairs_data = resp.get("data", [])
+            ceiling_gb = resp.get("dynamic_ceiling_gb", ceiling_gb)
+            chip = resp.get("chip_name", chip)
+    except Exception:
+        pairs_data = []
+
+    if not pairs_data:
+        store = _store(home, data)
+        pairs = discover_speculative_pairs(
+            store.list_manifests(),
+            is_ready=store.weights_ready,
+            dynamic_ceiling_gb=ceiling_gb,
+            chip_name=chip,
+        )
+        pairs_data = [p.model_dump() for p in pairs]
+
+    if as_json:
+        typer.echo(json.dumps(pairs_data, indent=2))
+        return
+
+    if not pairs_data:
+        typer.echo("No speculative candidate pairs detected.")
+        return
+
+    typer.secho(
+        f"\n🚀 Speculative Candidate Pairs ({chip} · Ceiling: {ceiling_gb:.1f} GB)",
+        fg=typer.colors.CYAN,
+        bold=True,
+    )
+    header = f"{'TARGET MODEL':<24} {'DRAFT MODEL':<24} {'PAIR RAM':<10} {'FEASIBLE':<12} {'EST. SPEEDUP':<14} {'STATUS':<12}"
+    typer.echo(header)
+    typer.echo("─" * len(header))
+
+    for p in pairs_data:
+        target = p.get("target_title") or p.get("target_package_id", "")
+        draft = p.get("draft_title") or p.get("draft_package_id", "")
+        ram = f"{p.get('composite_ram_gb', 0):.1f} GB"
+        feasible = "✔ Yes" if p.get("feasible_on_hardware") else "✖ Exceeds"
+        speedup = f"{p.get('estimated_speedup', 1.0):.2f}x"
+        ready = "✔ Ready" if p.get("ready") else "Weights Missing"
+
+        color = typer.colors.GREEN if p.get("ready") else typer.colors.WHITE
+        typer.secho(
+            f"{target:<24} {draft:<24} {ram:<10} {feasible:<12} {speedup:<14} {ready:<12}",
+            fg=color,
+        )
+    typer.echo()
+
+
+@speculative_app.command("bench")
+def spec_bench_cmd(
+    target: str = typer.Argument("chat-standard", help="Target model package id or alias"),
+    draft: str | None = typer.Option(None, "--draft", "-d", help="Draft model package id or alias"),
+    prompt: str = typer.Option(
+        "Explain quantum computing in simple terms with two analogies.",
+        "--prompt",
+        "-p",
+        help="Benchmark prompt",
+    ),
+    tokens: int = typer.Option(64, "--tokens", "-n", help="Tokens to generate"),
+    gamma: int = typer.Option(2, "--gamma", "-g", help="Draft tokens per step"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    as_json: bool = typer.Option(False, "--json", "--as-json", help="Output JSON"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
+) -> None:
+    """Benchmark standalone model generation against speculative decoding."""
+    import httpx
+
+    req_payload = {
+        "target_model": target,
+        "draft_model": draft,
+        "prompt": prompt,
+        "max_tokens": tokens,
+        "num_draft_tokens": gamma,
+        "temperature": 0.0,
+    }
+
+    resp_data = None
+    try:
+        r = httpx.post(
+            f"http://{host}:{port}/v1/speculative/benchmark",
+            json=req_payload,
+            timeout=120.0,
+        )
+        if r.status_code == 200:
+            resp_data = r.json()
+        elif r.status_code in {400, 409}:
+            err = r.json().get("detail", r.text)
+            typer.secho(f"Benchmark error: {err}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+    except httpx.RequestError:
+        resp_data = None
+
+    if resp_data is None:
+        import asyncio
+        from pantry.hardware import get_apple_silicon_device_info
+        from pantry.memory import get_available_unified_dram
+        from pantry.resolve import find_by_model_string
+        from pantry.runtime import runtime_for
+        from pantry.schemas import ChatMessage, QualityTier
+
+        store = _store(home, data)
+        target_pkg = store.load_manifest(target) or find_by_model_string(
+            target, store.list_manifests(), is_ready=store.weights_ready
+        )
+        if target_pkg is None:
+            typer.secho(f"Unknown target model: {target}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+        if not store.weights_ready(target_pkg):
+            typer.secho(
+                f"Weights not pulled for target '{target_pkg.id}'. Run: pantry pull {target_pkg.id}",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        draft_pkg = None
+        draft_str = draft or target_pkg.runtime.draft_package_id
+        if draft_str:
+            draft_pkg = store.load_manifest(draft_str) or find_by_model_string(
+                draft_str, store.list_manifests(), is_ready=store.weights_ready
+            )
+        if draft_pkg is None:
+            fam = (target_pkg.family or "").lower()
+            candidates = [
+                p
+                for p in store.list_manifests()
+                if p.id != target_pkg.id
+                and "text" in p.modalities
+                and (p.family or "").lower() == fam
+                and (p.ram_gb_min or 0) < (target_pkg.ram_gb_min or 0)
+                and store.weights_ready(p)
+            ]
+            if candidates:
+                candidates.sort(
+                    key=lambda p: (
+                        0 if p.quality_tier == QualityTier.compact else 1,
+                        p.ram_gb_min,
+                    )
+                )
+                draft_pkg = candidates[0]
+
+        if draft_pkg is None:
+            typer.secho(
+                f"No compatible ready draft model found for '{target_pkg.id}'",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(1)
+        if not store.weights_ready(draft_pkg):
+            typer.secho(
+                f"Weights not ready for draft '{draft_pkg.id}'. Run: pantry pull {draft_pkg.id}",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        rt = runtime_for(target_pkg, store)
+        messages = [ChatMessage(role="user", content=prompt)]
+
+        u_std: dict[str, Any] = {}
+        t0 = time.perf_counter()
+        asyncio.run(
+            rt.complete(
+                target_pkg,
+                messages,
+                max_tokens=tokens,
+                temperature=0.0,
+                prefer_speculative=False,
+                usage=u_std,
+            )
+        )
+        d_std = max(0.001, time.perf_counter() - t0)
+        c_std = u_std.get("completion_tokens", 0)
+        tps_std = round(c_std / d_std, 2)
+
+        u_sp: dict[str, Any] = {}
+        t1 = time.perf_counter()
+        asyncio.run(
+            rt.complete(
+                target_pkg,
+                messages,
+                max_tokens=tokens,
+                temperature=0.0,
+                prefer_speculative=True,
+                draft_model=draft_pkg.id,
+                num_draft_tokens=gamma,
+                usage=u_sp,
+            )
+        )
+        d_sp = max(0.001, time.perf_counter() - t1)
+        c_sp = u_sp.get("completion_tokens", 0)
+        tps_sp = round(c_sp / d_sp, 2)
+        sp_data = u_sp.get("speculative") or {}
+
+        resp_data = {
+            "target_model": target,
+            "draft_model": draft_pkg.id,
+            "target_package_id": target_pkg.id,
+            "draft_package_id": draft_pkg.id,
+            "standalone_tokens": c_std,
+            "standalone_duration_s": round(d_std, 3),
+            "standalone_tps": tps_std,
+            "speculative_tokens": c_sp,
+            "speculative_duration_s": round(d_sp, 3),
+            "speculative_tps": tps_sp,
+            "speedup": round(tps_sp / tps_std if tps_std > 0 else 1.0, 2),
+            "accepted_tokens": sp_data.get("accepted_tokens", 0),
+            "draft_tokens": sp_data.get("draft_tokens", c_sp * gamma),
+            "acceptance_rate": sp_data.get("acceptance_rate", 0.0),
+            "hardware_chip": get_apple_silicon_device_info().get(
+                "device_name", "Apple Silicon"
+            ),
+            "dynamic_ceiling_gb": round(get_available_unified_dram() / (1024.0**3), 2),
+        }
+
+    if as_json:
+        typer.echo(json.dumps(resp_data, indent=2))
+        return
+
+    typer.secho("\n🚀 Speculative Decoding Benchmark Results", fg=typer.colors.CYAN, bold=True)
+    typer.echo(f"  Target Model:      {resp_data['target_package_id']}")
+    typer.echo(f"  Draft Model:       {resp_data['draft_package_id']}")
+    typer.echo(
+        f"  Hardware:          {resp_data['hardware_chip']} (Ceiling: {resp_data['dynamic_ceiling_gb']:.1f} GB)"
+    )
+    typer.echo("────────────────────────────────────────────────────────────")
+    typer.echo(
+        f"  Standalone Target: {resp_data['standalone_tps']:>6.1f} tok/s  ({resp_data['standalone_duration_s']:.2f}s for {resp_data['standalone_tokens']} tokens)"
+    )
+    typer.secho(
+        f"  Speculative Pair:  {resp_data['speculative_tps']:>6.1f} tok/s  ({resp_data['speculative_duration_s']:.2f}s for {resp_data['speculative_tokens']} tokens)",
+        fg=typer.colors.GREEN,
+        bold=True,
+    )
+    speedup_val = resp_data["speedup"]
+    s_color = typer.colors.GREEN if speedup_val >= 1.15 else typer.colors.YELLOW
+    typer.secho(f"  Speedup Factor:    {speedup_val:.2f}x ⚡", fg=s_color, bold=True)
+    acc = resp_data["accepted_tokens"]
+    drf = resp_data["draft_tokens"]
+    rate = round(resp_data["acceptance_rate"] * 100, 1)
+    typer.echo(f"  Draft Acceptance:  {acc}/{drf} tokens ({rate}%)\n")
+
+
+@speculative_app.command("pair")
+def spec_pair_cmd(
+    target: str = typer.Argument(..., help="Target model package id or alias"),
+    draft: str = typer.Argument(..., help="Draft model package id or alias to bind"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
+) -> None:
+    """Bind a designated draft model to a target package manifest."""
+    from pantry.resolve import find_by_model_string
+
+    store = _store(home, data)
+    target_pkg = store.load_manifest(target) or find_by_model_string(
+        target, store.list_manifests(), is_ready=store.weights_ready
+    )
+    if target_pkg is None:
+        typer.secho(f"Unknown target package: {target}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+
+    draft_pkg = store.load_manifest(draft) or find_by_model_string(
+        draft, store.list_manifests(), is_ready=store.weights_ready
+    )
+    if draft_pkg is None:
+        typer.secho(f"Unknown draft package: {draft}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+
+    target_pkg.runtime.draft_package_id = draft_pkg.id
+    store.write_manifest(target_pkg)
+    typer.secho(
+        f"✔ Bound draft '{draft_pkg.id}' to target '{target_pkg.id}'",
+        fg=typer.colors.GREEN,
+        bold=True,
+    )
+
+
+app.add_typer(speculative_app, name="speculative")
+app.add_typer(speculative_app, name="spec")
+
 
 
 @app.command("transcribe")
@@ -1253,6 +1564,9 @@ def chat_cmd(
     prompt: str = typer.Argument(..., help="Prompt or message to send"),
     model: str = typer.Option("chat-standard", "--model", help="Model name, package id, or alias (e.g. chat-fast, chat-standard, chat-compact)"),
     speculative: bool = typer.Option(False, "--speculative", help="Prefer curated speculative decoding"),
+    draft_model: str | None = typer.Option(None, "--draft", "--draft-model", help="Draft model package id or alias for speculative decoding"),
+    num_draft_tokens: int | None = typer.Option(None, "--num-draft-tokens", help="Lookahead tokens drafted per step (default: 2)"),
+    show_speculative: bool = typer.Option(False, "--show-speculative", help="Display speculative decoding telemetry"),
     max_tokens: int = typer.Option(256, "--max-tokens"),
     temperature: float = typer.Option(0.7, "--temperature"),
     host: str = typer.Option("127.0.0.1", "--host"),
@@ -1266,7 +1580,7 @@ def chat_cmd(
 
     daemon_ok = False
     url = f"http://{host}:{port}/v1/chat/completions"
-    want_spec = speculative or model.strip() in {"chat-fast"}
+    want_spec = speculative or model.strip() in {"chat-fast", "chat-speculative"} or draft_model is not None
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
@@ -1275,22 +1589,39 @@ def chat_cmd(
         "stream": False,
         "prefer_speculative": want_spec,
     }
+    if draft_model:
+        payload["draft_model"] = draft_model
+    if num_draft_tokens is not None:
+        payload["num_draft_tokens"] = num_draft_tokens
+
     try:
         resp = httpx.post(url, json=payload, timeout=60.0)
         if resp.status_code == 200:
             daemon_ok = True
-            choices = resp.json().get("choices", [])
+            resp_json = resp.json()
+            choices = resp_json.get("choices", [])
             if choices:
                 content = choices[0].get("message", {}).get("content", "")
                 typer.echo(content)
+                spec_dt = resp_json.get("speculative_details")
+                if (speculative or show_speculative or draft_model) and spec_dt:
+                    d_id = spec_dt.get("draft_package_id", "draft")
+                    acc = spec_dt.get("accepted_tokens", 0)
+                    drafted = spec_dt.get("draft_tokens", 0)
+                    rate = round(spec_dt.get("acceptance_rate", 0.0) * 100, 1)
+                    speedup = spec_dt.get("speedup_factor", 1.0)
+                    typer.secho(
+                        f"\n[Speculative: draft={d_id} · {acc}/{drafted} accepted ({rate}%) · {speedup}x speedup]",
+                        fg=typer.colors.CYAN,
+                    )
                 return
     except Exception:
         daemon_ok = False
 
     if not daemon_ok:
         import asyncio
-        from pantry.runtime import runtime_for
         from pantry.resolve import find_by_model_string
+        from pantry.runtime import runtime_for
 
         store = _store(home, data)
         pkg = store.load_manifest(model)
@@ -1302,6 +1633,7 @@ def chat_cmd(
 
         rt = runtime_for(pkg, store)
         messages = [ChatMessage(role="user", content=prompt)]
+        usage_res: dict[str, Any] = {}
 
         async def _run() -> str:
             return await rt.complete(
@@ -1310,11 +1642,25 @@ def chat_cmd(
                 max_tokens=max_tokens,
                 temperature=temperature,
                 prefer_speculative=want_spec,
+                draft_model=draft_model,
+                num_draft_tokens=num_draft_tokens,
+                usage=usage_res,
             )
 
         try:
             result = asyncio.run(_run())
             typer.echo(result)
+            spec_dt = usage_res.get("speculative")
+            if (speculative or show_speculative or draft_model) and spec_dt:
+                d_id = spec_dt.get("draft_package_id", "draft")
+                acc = spec_dt.get("accepted_tokens", 0)
+                drafted = spec_dt.get("draft_tokens", 0)
+                rate = round(spec_dt.get("acceptance_rate", 0.0) * 100, 1)
+                speedup = spec_dt.get("speedup_factor", 1.0)
+                typer.secho(
+                    f"\n[Speculative: draft={d_id} · {acc}/{drafted} accepted ({rate}%) · {speedup}x speedup]",
+                    fg=typer.colors.CYAN,
+                )
         except Exception as e:
             typer.secho(f"chat generation failed: {e}", fg=typer.colors.RED, err=True)
             raise typer.Exit(1) from e

@@ -1325,6 +1325,15 @@ class TelemetryCollector:
                     else 300.0
                 )
 
+                draft_id = (
+                    man.runtime.draft_package_id
+                    if (
+                        man
+                        and getattr(man, "runtime", None)
+                        and getattr(man.runtime, "draft_package_id", None)
+                    )
+                    else None
+                )
                 active_items.append({
                     "id": pkg_id,
                     "title": title,
@@ -1339,6 +1348,7 @@ class TelemetryCollector:
                     "runtime": rt,
                     "context_length": ctx_len,
                     "idle_unload_seconds": idle_sec,
+                    "draft_package_id": draft_id,
                 })
 
             available_items = []
@@ -1362,6 +1372,15 @@ class TelemetryCollector:
                     quant = _model_quantization(man, man.id)
                     rt = _model_runtime(man, hw_info)
                     ctx_len = _model_context_length(man)
+                    draft_id = (
+                        man.runtime.draft_package_id
+                        if (
+                            man
+                            and getattr(man, "runtime", None)
+                            and getattr(man.runtime, "draft_package_id", None)
+                        )
+                        else None
+                    )
 
                     available_items.append({
                         "id": man.id,
@@ -1377,6 +1396,7 @@ class TelemetryCollector:
                         "runtime": rt,
                         "context_length": ctx_len,
                         "idle_unload_seconds": None,
+                        "draft_package_id": draft_id,
                     })
 
             mem_snap = memory_snapshot(apply_limits=False)

@@ -499,6 +499,76 @@ def test_images_generations_streaming_sse_shm(client):
     assert "event: done" in text
 
 
+def test_images_generations_streaming_error_sse(client, monkeypatch):
+    import json
+
+    def _fail_generate(*args, **kwargs):
+        raise RuntimeError("simulated image runtime failure")
+
+    monkeypatch.setattr(EchoImageRuntime, "generate", _fail_generate)
+
+    r = client.post(
+        "/v1/images/generations",
+        json={
+            "model": "image-compact",
+            "prompt": "trigger error",
+            "stream": True,
+        },
+        headers={"Accept": "text/event-stream"},
+    )
+    assert r.status_code == 200
+    assert "text/event-stream" in r.headers["content-type"]
+    text = r.text
+    assert "event: error" in text
+    error_line = next(line for line in text.splitlines() if line.startswith("data: "))
+    payload = json.loads(error_line[6:])
+    assert payload["type"] == "error"
+    assert payload["message"] == "simulated image runtime failure"
+    assert payload["error"]["message"] == "simulated image runtime failure"
+    assert payload["error"]["type"] == "RuntimeError"
+
+
+def test_mflux_preflight_swap_controls(tmp_path, monkeypatch):
+    store = PackageStore(tmp_path / "home")
+    store.ensure()
+    man = PackageManifest(
+        id="vdplabs.z-image-turbo.standard.v1",
+        family="z-image",
+        modalities=["image_gen"],
+        ram_gb_min=10.0,
+        runtime={"primary": "mflux"},
+    )
+    rt = MFluxImageRuntime(store)
+    monkeypatch.setattr("pantry.image_runtime._host_ram_gb", lambda: 16.0)
+    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 10.0)
+
+    # 1. Default threshold (8.0 GB) refuses cold load under 10.0 GB swap
+    with pytest.raises(RuntimeError, match="refusing cold image load"):
+        rt._preflight(man, model_warm=False)
+
+    # 2. Warm model skips swap check
+    rt._preflight(man, model_warm=True)
+
+    # 3. PANTRY_FORCE_IMAGE_LOAD=1 bypasses swap check
+    monkeypatch.setenv("PANTRY_FORCE_IMAGE_LOAD", "1")
+    rt._preflight(man, model_warm=False)
+    monkeypatch.delenv("PANTRY_FORCE_IMAGE_LOAD")
+
+    # 4. PANTRY_IGNORE_SWAP=1 bypasses swap check
+    monkeypatch.setenv("PANTRY_IGNORE_SWAP", "1")
+    rt._preflight(man, model_warm=False)
+    monkeypatch.delenv("PANTRY_IGNORE_SWAP")
+
+    # 5. PANTRY_IMAGE_MAX_SWAP_GB raises threshold
+    monkeypatch.setenv("PANTRY_IMAGE_MAX_SWAP_GB", "12.0")
+    rt._preflight(man, model_warm=False)
+
+    # 6. PANTRY_IMAGE_MAX_SWAP_GB lower threshold still raises
+    monkeypatch.setenv("PANTRY_IMAGE_MAX_SWAP_GB", "9.0")
+    with pytest.raises(RuntimeError, match="refusing cold image load"):
+        rt._preflight(man, model_warm=False)
+
+
 def test_mflux_image_runtime_step_callback(tmp_path, monkeypatch):
     """Verify that MFluxImageRuntime registers and invokes step_callback via in-loop callbacks."""
     monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 0.0)

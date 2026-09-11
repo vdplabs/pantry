@@ -15,6 +15,7 @@ from pantry.schemas import (
     PackageManifest,
     QualityTier,
     ResolveResult,
+    SpeculativePairInfo,
 )
 from pantry.task_benchmarks import normalize_task_intent, score_package
 
@@ -203,8 +204,31 @@ def resolve(
     # Step 208-216: Speculative Candidate Pair Feasibility Check and Fallback Resolution
     want_spec = bool(request.prefer_speculative or request.latency_class == LatencyClass.fast)
     draft_pkg = None
-    if want_spec and chosen.runtime.draft_package_id:
-        draft_pkg = next((p for p in packages if p.id == chosen.runtime.draft_package_id), None)
+    if want_spec:
+        if request.draft_model:
+            req_draft = request.draft_model.strip()
+            draft_pkg = next(
+                (p for p in packages if p.id == req_draft or req_draft in p.aliases),
+                None,
+            )
+        elif chosen.runtime.draft_package_id:
+            draft_pkg = next((p for p in packages if p.id == chosen.runtime.draft_package_id), None)
+        else:
+            # Dynamic discovery (Step 208): pair with compact model in same family
+            target_fam = (chosen.family or "").lower()
+            candidates_draft = [
+                p
+                for p in packages
+                if p.id != chosen.id
+                and "text" in p.modalities
+                and (p.family or "").lower() == target_fam
+                and (p.ram_gb_min or 0) < (chosen.ram_gb_min or 0)
+            ]
+            if candidates_draft:
+                candidates_draft.sort(
+                    key=lambda p: (0 if p.quality_tier == QualityTier.compact else 1, p.ram_gb_min)
+                )
+                draft_pkg = candidates_draft[0]
 
     speculative = False
     draft_package_id = None
@@ -334,6 +358,8 @@ def _approx_package_bytes(pkg: PackageManifest) -> int:
         return blob_sum
     if pkg.params_b and pkg.bits_approx:
         return int(pkg.params_b * 1_000_000_000 * (pkg.bits_approx / 8.0))
+    if pkg.ram_gb_min:
+        return int(pkg.ram_gb_min * (1024**3))
     return 0
 
 
@@ -413,3 +439,98 @@ def find_by_model_string(
 
         return min(tiered, key=sort_key)
     return None
+
+
+def discover_speculative_pairs(
+    packages: list[PackageManifest],
+    *,
+    is_ready: ReadyFn | None = None,
+    dynamic_ceiling_gb: float | None = None,
+    chip_name: str | None = None,
+) -> list[SpeculativePairInfo]:
+    """Identify feasible curated and discovered speculative candidate pairs (Patent FIG. 2, Steps 208-216)."""
+    if dynamic_ceiling_gb is None:
+        dynamic_ceiling_gb = get_available_unified_dram() / (1024.0**3)
+    if chip_name is None:
+        chip_name = get_apple_silicon_device_info().get("device_name", "Apple Silicon")
+
+    pairs: list[SpeculativePairInfo] = []
+    seen_pairs: set[tuple[str, str]] = set()
+
+    for target in packages:
+        if "text" not in target.modalities:
+            continue
+
+        draft_candidates: list[tuple[PackageManifest, str]] = []
+
+        # 1. Curated manifest link
+        if target.runtime.draft_package_id:
+            curated_pkg = next(
+                (p for p in packages if p.id == target.runtime.draft_package_id), None
+            )
+            if curated_pkg is not None:
+                draft_candidates.append((curated_pkg, "curated"))
+
+        # 2. Dynamic discovery if target has standard tier or >= 1B params
+        if target.quality_tier != QualityTier.compact:
+            target_fam = (target.family or "").lower()
+            discovered = [
+                p
+                for p in packages
+                if p.id != target.id
+                and "text" in p.modalities
+                and (p.family or "").lower() == target_fam
+                and (p.ram_gb_min or 0) < (target.ram_gb_min or 0)
+                and (target.runtime.draft_package_id != p.id)
+            ]
+            if discovered:
+                discovered.sort(
+                    key=lambda p: (
+                        0 if p.quality_tier == QualityTier.compact else 1,
+                        p.ram_gb_min,
+                    )
+                )
+                draft_candidates.append((discovered[0], "discovered"))
+
+        for draft_pkg, source in draft_candidates:
+            pair_key = (target.id, draft_pkg.id)
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+
+            composite_ram = round(float(target.ram_gb_min) + float(draft_pkg.ram_gb_min), 2)
+            feasible = composite_ram <= dynamic_ceiling_gb
+            target_ready = True if is_ready is None else bool(is_ready(target))
+            draft_ready = True if is_ready is None else bool(is_ready(draft_pkg))
+
+            target_bytes = _approx_package_bytes(target)
+            draft_bytes = _approx_package_bytes(draft_pkg)
+            speedup_info = estimate_speculative_speedup(
+                target_bytes, draft_bytes, chip_name=chip_name
+            )
+
+            target_title = target.aliases[0] if target.aliases else target.id
+            draft_title = draft_pkg.aliases[0] if draft_pkg.aliases else draft_pkg.id
+
+            pairs.append(
+                SpeculativePairInfo(
+                    target_package_id=target.id,
+                    draft_package_id=draft_pkg.id,
+                    target_title=target_title,
+                    draft_title=draft_title,
+                    target_family=target.family or "unknown",
+                    draft_family=draft_pkg.family or "unknown",
+                    target_ram_gb=float(target.ram_gb_min),
+                    draft_ram_gb=float(draft_pkg.ram_gb_min),
+                    composite_ram_gb=composite_ram,
+                    ready=target_ready and draft_ready,
+                    feasible_on_hardware=feasible,
+                    estimated_target_tps=speedup_info.get("target_tps", 0.0),
+                    estimated_speculative_tps=speedup_info.get("speculative_tps", 0.0),
+                    estimated_speedup=speedup_info.get("speedup", 1.0),
+                    source=source,
+                )
+            )
+
+    pairs.sort(key=lambda p: (-p.estimated_speedup, p.target_package_id))
+    return pairs

@@ -6,8 +6,10 @@ import threading
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 
+from typing import Any
+
 from pantry.limits import clamp_max_tokens
-from pantry.schemas import ChatMessage, PackageManifest
+from pantry.schemas import ChatMessage, PackageManifest, QualityTier
 from pantry.store import PackageStore
 from pantry.template import apply_chat_template, strip_stop_tokens
 
@@ -22,7 +24,9 @@ class Runtime(ABC):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
-        usage: dict[str, int] | None = None,
+        draft_model: str | None = None,
+        num_draft_tokens: int | None = None,
+        usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
     ) -> str:
         raise NotImplementedError
@@ -35,7 +39,9 @@ class Runtime(ABC):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
-        usage: dict[str, int] | None = None,
+        draft_model: str | None = None,
+        num_draft_tokens: int | None = None,
+        usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
     ) -> AsyncIterator[str]:
         text = await self.complete(
@@ -44,6 +50,8 @@ class Runtime(ABC):
             max_tokens=max_tokens,
             temperature=temperature,
             prefer_speculative=prefer_speculative,
+            draft_model=draft_model,
+            num_draft_tokens=num_draft_tokens,
             usage=usage,
             tools=tools,
         )
@@ -64,7 +72,9 @@ class EchoRuntime(Runtime):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
-        usage: dict[str, int] | None = None,
+        draft_model: str | None = None,
+        num_draft_tokens: int | None = None,
+        usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
     ) -> str:
         prompt = apply_chat_template(manifest, messages, tools=tools)
@@ -74,8 +84,13 @@ class EchoRuntime(Runtime):
                 last_user = m.text().strip()
                 break
         draft = ""
-        if prefer_speculative and manifest.runtime.draft_package_id:
-            draft = f"\n[speculative draft={manifest.runtime.draft_package_id}]"
+        draft_id = None
+        if prefer_speculative or draft_model:
+            draft_id = draft_model or manifest.runtime.draft_package_id
+            if not draft_id and (manifest.family or "") == "demo":
+                draft_id = "vdplabs.demo-chat.compact.v1"
+            if draft_id:
+                draft = f"\n[speculative draft={draft_id}]"
         body = (
             f"[pantry echo · {manifest.id} · template={manifest.template_family}]\n"
             f"You said: {last_user or '(empty)'}\n"
@@ -90,6 +105,19 @@ class EchoRuntime(Runtime):
             usage["prompt_tokens"] = p_toks
             usage["completion_tokens"] = c_toks
             usage["total_tokens"] = p_toks + c_toks
+            if draft_id:
+                k = int(num_draft_tokens or 2)
+                acc = int(c_toks * 0.75)
+                usage["speculative"] = {
+                    "enabled": True,
+                    "draft_model": draft_id,
+                    "draft_package_id": draft_id,
+                    "num_draft_tokens": k,
+                    "draft_tokens": c_toks * k,
+                    "accepted_tokens": acc,
+                    "acceptance_rate": 0.75,
+                    "speedup_factor": 1.45,
+                }
         return cleaned
 
 
@@ -98,20 +126,58 @@ def resolve_draft_path(
     manifest: PackageManifest,
     *,
     prefer_speculative: bool,
+    draft_model: str | None = None,
 ) -> tuple[str | None, str | None]:
     """Return (draft_weights_path, draft_package_id) when speculative can run."""
-    if not prefer_speculative:
+    if not prefer_speculative and not draft_model:
         return None, None
-    draft_id = manifest.runtime.draft_package_id
-    if not draft_id or store is None:
+    if store is None:
         return None, None
-    draft_man = store.load_manifest(draft_id)
+
+    draft_man: PackageManifest | None = None
+
+    # 1. Explicit draft model requested
+    if draft_model:
+        from pantry.resolve import find_by_model_string
+
+        draft_man = store.load_manifest(draft_model)
+        if draft_man is None:
+            draft_man = find_by_model_string(
+                draft_model, store.list_manifests(), is_ready=store.weights_ready
+            )
+
+    # 2. Manifest curated draft_package_id
+    if draft_man is None and manifest.runtime.draft_package_id:
+        draft_man = store.load_manifest(manifest.runtime.draft_package_id)
+
+    # 3. Dynamic discovery if prefer_speculative is set and weights are ready
+    if draft_man is None and prefer_speculative:
+        fam = (manifest.family or "").lower()
+        candidates = [
+            p
+            for p in store.list_manifests()
+            if p.id != manifest.id
+            and "text" in p.modalities
+            and (p.family or "").lower() == fam
+            and (p.ram_gb_min or 0) < (manifest.ram_gb_min or 0)
+            and store.weights_ready(p)
+        ]
+        if candidates:
+            candidates.sort(
+                key=lambda p: (
+                    0 if p.quality_tier == QualityTier.compact else 1,
+                    p.ram_gb_min,
+                )
+            )
+            draft_man = candidates[0]
+
     if draft_man is None or not store.weights_ready(draft_man):
         return None, None
+
     resolved = store.resolve_weights_path(draft_man)
     if resolved is not None:
-        return str(resolved), draft_id
-    return str(store.weights_dir(draft_id)), draft_id
+        return str(resolved), draft_man.id
+    return str(store.weights_dir(draft_man.id)), draft_man.id
 
 
 class MLXRuntime(Runtime):
@@ -149,7 +215,9 @@ class MLXRuntime(Runtime):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
-        usage: dict[str, int] | None = None,
+        draft_model: str | None = None,
+        num_draft_tokens: int | None = None,
+        usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
     ) -> str:
         parts: list[str] = []
@@ -159,6 +227,8 @@ class MLXRuntime(Runtime):
             max_tokens=max_tokens,
             temperature=temperature,
             prefer_speculative=prefer_speculative,
+            draft_model=draft_model,
+            num_draft_tokens=num_draft_tokens,
             usage=usage,
             tools=tools,
         ):
@@ -173,7 +243,9 @@ class MLXRuntime(Runtime):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
-        usage: dict[str, int] | None = None,
+        draft_model: str | None = None,
+        num_draft_tokens: int | None = None,
+        usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
     ) -> AsyncIterator[str]:
         try:
@@ -192,15 +264,18 @@ class MLXRuntime(Runtime):
             self.store.mark_loaded(manifest.id, pin=False)
         model, tokenizer = self._models[model_path]
 
-        draft_path, _draft_id = resolve_draft_path(
-            self.store, manifest, prefer_speculative=prefer_speculative
+        draft_path, draft_id = resolve_draft_path(
+            self.store,
+            manifest,
+            prefer_speculative=prefer_speculative,
+            draft_model=draft_model,
         )
-        draft_model = None
+        draft_model_obj = None
         if draft_path is not None:
             if draft_path not in self._models:
                 loaded_draft = await asyncio.to_thread(load, draft_path)
                 self._models[draft_path] = loaded_draft  # type: ignore[assignment]
-            draft_model, _draft_tok = self._models[draft_path]
+            draft_model_obj, _draft_tok = self._models[draft_path]
 
         prompt = apply_chat_template(manifest, messages, tools=tools)
         max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
@@ -222,6 +297,7 @@ class MLXRuntime(Runtime):
         errors: list[BaseException] = []
         cancel = threading.Event()
         gen_tokens_count = [0]
+        accepted_tokens_count = [0]
 
         def _produce() -> None:
             try:
@@ -246,8 +322,10 @@ class MLXRuntime(Runtime):
                     "sampler": sampler,
                     "logits_processors": processors,
                 }
-                if draft_model is not None:
-                    kwargs["draft_model"] = draft_model
+                if draft_model_obj is not None:
+                    kwargs["draft_model"] = draft_model_obj
+                    if num_draft_tokens is not None:
+                        kwargs["num_draft_tokens"] = int(num_draft_tokens)
                 gen = stream_generate(model, tokenizer, prompt=prompt, **kwargs)
                 for item in gen:
                     if cancel.is_set():
@@ -257,6 +335,8 @@ class MLXRuntime(Runtime):
                         gen_tokens_count[0] = int(gt)
                     else:
                         gen_tokens_count[0] += 1
+                    if getattr(item, "from_draft", False):
+                        accepted_tokens_count[0] += 1
                     text = getattr(item, "text", None) or ""
                     if text:
                         loop.call_soon_threadsafe(queue.put_nowait, text)
@@ -286,9 +366,30 @@ class MLXRuntime(Runtime):
             cancel.set()
             await producer
             if usage is not None:
+                total_gen = gen_tokens_count[0]
                 usage["prompt_tokens"] = prompt_tokens_count
-                usage["completion_tokens"] = gen_tokens_count[0]
-                usage["total_tokens"] = prompt_tokens_count + gen_tokens_count[0]
+                usage["completion_tokens"] = total_gen
+                usage["total_tokens"] = prompt_tokens_count + total_gen
+                if draft_model_obj is not None and draft_id is not None:
+                    acc = accepted_tokens_count[0]
+                    k = int(num_draft_tokens or 2)
+                    verify_steps = max(1, total_gen - acc)
+                    drafted = verify_steps * k
+                    acc_rate = round(acc / max(1, drafted), 3)
+                    speedup = round(
+                        (acc + verify_steps) / max(1, verify_steps * (1 + k * 0.2)),
+                        2,
+                    )
+                    usage["speculative"] = {
+                        "enabled": True,
+                        "draft_model": draft_id,
+                        "draft_package_id": draft_id,
+                        "num_draft_tokens": k,
+                        "draft_tokens": drafted,
+                        "accepted_tokens": acc,
+                        "acceptance_rate": min(1.0, acc_rate),
+                        "speedup_factor": max(1.0, speedup),
+                    }
 
     def _resolve_weights_path(self, manifest: PackageManifest) -> str:
         if self.store is not None:
