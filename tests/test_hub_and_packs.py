@@ -1,5 +1,4 @@
-from __future__ import annotations
-
+import time
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -20,6 +19,7 @@ from pantry.hub import (
 from pantry.resolve import find_by_model_string
 from pantry.server import create_app
 from pantry.store import PackageStore
+from pantry.telemetry import TelemetryCollector
 
 
 def test_evaluate_hardware_fit_thresholds():
@@ -237,9 +237,6 @@ def test_cli_hub_and_pack_commands(tmp_path: Path):
 
 
 def test_telemetry_real_apple_silicon_gpu_and_macos_memory(tmp_path: Path):
-    import time
-    from pantry.telemetry import TelemetryCollector
-
     store = PackageStore(root=tmp_path)
     collector = TelemetryCollector(store)
 
@@ -267,4 +264,35 @@ def test_telemetry_real_apple_silicon_gpu_and_macos_memory(tmp_path: Path):
     assert "app_human" in mem
     assert "wired_human" in mem
     assert "compressed_human" in mem
+
+
+def test_huggingface_hub_search(tmp_path: Path):
+    store = PackageStore(tmp_path)
+    app = create_app(store)
+    client = TestClient(app)
+
+    # 1. Search Hugging Face Hub for Qwen models
+    r = client.get("/v1/hub/search?q=qwen&source=hf&limit=5")
+    assert r.status_code == 200
+    models = r.json().get("models", [])
+    assert len(models) >= 1
+    assert any("qwen" in m["repo_id"].lower() for m in models)
+    assert all(m["source"] == "hub" for m in models)
+    assert "downloads" in models[0]
+    assert "fit" in models[0]
+
+    # 2. Search Hugging Face Hub with empty query (defaults to top MLX models)
+    r = client.get("/v1/hub/search?source=hf&limit=5")
+    assert r.status_code == 200
+    models_empty = r.json().get("models", [])
+    assert len(models_empty) >= 1
+    assert all(m["source"] == "hub" for m in models_empty)
+
+    # 3. Search for "hugging face" specifically
+    r = client.get("/v1/hub/search?q=hugging+face&source=hf&limit=5")
+    assert r.status_code == 200
+    models_hf = r.json().get("models", [])
+    assert len(models_hf) >= 1
+    assert all(m["source"] == "hub" for m in models_hf)
+
 

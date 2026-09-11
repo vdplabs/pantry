@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import re
 import shutil
@@ -9,6 +10,8 @@ from typing import Any
 from pantry.hardware import get_apple_silicon_device_info
 from pantry.schemas import PackageManifest, QualityTier, RuntimeInfo
 from pantry.store import PackageStore
+
+logger = logging.getLogger(__name__)
 
 # Curated high-performance models optimized for Apple Silicon MLX and diffusers
 CURATED_MODELS: list[dict[str, Any]] = [
@@ -446,6 +449,7 @@ def search_hub(
     query: str = "",
     modality: str = "all",
     limit: int = 20,
+    source: str = "all",
     device_info: dict[str, Any] | None = None,
 ) -> list[dict[str, Any]]:
     """Search Hugging Face Hub for MLX and compatible open-weights models, annotated with hardware fit."""
@@ -457,40 +461,45 @@ def search_hub(
 
     results: list[dict[str, Any]] = []
 
-    # If empty query or query matches curated models, start with relevant curated models
-    for m in CURATED_MODELS:
-        m_mod = m.get("modality", "text")
-        if norm_mod != "all":
-            if norm_mod in {"chat", "reasoning", "coder"} and m.get("role") != norm_mod:
-                continue
-            if norm_mod in {"image", "image_gen"} and m_mod not in {"image", "image_gen"}:
-                continue
-            if norm_mod in {"video", "video_gen"} and m_mod not in {"video", "video_gen"}:
-                continue
-            if norm_mod in {"audio", "stt"} and m_mod not in {"stt", "audio"}:
-                continue
+    # 1. Curated Models (if source is "all" or "curated")
+    if source in ("all", "curated"):
+        for m in CURATED_MODELS:
+            m_mod = m.get("modality", "text")
+            if norm_mod != "all":
+                if norm_mod in {"chat", "reasoning", "coder"} and m.get("role") != norm_mod:
+                    continue
+                if norm_mod in {"image", "image_gen"} and m_mod not in {"image", "image_gen"}:
+                    continue
+                if norm_mod in {"video", "video_gen"} and m_mod not in {"video", "video_gen"}:
+                    continue
+                if norm_mod in {"audio", "stt"} and m_mod not in {"stt", "audio"}:
+                    continue
 
-        if q_clean:
-            q_lower = q_clean.lower()
-            text_haystack = f"{m['title']} {m['repo_id']} {m['family']} {m.get('description', '')}".lower()
-            if q_lower not in text_haystack:
-                continue
+            if q_clean:
+                q_lower = q_clean.lower()
+                text_haystack = f"{m['title']} {m['repo_id']} {m['family']} {m.get('description', '')}".lower()
+                if q_lower not in text_haystack:
+                    continue
 
-        fit = evaluate_hardware_fit(m["approx_bytes"], device_info)
-        results.append({
-            **m,
-            "source": "curated",
-            "fit": fit,
-        })
+            fit = evaluate_hardware_fit(m["approx_bytes"], device_info)
+            results.append({
+                **m,
+                "source": "curated",
+                "fit": fit,
+            })
 
-    # If searching specific HF queries, query huggingface_hub
-    if q_clean:
+    # 2. Live Hugging Face Hub Query (if source is "all" or "hf")
+    # For source == "hf", if query is empty we default to "mlx" to discover trending Apple Silicon models
+    if source in ("all", "hf") and (q_clean or source == "hf"):
         try:
             from huggingface_hub import HfApi
 
             api = HfApi()
-            search_str = q_clean
-            hf_candidates = list(api.list_models(search=search_str, limit=limit, sort="downloads", direction=-1))
+            search_str = q_clean if q_clean else "mlx"
+
+            # list_models accepts search, sort, limit. (direction argument is invalid)
+            fetch_limit = min(50, limit * 2) if norm_mod != "all" else limit
+            hf_candidates = list(api.list_models(search=search_str, limit=fetch_limit, sort="downloads"))
             existing_repos = {r["repo_id"].lower() for r in results}
 
             for model_card in hf_candidates:
@@ -498,34 +507,39 @@ def search_hub(
                 if repo_id.lower() in existing_repos:
                     continue
 
-                tags = [t.lower() for t in (model_card.tags or [])]
+                tags = [t.lower() for t in (getattr(model_card, "tags", None) or [])]
+                pipeline_tag = getattr(model_card, "pipeline_tag", None) or ""
                 is_mlx = "mlx" in tags or "mlx" in repo_id.lower()
-                is_diffusers = "diffusers" in tags or "diffusers" in repo_id.lower()
+                is_diffusers = "diffusers" in tags or "diffusers" in repo_id.lower() or "image-generation" in tags
 
                 inferred_mod = "text"
                 inferred_role = "chat"
-                if "reasoning" in repo_id.lower() or "r1" in repo_id.lower():
+
+                if pipeline_tag in {"automatic-speech-recognition", "audio-to-audio", "audio-classification"} or any("audio" in t or "speech" in t for t in tags):
+                    inferred_mod = "stt"
+                    inferred_role = "audio"
+                elif pipeline_tag in {"text-to-video", "image-to-video"} or any("video" in t for t in tags):
+                    inferred_mod = "video"
+                    inferred_role = "video"
+                elif pipeline_tag in {"text-to-image", "image-to-image"} or is_diffusers or any("image" in t for t in tags):
+                    inferred_mod = "image_gen"
+                    inferred_role = "image"
+                elif "reasoning" in repo_id.lower() or "r1" in repo_id.lower() or "deepseek-r1" in tags:
                     inferred_role = "reasoning"
                 elif "coder" in repo_id.lower() or "code" in repo_id.lower():
                     inferred_role = "coder"
-                elif is_diffusers or any("image" in t for t in tags):
-                    inferred_mod = "image_gen"
-                    inferred_role = "image"
-                elif any("video" in t for t in tags):
-                    inferred_mod = "video"
-                    inferred_role = "video"
-                elif any("audio" in t or "speech" in t for t in tags):
-                    inferred_mod = "stt"
-                    inferred_role = "audio"
 
                 if norm_mod != "all":
-                    if norm_mod in {"chat", "reasoning", "coder"} and inferred_role != norm_mod and inferred_mod != "text":
-                        continue
-                    if norm_mod in {"image", "image_gen"} and inferred_mod not in {"image", "image_gen"}:
-                        continue
-                    if norm_mod in {"video", "video_gen"} and inferred_mod not in {"video", "video_gen"}:
-                        continue
-                    if norm_mod in {"audio", "stt"} and inferred_mod not in {"stt", "audio"}:
+                    if norm_mod in {"chat", "reasoning", "coder"}:
+                        if norm_mod == "chat" and inferred_mod != "text":
+                            continue
+                        if norm_mod in {"reasoning", "coder"} and inferred_role != norm_mod:
+                            continue
+                    elif (
+                        (norm_mod in {"image", "image_gen"} and inferred_mod not in {"image", "image_gen"})
+                        or (norm_mod in {"video", "video_gen"} and inferred_mod not in {"video", "video_gen"})
+                        or (norm_mod in {"audio", "stt"} and inferred_mod not in {"stt", "audio"})
+                    ):
                         continue
 
                 approx_bytes = 4_000_000_000
@@ -544,10 +558,20 @@ def search_hub(
                 fit = evaluate_hardware_fit(approx_bytes, device_info)
                 title = repo_id.split("/")[-1].replace("-", " ")
 
+                downloads = getattr(model_card, "downloads", 0) or 0
+                likes = getattr(model_card, "likes", 0) or 0
+                dl_parts = []
+                if downloads:
+                    dl_parts.append(f"{downloads:,} downloads")
+                if likes:
+                    dl_parts.append(f"{likes:,} likes")
+                meta_sub = " · ".join(dl_parts)
+                desc = f"Hugging Face model {repo_id} ({meta_sub})" if meta_sub else f"Hugging Face repository {repo_id}"
+
                 results.append({
                     "repo_id": repo_id,
                     "title": title,
-                    "description": f"Hugging Face model {repo_id} ({model_card.downloads or 0:,} downloads)",
+                    "description": desc,
                     "modality": inferred_mod,
                     "role": inferred_role,
                     "family": repo_id.split("/")[-1].split("-")[0].lower(),
@@ -562,12 +586,14 @@ def search_hub(
                     "aliases": [],
                     "quality_tier": "standard" if params_b >= 6.0 else "compact",
                     "approx_bytes": approx_bytes,
-                    "downloads": model_card.downloads or 0,
+                    "downloads": downloads,
+                    "likes": likes,
                     "source": "hub",
                     "fit": fit,
                 })
-        except Exception:  # noqa: BLE001, S110
-            pass
+        except Exception as exc:  # noqa: BLE001
+            import logging
+            logging.getLogger(__name__).warning("Failed to search Hugging Face Hub: %s", exc)
 
     return results[:limit]
 

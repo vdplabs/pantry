@@ -415,12 +415,13 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         q: str = "",
         modality: str = "all",
         limit: int = 20,
+        source: str = "all",
     ) -> dict[str, Any]:
         from pantry.hardware import get_apple_silicon_device_info
         from pantry.hub import search_hub
 
         device_info = get_apple_silicon_device_info()
-        models = search_hub(query=q, modality=modality, limit=limit, device_info=device_info)
+        models = search_hub(query=q, modality=modality, limit=limit, source=source, device_info=device_info)
         return {"models": models}
 
     @app.get("/v1/hub/details")
