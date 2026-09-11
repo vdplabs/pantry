@@ -3652,8 +3652,26 @@
             </div>
           </div>
 
-          <!-- Accordion: Customize & Advanced Options -->
-          <div class="accordion-box">
+          <!-- Intent Remapping Controls (Visible in Active Intent Packs mode) -->
+          <div id="insp-remap-section" style="margin-top: 14px; background: var(--bg-card-inner); border: 1px solid var(--border-card-subtle); border-radius: 8px; padding: 14px;">
+            <div style="font-size: 11px; font-weight: 700; color: var(--text-title); text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
+              <span style="display: flex; align-items: center; gap: 6px;"><span>🔄</span> Intent Remapping & Routing</span>
+              <span id="insp-intent-status-badge" class="status-pill loaded">● Active Provider</span>
+            </div>
+            <p style="font-size: 11.5px; color: var(--text-muted); margin: 0 0 10px 0; line-height: 1.45;">
+              Select which local package serves requests for intent alias <strong id="insp-intent-alias-badge" style="color: #3b82f6; font-family: var(--mono);">chat-standard</strong>:
+            </p>
+            <div class="form-group-compact" style="margin-bottom: 12px;">
+              <label style="font-size: 10.5px; color: var(--text-dim); text-transform: uppercase; font-weight: 600; margin-bottom: 4px; display: block;">Remap Target Model Package</label>
+              <select id="insp-intent-remap-select" style="width: 100%; background: var(--bg-surface); border: 1px solid var(--border-card); border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--text-primary); font-family: var(--mono); cursor: pointer;" onchange="onInspectorRemapSelectChange()"></select>
+            </div>
+            <div style="font-size: 10.5px; color: var(--text-dim); line-height: 1.4; background: var(--bg-subtle); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-card-subtle);" id="insp-remap-note">
+              When client apps request <code style="font-family: var(--mono); color: var(--text-title);" id="insp-remap-code-alias">chat-standard</code>, Pantry routes dynamically to this model without restarting services.
+            </div>
+          </div>
+
+          <!-- Accordion: Customize & Advanced Options (Visible in Recommended / HF Search mode) -->
+          <div class="accordion-box" id="insp-customize-accordion" style="display: none;">
             <div class="accordion-header" onclick="toggleStudioAccordion()">
               <span style="display: flex; align-items: center; gap: 6px;">
                 <span id="accordion-chevron">▸</span> Customize & Advanced Options
@@ -3735,8 +3753,18 @@
             </div>
           </div>
 
-          <!-- Action Buttons Footer -->
-          <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; border-top: 1px solid var(--border-card-subtle); padding-top: 14px;">
+          <!-- Action Buttons Footer for Intent Mode -->
+          <div id="insp-footer-intent" style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; border-top: 1px solid var(--border-card-subtle); padding-top: 14px;">
+            <button class="btn-action launch" id="btn-insp-intent-test" style="padding: 8px 16px; font-size: 12px; font-weight: 600;" onclick="launchSelectedIntentInPlayground()">
+              ⚡ Playground
+            </button>
+            <button class="btn-action load" id="btn-insp-apply-remap" style="padding: 8px 20px; font-size: 12px; font-weight: 700;" onclick="applyInspectorRemap()">
+              🔄 Save Remap
+            </button>
+          </div>
+
+          <!-- Action Buttons Footer for Hub Mode -->
+          <div id="insp-footer-hub" style="display: none; gap: 8px; justify-content: flex-end; margin-top: 16px; border-top: 1px solid var(--border-card-subtle); padding-top: 14px;">
             <button class="btn-action" style="padding: 8px 16px; font-size: 12px;" onclick="resetInspector()">Cancel</button>
             <button class="btn-action load" id="btn-studio-download" style="padding: 8px 20px; font-size: 12px; font-weight: 700;" onclick="handleStudioDownloadAndUse()">
               ⚡ Download & Use (-- GB)
@@ -5138,6 +5166,7 @@
     models: [],
     intents: [],
     selectedModel: null,
+    selectedIntent: null,
     isAccordionOpen: false,
     rebindTargetAlias: null,
     pollTimer: null
@@ -5242,6 +5271,10 @@
       }
       closeRebindModal();
       await loadIntentBindings();
+      if (studioState.selectedIntent && studioState.selectedIntent.alias === studioState.rebindTargetAlias) {
+        const updated = studioState.intents.find(i => i.alias === studioState.rebindTargetAlias);
+        if (updated) selectIntentForInspector(updated);
+      }
     } catch (err) {
       alert(`Rebind error: ${err.message}`);
     }
@@ -5413,7 +5446,7 @@
         const diskGb = active ? (active.bytes_on_disk / (1024**3)).toFixed(1) : '0';
         const pkgTitle = active ? (active.title || active.package_id) : 'Unbound';
         const pkgId = active ? active.package_id : '—';
-        const isSelected = studioState.selectedModel && (studioState.selectedModel.aliases || []).includes(it.alias);
+        const isSelected = studioState.selectedIntent ? studioState.selectedIntent.alias === it.alias : false;
 
         let icon = '💬';
         let modClass = 'text';
@@ -5469,7 +5502,7 @@
           const isReady = active && active.weights_ready;
           const diskGb = active ? (active.bytes_on_disk / (1024**3)).toFixed(1) : '0';
           const pkgTitle = active ? (active.title || active.package_id) : 'Unbound';
-          const isSelected = studioState.selectedModel && (studioState.selectedModel.aliases || []).includes(it.alias);
+          const isSelected = studioState.selectedIntent ? studioState.selectedIntent.alias === it.alias : false;
 
           let icon = '💬';
           const alias = (it.alias || '').toLowerCase();
@@ -5607,50 +5640,137 @@
   }
 
   function selectIntentForInspector(it) {
+    studioState.selectedIntent = it;
+    studioState.selectedModel = null;
+
+    const remapSection = document.getElementById('insp-remap-section');
+    const customAccordion = document.getElementById('insp-customize-accordion');
+    const footerIntent = document.getElementById('insp-footer-intent');
+    const footerHub = document.getElementById('insp-footer-hub');
+
+    if (remapSection) remapSection.style.display = 'block';
+    if (customAccordion) customAccordion.style.display = 'none';
+    if (footerIntent) footerIntent.style.display = 'flex';
+    if (footerHub) footerHub.style.display = 'none';
+
     const active = it.active_package || {};
-    const sizeBytes = active.bytes_on_disk || (1.5 * 1024**3);
-    const sizeGb = (sizeBytes / (1024**3)).toFixed(1);
+    const sizeBytes = active.bytes_on_disk || 0;
+    const sizeGb = sizeBytes > 0 ? (sizeBytes / (1024**3)).toFixed(1) : '—';
+    const isReady = Boolean(active && active.weights_ready);
 
-    const syntheticModel = {
-      title: active.title || it.alias,
-      repo_id: active.package_id || `intent.${it.alias}`,
-      description: it.description || `Standard capability package for ${it.alias}`,
-      architecture: active.architecture || 'CausalLM',
-      quant_label: active.quantization || '4-bit (mlx)',
-      context_max: active.context_max || 32768,
-      approx_bytes: sizeBytes,
-      role: it.modality || 'chat',
-      modality: it.modality || 'text',
-      quality_tier: 'standard',
-      aliases: [it.alias],
-      fit: {
-        compatible: true,
-        fit_status: 'runs_great',
-        fit_badge: 'Active Default Intent',
-        fit_color: '#10b981',
-        device_name: 'Apple Silicon',
-        total_ram_gb: 16,
-        working_set_gb: 11.8,
-        model_gb: parseFloat(sizeGb) || 1.5,
-        macos_baseline_gb: 3.0,
-        total_working_gb: (3.0 + (parseFloat(sizeGb) || 1.5)).toFixed(1),
-        message: `Active intent binding for '${it.alias}' on this Mac.`
+    const titleEl = document.getElementById('insp-title');
+    const repoIdEl = document.getElementById('insp-repo-id');
+    const repoLinkEl = document.getElementById('insp-repo-link');
+    const descEl = document.getElementById('insp-desc');
+
+    if (titleEl) titleEl.textContent = it.alias;
+    if (repoIdEl) repoIdEl.textContent = active.package_id || 'No local package bound';
+    if (repoLinkEl) {
+      if (active.package_id && active.package_id.includes('/')) {
+        repoLinkEl.href = `https://huggingface.co/${active.package_id}`;
+        repoLinkEl.style.display = 'inline-flex';
+      } else {
+        repoLinkEl.style.display = 'none';
       }
-    };
+    }
+    if (descEl) descEl.textContent = it.description || `Capability provider for intent alias '${it.alias}'`;
 
-    selectModelForInspector(syntheticModel);
+    const hwDevice = document.getElementById('studio-hw-device');
+    const hwBudget = document.getElementById('studio-hw-budget');
+    if (hwDevice) hwDevice.textContent = `Apple Silicon · Intent Binding`;
+    if (hwBudget) hwBudget.textContent = `True MLX Budget: ~11.8 GB`;
 
-    const aliasIdMap = {
-      'chat-standard': 'chk-alias-chat',
-      'chat-compact': 'chk-alias-chat-compact',
-      'coder': 'chk-alias-coder',
-      'reasoning': 'chk-alias-reasoning',
-      'image': 'chk-alias-image',
-      'video': 'chk-alias-video'
-    };
-    if (aliasIdMap[it.alias]) {
-      const chk = document.getElementById(aliasIdMap[it.alias]);
-      if (chk) chk.checked = true;
+    const archEl = document.getElementById('insp-arch');
+    const quantEl = document.getElementById('insp-quant');
+    const contextEl = document.getElementById('insp-context');
+    const sizeEl = document.getElementById('insp-size');
+
+    if (archEl) archEl.textContent = active.architecture || 'CausalLM';
+    if (quantEl) quantEl.textContent = active.quantization || '4-bit (mlx)';
+    if (contextEl) contextEl.textContent = `${(active.context_max || 32768).toLocaleString()} ctx`;
+    if (sizeEl) sizeEl.textContent = sizeGb !== '—' ? `${sizeGb} GB` : 'On Demand';
+
+    const compatBanner = document.getElementById('insp-compat-banner');
+    const compatIcon = document.getElementById('insp-compat-icon');
+    const compatText = document.getElementById('insp-compat-text');
+    if (compatBanner && compatText && compatIcon) {
+      compatBanner.style.background = 'rgba(16, 185, 129, 0.08)';
+      compatBanner.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+      compatBanner.style.color = '#10b981';
+      compatIcon.textContent = '✔';
+      compatText.textContent = isReady
+        ? `Active provider '${active.package_id || it.alias}' is installed and ready to serve.`
+        : `Active provider '${active.package_id || it.alias}' is configured; weights will download on demand.`;
+    }
+
+    const barModel = document.getElementById('insp-bar-model');
+    const barOs = document.getElementById('insp-bar-os');
+    const ratioText = document.getElementById('insp-budget-ratio-text');
+    const legModel = document.getElementById('insp-leg-model');
+    const legOs = document.getElementById('insp-leg-os');
+
+    const budgetGb = 11.8;
+    const modelGb = sizeGb !== '—' ? parseFloat(sizeGb) : 1.5;
+    const osGb = 3.0;
+    const totalWorkingGb = (modelGb + osGb).toFixed(1);
+
+    const modelPct = Math.min(100, (modelGb / budgetGb) * 100);
+    const osPct = Math.min(100, (osGb / budgetGb) * 100);
+
+    if (barModel) barModel.style.width = `${modelPct.toFixed(1)}%`;
+    if (barOs) barOs.style.width = `${osPct.toFixed(1)}%`;
+    if (ratioText) {
+      ratioText.textContent = `${totalWorkingGb} GB / ${budgetGb} GB True MLX Budget`;
+      ratioText.style.color = '#10b981';
+    }
+    if (legModel) legModel.textContent = `Model · ${modelGb} GB`;
+    if (legOs) legOs.textContent = `macOS · ${osGb} GB`;
+
+    // Intent remapping controls
+    const aliasBadge = document.getElementById('insp-intent-alias-badge');
+    const codeAlias = document.getElementById('insp-remap-code-alias');
+    const statusBadge = document.getElementById('insp-intent-status-badge');
+    const selectEl = document.getElementById('insp-intent-remap-select');
+    const btnApply = document.getElementById('btn-insp-apply-remap');
+
+    if (aliasBadge) aliasBadge.textContent = it.alias;
+    if (codeAlias) codeAlias.textContent = it.alias;
+    if (statusBadge) {
+      if (isReady) {
+        statusBadge.innerHTML = '● Active Provider';
+        statusBadge.className = 'status-pill loaded';
+      } else {
+        statusBadge.innerHTML = '○ Need Pull';
+        statusBadge.className = 'status-pill standby';
+      }
+    }
+
+    if (selectEl) {
+      selectEl.innerHTML = '';
+      const candidates = [...(it.candidates || [])];
+      if (candidates.length === 0 && active.package_id) {
+        candidates.push(active);
+      }
+      candidates.forEach(cand => {
+        const opt = document.createElement('option');
+        opt.value = cand.package_id;
+        const isCurrent = active.package_id === cand.package_id;
+        const readyStr = cand.weights_ready ? '⚡ Ready' : 'Need Pull';
+        const diskStr = cand.bytes_on_disk > 0 ? ` · ${(cand.bytes_on_disk / (1024**3)).toFixed(1)} GB` : '';
+        opt.textContent = `${cand.package_id} (${readyStr}${diskStr})${isCurrent ? ' [Current Active]' : ''}`;
+        if (isCurrent) opt.selected = true;
+        selectEl.appendChild(opt);
+      });
+      if (active.package_id) {
+        selectEl.value = active.package_id;
+      }
+    }
+
+    if (btnApply) {
+      btnApply.innerHTML = '✔ Current Provider';
+      btnApply.disabled = true;
+      btnApply.style.opacity = '0.65';
+      btnApply.style.cursor = 'default';
     }
   }
 
@@ -5731,6 +5851,18 @@
 
   function selectModelForInspector(m) {
     studioState.selectedModel = m;
+    studioState.selectedIntent = null;
+
+    const remapSection = document.getElementById('insp-remap-section');
+    const customAccordion = document.getElementById('insp-customize-accordion');
+    const footerIntent = document.getElementById('insp-footer-intent');
+    const footerHub = document.getElementById('insp-footer-hub');
+
+    if (remapSection) remapSection.style.display = 'none';
+    if (customAccordion) customAccordion.style.display = 'block';
+    if (footerIntent) footerIntent.style.display = 'none';
+    if (footerHub) footerHub.style.display = 'flex';
+
     const fit = m.fit || {};
 
     const titleEl = document.getElementById('insp-title');
@@ -5740,7 +5872,10 @@
 
     if (titleEl) titleEl.textContent = m.title;
     if (repoIdEl) repoIdEl.textContent = m.repo_id;
-    if (repoLinkEl) repoLinkEl.href = `https://huggingface.co/${m.repo_id}`;
+    if (repoLinkEl) {
+      repoLinkEl.href = `https://huggingface.co/${m.repo_id}`;
+      repoLinkEl.style.display = 'inline-flex';
+    }
     if (descEl) descEl.textContent = m.description || `Hugging Face model repository ${m.repo_id}`;
 
     const hwDevice = document.getElementById('studio-hw-device');
@@ -5857,10 +5992,135 @@
   }
 
   function copyInspectorRepo() {
-    if (studioState.selectedModel) {
+    if (studioState.source === 'intents' && studioState.selectedIntent) {
+      const active = studioState.selectedIntent.active_package;
+      const idToCopy = active ? active.package_id : studioState.selectedIntent.alias;
+      navigator.clipboard.writeText(idToCopy);
+      alert(`Copied package identifier: ${idToCopy}`);
+    } else if (studioState.selectedModel) {
       navigator.clipboard.writeText(studioState.selectedModel.repo_id);
       alert(`Copied repository path: ${studioState.selectedModel.repo_id}`);
     }
+  }
+
+  function onInspectorRemapSelectChange() {
+    if (!studioState.selectedIntent) return;
+    const it = studioState.selectedIntent;
+    const selectEl = document.getElementById('insp-intent-remap-select');
+    const btnApply = document.getElementById('btn-insp-apply-remap');
+    const statusBadge = document.getElementById('insp-intent-status-badge');
+    if (!selectEl || !btnApply) return;
+
+    const chosenPkgId = selectEl.value;
+    const currentActivePkgId = it.active_package ? it.active_package.package_id : null;
+    const isCurrent = chosenPkgId === currentActivePkgId;
+
+    const cand = (it.candidates || []).find(c => c.package_id === chosenPkgId);
+
+    if (isCurrent) {
+      btnApply.innerHTML = '✔ Current Provider';
+      btnApply.disabled = true;
+      btnApply.style.opacity = '0.65';
+      btnApply.style.cursor = 'default';
+      if (statusBadge) {
+        statusBadge.innerHTML = '● Active Provider';
+        statusBadge.className = 'status-pill loaded';
+      }
+    } else {
+      btnApply.innerHTML = '🔄 Save Remap';
+      btnApply.disabled = false;
+      btnApply.style.opacity = '1.0';
+      btnApply.style.cursor = 'pointer';
+      if (statusBadge) {
+        statusBadge.innerHTML = '○ Remap Pending';
+        statusBadge.className = 'status-pill standby';
+      }
+    }
+
+    if (cand) {
+      const sizeGb = cand.bytes_on_disk > 0 ? (cand.bytes_on_disk / (1024**3)).toFixed(1) : '—';
+      const sizeEl = document.getElementById('insp-size');
+      if (sizeEl) sizeEl.textContent = sizeGb !== '—' ? `${sizeGb} GB` : 'On Demand';
+      if (cand.architecture) {
+        const archEl = document.getElementById('insp-arch');
+        if (archEl) archEl.textContent = cand.architecture;
+      }
+      if (cand.quantization) {
+        const quantEl = document.getElementById('insp-quant');
+        if (quantEl) quantEl.textContent = cand.quantization;
+      }
+      if (cand.context_max) {
+        const contextEl = document.getElementById('insp-context');
+        if (contextEl) contextEl.textContent = `${cand.context_max.toLocaleString()} ctx`;
+      }
+    }
+  }
+
+  async function applyInspectorRemap() {
+    if (!studioState.selectedIntent) return;
+    const it = studioState.selectedIntent;
+    const selectEl = document.getElementById('insp-intent-remap-select');
+    const btnApply = document.getElementById('btn-insp-apply-remap');
+    if (!selectEl) return;
+
+    const chosenPkgId = selectEl.value;
+    if (btnApply) {
+      btnApply.disabled = true;
+      btnApply.innerHTML = '⏳ Saving...';
+    }
+
+    try {
+      const res = await fetch('/v1/packs/rebind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          alias: it.alias,
+          package_id: chosenPkgId
+        })
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        alert(`Failed to remap intent: ${errText}`);
+        if (btnApply) {
+          btnApply.disabled = false;
+          btnApply.innerHTML = '🔄 Save Remap';
+        }
+        return;
+      }
+
+      await loadIntentBindings();
+      const updated = studioState.intents.find(i => i.alias === it.alias);
+      if (updated) {
+        selectIntentForInspector(updated);
+      }
+      renderStudioContent();
+
+      if (btnApply) {
+        btnApply.innerHTML = '✔ Remapped!';
+        setTimeout(() => {
+          if (btnApply) {
+            btnApply.innerHTML = '✔ Current Provider';
+            btnApply.disabled = true;
+            btnApply.style.opacity = '0.65';
+          }
+        }, 1500);
+      }
+    } catch (err) {
+      alert(`Remap network error: ${err.message}`);
+      if (btnApply) {
+        btnApply.disabled = false;
+        btnApply.innerHTML = '🔄 Save Remap';
+      }
+    }
+  }
+
+  function launchSelectedIntentInPlayground() {
+    if (!studioState.selectedIntent) return;
+    const it = studioState.selectedIntent;
+    const pkgId = it.active_package ? it.active_package.package_id : it.alias;
+    const mod = (it.modality || 'chat').toLowerCase();
+    launchInPlayground(pkgId, mod);
   }
 
   function exportPackJson() {
@@ -5997,8 +6257,14 @@
   }
 
   function resetInspector() {
-    if (studioState.models.length > 0) {
-      selectModelForInspector(studioState.models[0]);
+    if (studioState.source === 'intents') {
+      if (studioState.intents.length > 0) {
+        selectIntentForInspector(studioState.intents[0]);
+      }
+    } else {
+      if (studioState.models.length > 0) {
+        selectModelForInspector(studioState.models[0]);
+      }
     }
   }
 
