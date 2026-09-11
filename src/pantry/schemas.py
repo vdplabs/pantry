@@ -42,6 +42,7 @@ class RuntimeInfo(BaseModel):
 
 class PackageManifest(BaseModel):
     id: str
+    title: str = ""
     family: str
     role: str = "chat"
     params_b: float = 0
@@ -316,4 +317,34 @@ class TranscriptionVerboseResponse(BaseModel):
     text: str
     words: list[TranscriptionWord] | None = None
     segments: list[TranscriptionSegment] = Field(default_factory=list)
+
+
+class RebindPackBody(BaseModel):
+    alias: str
+    package_id: str
+
+
+class CreatePackBody(BaseModel):
+    id: str | None = None
+    title: str | None = None
+    family: str = "custom"
+    role: str = "chat"
+    params_b: float = 7.0
+    quality_tier: str = "standard"
+    quant_method: str = "mlx_4bit"
+    bits_approx: float = 4.0
+    ram_gb_min: float = 4.0
+    ram_gb_comfortable: float = 6.0
+    modality: str = "text"
+    context_max: int = 32768
+    license: str = "open-weights"
+    chat_template_id: str = "chatml-v1"
+    template_family: str = "chatml"
+    aliases: list[str] = Field(default_factory=list)
+    hf_repo: str | None = None
+    hf_revision: str | None = None
+    primary: str = "mlx"
+    system_preamble: str = "You are a helpful assistant running locally via pantry."
+    pull_now: bool = False
+
 

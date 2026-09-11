@@ -883,6 +883,164 @@ def catalog_list_cmd(
 
 app.add_typer(catalog_app, name="catalog")
 
+hub_app = typer.Typer(
+    name="hub",
+    help="Discover and inspect models from Hugging Face Hub.",
+    no_args_is_help=True,
+)
+
+
+@hub_app.command("search")
+def hub_search_cmd(
+    query: str = typer.Argument("", help="Search query (e.g. 'deepseek', 'qwen', 'llama')"),
+    modality: str = typer.Option("all", "--modality", help="all|chat|reasoning|coder|image|video|audio"),
+    limit: int = typer.Option(20, "--limit", help="Max results to return"),
+    json_out: bool = typer.Option(False, "--json", help="Output raw JSON"),
+) -> None:
+    """Search Hugging Face Hub with local hardware fit evaluation."""
+    from pantry.hub import search_hub
+
+    results = search_hub(query=query, modality=modality, limit=limit)
+    if json_out:
+        typer.echo(json.dumps(results, indent=2))
+        return
+
+    if not results:
+        typer.echo("No matching models found.")
+        return
+
+    for m in results:
+        fit = m.get("fit", {})
+        badge = fit.get("fit_label", "Unknown")
+        color = (
+            typer.colors.GREEN
+            if badge == "Runs Great"
+            else typer.colors.BLUE
+            if badge == "Good Fit"
+            else typer.colors.YELLOW
+            if badge == "Tight Fit"
+            else typer.colors.RED
+        )
+        size_gb = round(m.get("approx_bytes", 0) / (1024**3), 2)
+        typer.secho(f"• {m['title']} ({m['repo_id']})", bold=True)
+        typer.echo(
+            f"  Modality: {m.get('modality', 'text')} | Role: {m.get('role', 'chat')} | Params: {m.get('params_b', '?')}B | Size: ~{size_gb} GB"
+        )
+        typer.secho(
+            f"  Hardware Fit: {badge} ({fit.get('total_working_gb', '?')} GB / {fit.get('working_set_gb', '?')} GB True MLX Budget) - {fit.get('fit_badge', '')}",
+            fg=color,
+        )
+        typer.echo()
+
+
+app.add_typer(hub_app, name="hub")
+
+pack_app = typer.Typer(
+    name="pack",
+    help="Manage model packs, intent aliases, and local manifests.",
+    no_args_is_help=True,
+)
+
+
+@pack_app.command("intents")
+def pack_intents_cmd(
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    json_out: bool = typer.Option(False, "--json", help="Output raw JSON"),
+) -> None:
+    """Inspect all active intent packages and their bindings."""
+    from pantry.hub import get_intent_bindings
+
+    store = _store(home)
+    intents = get_intent_bindings(store)
+    if json_out:
+        typer.echo(json.dumps(intents, indent=2))
+        return
+
+    typer.secho("Active Intent Packages Overview:", bold=True)
+    for it in intents:
+        active = it.get("active_package")
+        if active:
+            ready_str = "● READY" if active["weights_ready"] else "○ NOT PULLED"
+            disk_gb = round(active["bytes_on_disk"] / (1024**3), 2)
+            typer.echo(f"  [{it['alias']}] -> {active['package_id']} ({ready_str}, {disk_gb} GB on disk)")
+            typer.echo(f"     Title: {active['title']} | Repo: {active.get('hf_repo') or 'N/A'}")
+        else:
+            typer.secho(f"  [{it['alias']}] -> (Unbound)", fg=typer.colors.RED)
+    typer.echo()
+
+
+@pack_app.command("rebind")
+def pack_rebind_cmd(
+    alias: str = typer.Argument(..., help="Intent alias to rebind (e.g. 'chat-standard', 'coder')"),
+    package_id: str = typer.Argument(..., help="Target package id to bind to this intent"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+) -> None:
+    """Rebind an intent alias to a different package."""
+    from pantry.hub import rebind_intent_alias
+
+    store = _store(home)
+    try:
+        updated = rebind_intent_alias(store, alias, package_id)
+        typer.secho(f"✔ Successfully rebound '{alias}' to '{updated.id}'", fg=typer.colors.GREEN)
+        typer.echo(f"  Package aliases: {', '.join(updated.aliases)}")
+    except Exception as e:
+        typer.secho(f"Error rebinding intent: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from e
+
+
+@pack_app.command("create")
+def pack_create_cmd(
+    hf_repo: str = typer.Argument(..., help="Hugging Face repository ID"),
+    package_id: str | None = typer.Option(None, "--id", help="Custom package ID (e.g. local.deepseek-r1-7b.v1)"),
+    title: str | None = typer.Option(None, "--title", help="Human-readable title"),
+    modality: str = typer.Option("text", "--modality", help="text|image_gen|video|stt"),
+    role: str = typer.Option("chat", "--role", help="chat|reasoning|coder|image|video|audio"),
+    tier: str = typer.Option("standard", "--tier", help="standard|compact|extreme"),
+    alias: list[str] = typer.Option([], "--alias", help="Intent alias to bind (can be specified multiple times)"),
+    pull_now: bool = typer.Option(False, "--pull", help="Immediately pull weights"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+) -> None:
+    """Create and register a custom local model pack from Hugging Face."""
+    from pantry.hub import create_custom_pack, generate_manifest_template
+    from pantry.pull import pull_package
+
+    store = _store(home)
+    manifest = generate_manifest_template(
+        repo_id=hf_repo,
+        title=title,
+        modality=modality,
+        role=role,
+        tier=tier,
+        aliases=list(alias),
+        custom_package_id=package_id,
+    )
+    created = create_custom_pack(store, manifest.model_dump())
+    typer.secho(f"✔ Registered model pack: {created.id}", fg=typer.colors.GREEN)
+    typer.echo(f"  Path: {store.package_dir(created.id) / 'manifest.json'}")
+    typer.echo(f"  Aliases: {', '.join(created.aliases) if created.aliases else 'None'}")
+
+    if pull_now:
+        typer.echo(f"Pulling weights for {created.id}...")
+        res = pull_package(store, created.id)
+        typer.echo(f"✔ Pulled: {res.get('bytes_on_disk', 0)} bytes ready.")
+
+
+@pack_app.command("delete")
+def pack_delete_cmd(
+    package_id: str = typer.Argument(..., help="Package ID to delete"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+) -> None:
+    """Delete a custom local package from the library."""
+    from pantry.hub import delete_custom_pack
+
+    store = _store(home)
+    delete_custom_pack(store, package_id)
+    typer.secho(f"✔ Deleted package {package_id}", fg=typer.colors.GREEN)
+
+
+app.add_typer(pack_app, name="pack")
+
+
 
 @app.command("transcribe")
 def transcribe_cmd(

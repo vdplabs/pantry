@@ -1578,6 +1578,330 @@
       margin-top: 4px;
     }
 
+    /* Model Pack Studio Styles */
+    .studio-header-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 12px;
+      padding: 14px 20px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-card);
+    }
+    .studio-hw-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border-card-subtle);
+      border-radius: 20px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-title);
+    }
+    .studio-hw-badge .budget-tag {
+      color: #10b981;
+      font-family: var(--mono);
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.12);
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+    .intents-overview-bar {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 12px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      box-shadow: var(--shadow-card);
+    }
+    .intents-bar-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-dim);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .intents-chips-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .intent-chip {
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border-card-subtle);
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-size: 11.5px;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .intent-chip:hover {
+      border-color: var(--border-highlight);
+      background: var(--bg-card);
+    }
+    .intent-chip.active-intent {
+      border-color: #3b82f6;
+      background: rgba(59, 130, 246, 0.08);
+    }
+    .intent-chip .alias-name {
+      font-weight: 700;
+      font-family: var(--mono);
+      color: var(--text-title);
+    }
+    .intent-chip .pkg-name {
+      color: var(--text-muted);
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+      flex-shrink: 0;
+    }
+    .status-dot.ready { background: #10b981; box-shadow: 0 0 6px rgba(16, 185, 129, 0.5); }
+    .status-dot.unready { background: #f59e0b; }
+
+    .studio-segmented-switch {
+      display: inline-flex;
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border-card-subtle);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 3px;
+    }
+    .studio-segmented-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 600;
+      padding: 6px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .studio-segmented-btn.active {
+      background: var(--bg-card);
+      color: var(--text-title);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .studio-main-layout {
+      display: grid;
+      grid-template-columns: 1fr 430px;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 1080px) {
+      .studio-main-layout {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .studio-inspector-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-card);
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: var(--shadow-card);
+      position: sticky;
+      top: 16px;
+    }
+    .inspector-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 12px;
+    }
+    .inspector-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: var(--text-title);
+      margin-bottom: 4px;
+    }
+    .inspector-repo-link {
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--mono);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      text-decoration: none;
+      word-break: break-all;
+    }
+    .inspector-repo-link:hover {
+      color: #3b82f6;
+    }
+    .meta-stat-chips-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 14px 0;
+    }
+    .meta-stat-chip {
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border-card-subtle);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .meta-stat-chip .chip-label {
+      font-size: 10px;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 3px;
+    }
+    .meta-stat-chip .chip-val {
+      font-size: 12px;
+      font-weight: 700;
+      font-family: var(--mono);
+      color: var(--text-title);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .budget-gauge-box {
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border-card-subtle);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin: 14px 0;
+    }
+    .budget-gauge-label {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: var(--text-title);
+    }
+    .budget-progress-track {
+      height: 12px;
+      background: rgba(120, 120, 120, 0.15);
+      border-radius: 6px;
+      display: flex;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .budget-seg-model {
+      background: #10b981;
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+    .budget-seg-os {
+      background: #64748b;
+      height: 100%;
+      transition: width 0.3s ease;
+    }
+    .budget-legend {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+    .budget-legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .legend-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .accordion-box {
+      border-top: 1px solid var(--border-card-subtle);
+      margin-top: 14px;
+      padding-top: 12px;
+    }
+    .accordion-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-title);
+      user-select: none;
+      padding: 4px 0;
+    }
+    .accordion-content {
+      padding-top: 10px;
+      display: none;
+    }
+    .accordion-content.open {
+      display: block;
+    }
+
+    .form-group-compact {
+      margin-bottom: 10px;
+    }
+    .form-group-compact label {
+      display: block;
+      font-size: 10px;
+      font-weight: 600;
+      color: var(--text-dim);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .form-group-compact input,
+    .form-group-compact select {
+      width: 100%;
+      background: var(--bg-card);
+      border: 1px solid var(--border-card-subtle);
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 11.5px;
+      color: var(--text-main);
+      font-family: var(--mono);
+      outline: none;
+      box-sizing: border-box;
+    }
+    .form-group-compact input:focus,
+    .form-group-compact select:focus {
+      border-color: #3b82f6;
+    }
+    .alias-checkbox-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 4px;
+    }
+    .alias-checkbox-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      color: var(--text-title);
+      cursor: pointer;
+    }
+    .alias-checkbox-item input {
+      cursor: pointer;
+    }
+
+
     /* Governance Styles */
     .gov-grid {
       display: grid;
@@ -3158,180 +3482,237 @@
 <!-- VIEW 3: MODEL PACKS (BROWSE & DOWNLOAD) -->
   <div id="tab-view-packs" class="tab-view" style="display: none;">
     <div class="view-container">
-      <div class="view-hero">
-        <div class="view-hero-text">
-          <h2>📦 Model Packs & Registry</h2>
-          <p>Explore, download, and manage optimized inference packages for local zero-latency execution.</p>
+      
+      <!-- Top Hardware Resource Strip -->
+      <div class="studio-header-strip">
+        <div>
+          <h2 style="font-size: 18px; font-weight: 700; color: var(--text-title); margin: 0 0 4px 0; display: flex; align-items: center; gap: 8px;">
+            📦 Model Pack Studio & Registry
+          </h2>
+          <p style="font-size: 12px; color: var(--text-muted); margin: 0;">
+            Discover models from Hugging Face based on host memory capacity, bind intent defaults, and generate local packs.
+          </p>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="pack-pull-input" placeholder="hf.co/... or registry repo" class="pack-search-input" style="width: 260px;" />
-          <button class="btn-action load" id="btn-pack-pull" onclick="alert('Pack pull request submitted to CAS resolver!')">📥 Pull Pack</button>
-        </div>
-      </div>
-
-      <div class="search-filter-bar">
-        <input type="text" id="pack-search" placeholder="Search packs by name, task, or architecture (e.g. llama, flux, whisper, reasoning)..." class="pack-search-input" />
-        <div class="filter-pills">
-          <button class="filter-pill active" data-filter="all">All Packs (6)</button>
-          <button class="filter-pill" data-filter="llm">Language (3)</button>
-          <button class="filter-pill" data-filter="vision">Vision & Image (2)</button>
-          <button class="filter-pill" data-filter="audio">Speech & Audio (1)</button>
+        <div class="studio-hw-badge" id="studio-hw-badge">
+          <span>💻 <span id="studio-hw-device">Detecting Apple Silicon…</span></span>
+          <span class="budget-tag" id="studio-hw-budget">True MLX Budget: -- GB</span>
         </div>
       </div>
 
-      <div class="packs-grid" id="packs-catalog-container">
-        <!-- Pack 1: llama-3.2-3b-instruct -->
-        <div class="pack-card" data-modality="llm">
-          <div>
-            <div class="pack-card-header">
-              <span class="pack-card-icon">💬</span>
-              <div>
-                <div class="pack-card-title">llama-3.2-3b-instruct</div>
-                <span class="nav-badge">Language LLM</span>
-                <span class="status-badge ok" style="margin-left: 4px;">Installed</span>
-              </div>
-            </div>
-            <div class="pack-card-desc">Lightweight high-efficiency instruction LLM. Tuned for code synthesis, structured JSON outputs, and function-calling workflows.</div>
-            <div class="pack-meta-grid">
-              <div class="pack-meta-item"><span>Format</span><strong>MLX 4-bit</strong></div>
-              <div class="pack-meta-item"><span>VRAM Footprint</span><strong>~2.10 GB</strong></div>
-              <div class="pack-meta-item"><span>Context Window</span><strong>131,072 ctx</strong></div>
-              <div class="pack-meta-item"><span>CAS Dedup</span><strong>1.46x Saved</strong></div>
-            </div>
-          </div>
-          <div class="pack-card-actions">
-            <span style="font-size: 10px; color: var(--text-dim); font-family: var(--mono);">vdplabs/llama-3.2-3b</span>
-            <button class="btn-action load" onclick="loadModel('demo-compact')">⚡ Load Weights</button>
-          </div>
+      <!-- Active Intent Packs Overview Bar -->
+      <div class="intents-overview-bar">
+        <div class="intents-bar-title">
+          <span>Active Intent Packages Overview</span>
+          <span style="font-size: 10px; color: var(--text-dim); font-weight: normal;">Click any intent to inspect or rebind</span>
+        </div>
+        <div class="intents-chips-row" id="intents-chips-container">
+          <div style="font-size: 11px; color: var(--text-dim); padding: 4px;">Loading intent packages…</div>
+        </div>
+      </div>
+
+      <!-- Source Switcher & Filter Pills Bar -->
+      <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
+        <div class="studio-segmented-switch">
+          <button class="studio-segmented-btn active" id="btn-source-recommended" onclick="switchStudioSource('recommended')">★ Recommended</button>
+          <button class="studio-segmented-btn" id="btn-source-hf" onclick="switchStudioSource('hf')">🤗 Search Hugging Face</button>
         </div>
 
-        <!-- Pack 2: z-image-turbo -->
-        <div class="pack-card" data-modality="vision">
-          <div>
-            <div class="pack-card-header">
-              <span class="pack-card-icon">🎨</span>
-              <div>
-                <div class="pack-card-title">z-image-turbo</div>
-                <span class="nav-badge">Diffusion Studio</span>
-                <span class="chip warn-pulse" style="margin-left: 4px; font-size: 10px;">Active In Memory</span>
-              </div>
-            </div>
-            <div class="pack-card-desc">Sub-second diffusion image generation engine optimized for Apple Silicon Metal & NVIDIA Tensor Cores with Lanczos upscaling.</div>
-            <div class="pack-meta-grid">
-              <div class="pack-meta-item"><span>Engine</span><strong>mflux / diffusers</strong></div>
-              <div class="pack-meta-item"><span>VRAM Footprint</span><strong>~10.00 GB</strong></div>
-              <div class="pack-meta-item"><span>Resolution</span><strong>512x512 → 1024</strong></div>
-              <div class="pack-meta-item"><span>Steps</span><strong>4–8 Turbo Steps</strong></div>
-            </div>
-          </div>
-          <div class="pack-card-actions">
-            <span style="font-size: 10px; color: var(--text-dim); font-family: var(--mono);">vdplabs.z-image-turbo</span>
-            <button class="btn-action unload" onclick="unloadModel('z-image-turbo')">Unload</button>
-          </div>
+        <div class="filter-pills" id="studio-filter-pills" style="margin: 0;">
+          <button class="filter-pill active" data-studio-filter="all">All (<span id="count-all">0</span>)</button>
+          <button class="filter-pill" data-studio-filter="chat">Chat (<span id="count-chat">0</span>)</button>
+          <button class="filter-pill" data-studio-filter="reasoning">Reasoning (<span id="count-reasoning">0</span>)</button>
+          <button class="filter-pill" data-studio-filter="coder">Coder (<span id="count-coder">0</span>)</button>
+          <button class="filter-pill" data-studio-filter="image">Image (<span id="count-image">0</span>)</button>
+          <button class="filter-pill" data-studio-filter="video">Video (<span id="count-video">0</span>)</button>
+          <button class="filter-pill" data-studio-filter="audio">Audio (<span id="count-audio">0</span>)</button>
+        </div>
+      </div>
+
+      <!-- Search Input Bar -->
+      <div class="search-filter-bar" style="margin-bottom: 16px;">
+        <input type="text" id="studio-search-input" placeholder="Search curated models or type Hugging Face repo (e.g. DeepSeek-R1, Qwen2.5, Llama-3.2, FLUX)..." class="pack-search-input" />
+      </div>
+
+      <!-- Two-Column Studio Layout: Cards Grid (Left) + Inspector / Pack Creator (Right) -->
+      <div class="studio-main-layout">
+        <!-- Left: Model Cards Grid -->
+        <div class="packs-grid" id="studio-cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+          <!-- Populated by renderStudioCards() -->
         </div>
 
-        <!-- Pack 3: reasoning-compact -->
-        <div class="pack-card" data-modality="llm">
-          <div>
-            <div class="pack-card-header">
-              <span class="pack-card-icon">🧠</span>
-              <div>
-                <div class="pack-card-title">reasoning-compact (DeepSeek-R1)</div>
-                <span class="nav-badge">Reasoning LLM</span>
-                <span class="status-badge ok" style="margin-left: 4px;">Installed</span>
-              </div>
+        <!-- Right: Model Details & Compatibility Inspector -->
+        <div class="studio-inspector-card" id="studio-inspector-card">
+          <div class="inspector-header">
+            <div>
+              <div class="inspector-title" id="insp-title">Select a Model</div>
+              <a href="#" target="_blank" rel="noreferrer" class="inspector-repo-link" id="insp-repo-link">
+                <span id="insp-repo-id">mlx-community/...</span>
+                <span>↗</span>
+              </a>
             </div>
-            <div class="pack-card-desc">Distilled reasoning model producing explicit chain-of-thought tokens prior to answering complex math and coding prompts.</div>
-            <div class="pack-meta-grid">
-              <div class="pack-meta-item"><span>Format</span><strong>GGUF / MLX 4-bit</strong></div>
-              <div class="pack-meta-item"><span>VRAM Footprint</span><strong>~2.00 GB</strong></div>
-              <div class="pack-meta-item"><span>Context Window</span><strong>32,768 ctx</strong></div>
-              <div class="pack-meta-item"><span>Chain of Thought</span><strong>Enabled</strong></div>
-            </div>
+            <button class="btn-action" style="padding: 4px 8px; font-size: 11px;" onclick="copyInspectorRepo()" title="Copy Hugging Face Repo">📋</button>
           </div>
-          <div class="pack-card-actions">
-            <span style="font-size: 10px; color: var(--text-dim); font-family: var(--mono);">vdplabs.reasoning.v1</span>
-            <button class="btn-action load" onclick="loadModel('reasoning-compact')">⚡ Load Weights</button>
-          </div>
-        </div>
 
-        <!-- Pack 4: whisper-large-v3-turbo -->
-        <div class="pack-card" data-modality="audio">
-          <div>
-            <div class="pack-card-header">
-              <span class="pack-card-icon">🎙️</span>
-              <div>
-                <div class="pack-card-title">whisper-large-v3-turbo</div>
-                <span class="nav-badge">Speech-to-Text</span>
-                <span class="status-badge ok" style="margin-left: 4px;">Installed</span>
-              </div>
-            </div>
-            <div class="pack-card-desc">Ultra-fast multi-lingual automatic speech recognition with automatic timestamping and punctuation insertion.</div>
-            <div class="pack-meta-grid">
-              <div class="pack-meta-item"><span>Engine</span><strong>mlx-whisper / faster-whisper</strong></div>
-              <div class="pack-meta-item"><span>VRAM Footprint</span><strong>~800 MB</strong></div>
-              <div class="pack-meta-item"><span>Languages</span><strong>99 supported</strong></div>
-              <div class="pack-meta-item"><span>Speedup</span><strong>8x Realtime</strong></div>
-            </div>
+          <div style="font-size: 11.5px; color: var(--text-muted); line-height: 1.45; min-height: 32px;" id="insp-desc">
+            Choose a curated model or search Hugging Face to inspect unified memory footprint and generate local packs.
           </div>
-          <div class="pack-card-actions">
-            <span style="font-size: 10px; color: var(--text-dim); font-family: var(--mono);">openai/whisper-turbo</span>
-            <button class="btn-action load" onclick="loadModel('whisper-demo')">⚡ Load Weights</button>
-          </div>
-        </div>
 
-        <!-- Pack 5: qwen2.5-coder-7b (Available in Registry) -->
-        <div class="pack-card" data-modality="llm">
-          <div>
-            <div class="pack-card-header">
-              <span class="pack-card-icon">💻</span>
-              <div>
-                <div class="pack-card-title">qwen2.5-coder-7b-instruct</div>
-                <span class="nav-badge">Code LLM</span>
-                <span class="nav-badge new" style="margin-left: 4px;">Registry</span>
-              </div>
+          <!-- 4 Metadata Stat Chips -->
+          <div class="meta-stat-chips-grid">
+            <div class="meta-stat-chip">
+              <div class="chip-label">Architecture</div>
+              <div class="chip-val" id="insp-arch">--</div>
             </div>
-            <div class="pack-card-desc">State-of-the-art coding model with support for 92 programming languages, repository-level debugging, and code generation.</div>
-            <div class="pack-meta-grid">
-              <div class="pack-meta-item"><span>Format</span><strong>4-bit AWQ / MLX</strong></div>
-              <div class="pack-meta-item"><span>Download Size</span><strong>4.60 GB</strong></div>
-              <div class="pack-meta-item"><span>Context Window</span><strong>131,072 ctx</strong></div>
-              <div class="pack-meta-item"><span>Min Hardware</span><strong>8 GB Unified RAM</strong></div>
+            <div class="meta-stat-chip">
+              <div class="chip-label">Quantization</div>
+              <div class="chip-val" id="insp-quant">--</div>
+            </div>
+            <div class="meta-stat-chip">
+              <div class="chip-label">Context / Cap</div>
+              <div class="chip-val" id="insp-context">-- tokens</div>
+            </div>
+            <div class="meta-stat-chip">
+              <div class="chip-label">Est. Size</div>
+              <div class="chip-val" id="insp-size">-- GB</div>
             </div>
           </div>
-          <div class="pack-card-actions">
-            <span style="font-size: 10px; color: var(--text-dim); font-family: var(--mono);">Qwen/Qwen2.5-Coder-7B</span>
-            <button class="btn-action load" onclick="alert('Pack download initiated in background via CAS resolver!')">📥 Download Pack</button>
-          </div>
-        </div>
 
-        <!-- Pack 6: flux-1-schnell (Available in Registry) -->
-        <div class="pack-card" data-modality="vision">
-          <div>
-            <div class="pack-card-header">
-              <span class="pack-card-icon">🖼️</span>
-              <div>
-                <div class="pack-card-title">flux-1-schnell-4bit</div>
-                <span class="nav-badge">Next-Gen Diffusion</span>
-                <span class="nav-badge new" style="margin-left: 4px;">Registry</span>
-              </div>
+          <!-- Compatibility Status Banner -->
+          <div id="insp-compat-banner" style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 8px; padding: 8px 12px; font-size: 11.5px; color: #10b981; font-weight: 600; display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+            <span id="insp-compat-icon">✔</span>
+            <span id="insp-compat-text">Compatible with Sink on this Mac.</span>
+          </div>
+
+          <!-- True MLX Unified Memory Budget Gauge -->
+          <div class="budget-gauge-box">
+            <div class="budget-gauge-label">
+              <span>True MLX Unified Memory Budget</span>
+              <span id="insp-budget-ratio-text" style="font-family: var(--mono); color: #10b981;">-- GB / -- GB</span>
             </div>
-            <div class="pack-card-desc">Black Forest Labs' rectified flow transformer model for ultra-high-fidelity photorealistic text-to-image synthesis in 4 steps.</div>
-            <div class="pack-meta-grid">
-              <div class="pack-meta-item"><span>Format</span><strong>MLX 4-bit Quant</strong></div>
-              <div class="pack-meta-item"><span>Download Size</span><strong>6.20 GB</strong></div>
-              <div class="pack-meta-item"><span>Architecture</span><strong>Flow Transformer</strong></div>
-              <div class="pack-meta-item"><span>Steps</span><strong>4 Steps</strong></div>
+            <div class="budget-progress-track">
+              <div class="budget-seg-model" id="insp-bar-model" style="width: 30%;" title="Model Weights & Buffer"></div>
+              <div class="budget-seg-os" id="insp-bar-os" style="width: 25%;" title="macOS Base Overhead"></div>
+            </div>
+            <div class="budget-legend">
+              <span><span class="legend-dot" style="background: #10b981;"></span> <span id="insp-leg-model">Model · 4.3 GB</span></span>
+              <span><span class="legend-dot" style="background: #64748b;"></span> <span id="insp-leg-os">macOS · 3.0 GB</span></span>
+              <span><span class="legend-dot" style="background: var(--border-card-subtle);"></span> Headroom</span>
             </div>
           </div>
-          <div class="pack-card-actions">
-            <span style="font-size: 10px; color: var(--text-dim); font-family: var(--mono);">black-forest-labs/FLUX.1-schnell</span>
-            <button class="btn-action load" onclick="alert('Pack download initiated in background via CAS resolver!')">📥 Download Pack</button>
+
+          <!-- Accordion: Customize & Advanced Options -->
+          <div class="accordion-box">
+            <div class="accordion-header" onclick="toggleStudioAccordion()">
+              <span style="display: flex; align-items: center; gap: 6px;">
+                <span id="accordion-chevron">▸</span> Customize & Advanced Options
+              </span>
+              <span style="font-size: 10px; color: var(--text-dim);">Pack ID, Intent Aliases</span>
+            </div>
+            <div class="accordion-content" id="studio-accordion-content">
+              <div class="form-group-compact">
+                <label>Custom Package ID</label>
+                <input type="text" id="form-pack-id" placeholder="local.model-name.standard.v1" />
+              </div>
+
+              <div class="form-group-compact">
+                <label>Bind to Standard Intent</label>
+                <div class="alias-checkbox-grid">
+                  <label class="alias-checkbox-item">
+                    <input type="checkbox" name="intent-alias" value="chat-standard" id="chk-alias-chat" />
+                    <span>chat-standard</span>
+                  </label>
+                  <label class="alias-checkbox-item">
+                    <input type="checkbox" name="intent-alias" value="chat-compact" id="chk-alias-chat-compact" />
+                    <span>chat-compact</span>
+                  </label>
+                  <label class="alias-checkbox-item">
+                    <input type="checkbox" name="intent-alias" value="coder" id="chk-alias-coder" />
+                    <span>coder</span>
+                  </label>
+                  <label class="alias-checkbox-item">
+                    <input type="checkbox" name="intent-alias" value="reasoning" id="chk-alias-reasoning" />
+                    <span>reasoning</span>
+                  </label>
+                  <label class="alias-checkbox-item">
+                    <input type="checkbox" name="intent-alias" value="image" id="chk-alias-image" />
+                    <span>image</span>
+                  </label>
+                  <label class="alias-checkbox-item">
+                    <input type="checkbox" name="intent-alias" value="video" id="chk-alias-video" />
+                    <span>video</span>
+                  </label>
+                </div>
+              </div>
+
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div class="form-group-compact">
+                  <label>Quality Tier</label>
+                  <select id="form-quality-tier">
+                    <option value="standard">standard</option>
+                    <option value="compact">compact</option>
+                    <option value="extreme">extreme</option>
+                  </select>
+                </div>
+                <div class="form-group-compact">
+                  <label>Chat Template</label>
+                  <select id="form-template-family">
+                    <option value="chatml">chatml</option>
+                    <option value="llama3">llama3</option>
+                    <option value="deepseek-r1-distill-qwen">deepseek</option>
+                    <option value="auto">auto</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="margin-top: 10px; display: flex; justify-content: flex-end;">
+                <button class="btn-action" style="font-size: 11px; padding: 5px 12px;" onclick="exportPackJson()">
+                  📋 Export Pack JSON (Community)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Download Progress Indicator (Initially hidden) -->
+          <div id="studio-download-progress-container" style="display: none; margin-top: 14px; background: var(--bg-card-inner); border-radius: 8px; padding: 10px;">
+            <div style="display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 6px;">
+              <span id="studio-download-status-text" style="color: #3b82f6; font-weight: 600;">Downloading weights to shared HF cache…</span>
+              <span id="studio-download-percent" style="font-family: var(--mono); color: var(--text-title);">In Progress</span>
+            </div>
+            <div style="height: 6px; background: rgba(120, 120, 120, 0.2); border-radius: 3px; overflow: hidden;">
+              <div id="studio-download-bar" style="width: 100%; height: 100%; background: #3b82f6;"></div>
+            </div>
+          </div>
+
+          <!-- Action Buttons Footer -->
+          <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; border-top: 1px solid var(--border-card-subtle); padding-top: 14px;">
+            <button class="btn-action" style="padding: 8px 16px; font-size: 12px;" onclick="resetInspector()">Cancel</button>
+            <button class="btn-action load" id="btn-studio-download" style="padding: 8px 20px; font-size: 12px; font-weight: 700;" onclick="handleStudioDownloadAndUse()">
+              ⚡ Download & Use (-- GB)
+            </button>
           </div>
         </div>
       </div>
+
     </div>
   </div> <!-- /tab-view-packs -->
+
+  <!-- Modal Dialog for Intent Rebinding -->
+  <div id="modal-intent-rebind" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center;">
+    <div style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 12px; padding: 24px; max-width: 480px; width: 90%; box-shadow: var(--shadow-card);">
+      <h3 style="margin: 0 0 8px 0; font-size: 16px; color: var(--text-title);" id="modal-rebind-title">Rebind Intent</h3>
+      <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 16px 0;" id="modal-rebind-desc">
+        Select which model will handle this intent capability request:
+      </p>
+      <div style="margin-bottom: 16px;">
+        <label style="display: block; font-size: 11px; font-weight: 600; color: var(--text-dim); margin-bottom: 6px;">CANDIDATE PACKAGES</label>
+        <select id="modal-rebind-select" style="width: 100%; background: var(--bg-card-inner); border: 1px solid var(--border-card-subtle); border-radius: 6px; padding: 8px 10px; font-size: 12px; color: var(--text-main); font-family: var(--mono);"></select>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button class="btn-action" onclick="closeRebindModal()">Cancel</button>
+        <button class="btn-action load" onclick="submitRebindModal()">Save Binding</button>
+      </div>
+    </div>
+  </div>
 
   
 
@@ -4667,6 +5048,9 @@
     if (tab === 'playground') {
       fetchPlaygroundModels();
     }
+    if (tab === 'packs') {
+      initModelPacksStudio();
+    }
     if (tab === 'performance' && lastStats) {
       try { renderPerformance(lastStats); } catch (e) { console.error('Error rendering performance on tab switch:', e); }
     }
@@ -4691,33 +5075,562 @@
     });
   }
 
-  // Model Packs search & filter
-  const packSearch = document.getElementById('pack-search');
-  if (packSearch) {
-    packSearch.addEventListener('input', (e) => {
-      const q = e.target.value.toLowerCase().trim();
-      document.querySelectorAll('#packs-catalog-container .pack-card').forEach(card => {
-        const text = card.textContent.toLowerCase();
-        card.style.display = (!q || text.includes(q)) ? 'flex' : 'none';
-      });
+  // ==========================================
+  // MODEL PACK STUDIO CONTROLLER
+  // ==========================================
+  const studioState = {
+    source: 'recommended',
+    filter: 'all',
+    searchQuery: '',
+    models: [],
+    intents: [],
+    selectedModel: null,
+    isAccordionOpen: false,
+    rebindTargetAlias: null,
+    pollTimer: null
+  };
+
+  async function initModelPacksStudio() {
+    await Promise.all([loadIntentBindings(), loadStudioModels()]);
+  }
+
+  async function loadIntentBindings() {
+    try {
+      const res = await fetch('/v1/packs/intents');
+      if (!res.ok) return;
+      const data = await res.json();
+      studioState.intents = data.intents || [];
+      renderIntentChips(studioState.intents);
+    } catch (err) {
+      console.warn('Failed to fetch intent bindings', err);
+    }
+  }
+
+  function renderIntentChips(intents) {
+    const container = document.getElementById('intents-chips-container');
+    if (!container) return;
+    if (!intents || intents.length === 0) {
+      container.innerHTML = '<div style="font-size: 11px; color: var(--text-dim); padding: 4px;">No standard intent packages found.</div>';
+      return;
+    }
+    container.innerHTML = '';
+    intents.forEach(it => {
+      const chip = document.createElement('div');
+      chip.className = 'intent-chip';
+      const active = it.active_package;
+      const isReady = active && active.weights_ready;
+      const diskGb = active ? (active.bytes_on_disk / (1024**3)).toFixed(1) : '0';
+      const pkgDisplay = active ? (active.title || active.package_id) : 'Unbound';
+
+      chip.innerHTML = `
+        <span class="status-dot ${isReady ? 'ready' : 'unready'}" title="${isReady ? 'Ready in memory/cache' : 'Weights not yet pulled'}"></span>
+        <span class="alias-name">${escapeHtml(it.alias)}</span>
+        <span class="pkg-name" title="${escapeHtml(pkgDisplay)}">${escapeHtml(pkgDisplay)}</span>
+        <span style="font-size: 9.5px; color: var(--text-dim); font-family: var(--mono);">${diskGb > 0 ? `${diskGb} GB` : (isReady ? 'Ready' : 'Need Pull')}</span>
+        <button style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 0 2px; font-size: 11px;" title="Rebind intent">⇄</button>
+      `;
+      chip.addEventListener('click', () => openRebindModal(it.alias));
+      container.appendChild(chip);
     });
   }
 
-  document.querySelectorAll('#tab-view-packs .filter-pill').forEach(pill => {
-    pill.addEventListener('click', () => {
-      document.querySelectorAll('#tab-view-packs .filter-pill').forEach(p => p.classList.remove('active'));
-      pill.classList.add('active');
-      const filter = pill.getAttribute('data-filter');
-      document.querySelectorAll('#packs-catalog-container .pack-card').forEach(card => {
-        const mod = card.getAttribute('data-modality');
-        if (filter === 'all' || mod === filter) {
-          card.style.display = 'flex';
-        } else {
-          card.style.display = 'none';
-        }
+  function openRebindModal(alias) {
+    studioState.rebindTargetAlias = alias;
+    const it = studioState.intents.find(i => i.alias === alias);
+    if (!it) return;
+
+    const modal = document.getElementById('modal-intent-rebind');
+    const titleEl = document.getElementById('modal-rebind-title');
+    const descEl = document.getElementById('modal-rebind-desc');
+    const selectEl = document.getElementById('modal-rebind-select');
+
+    if (titleEl) titleEl.textContent = `Rebind Intent: [${alias}]`;
+    if (descEl) descEl.textContent = `${it.description}. Select which candidate package will handle requests for '${alias}':`;
+
+    if (selectEl) {
+      selectEl.innerHTML = '';
+      (it.candidates || []).forEach(cand => {
+        const opt = document.createElement('option');
+        opt.value = cand.package_id;
+        const readyStr = cand.weights_ready ? '⚡ Ready' : 'Need Pull';
+        const diskStr = cand.bytes_on_disk > 0 ? ` · ${(cand.bytes_on_disk / (1024**3)).toFixed(1)} GB` : '';
+        opt.textContent = `${cand.package_id} (${readyStr}${diskStr})`;
+        selectEl.appendChild(opt);
       });
+      if (it.active_package && it.active_package.package_id) {
+        selectEl.value = it.active_package.package_id;
+      }
+    }
+
+    if (modal) modal.style.display = 'flex';
+  }
+
+  function closeRebindModal() {
+    const modal = document.getElementById('modal-intent-rebind');
+    if (modal) modal.style.display = 'none';
+    studioState.rebindTargetAlias = null;
+  }
+
+  async function submitRebindModal() {
+    const selectEl = document.getElementById('modal-rebind-select');
+    if (!selectEl || !studioState.rebindTargetAlias) return;
+    const targetPkgId = selectEl.value;
+    try {
+      const res = await fetch('/v1/packs/rebind', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          alias: studioState.rebindTargetAlias,
+          package_id: targetPkgId
+        })
+      });
+      if (!res.ok) {
+        const err = await res.text();
+        alert(`Failed to rebind intent: ${err}`);
+        return;
+      }
+      closeRebindModal();
+      await loadIntentBindings();
+    } catch (err) {
+      alert(`Rebind error: ${err.message}`);
+    }
+  }
+
+  function switchStudioSource(source) {
+    studioState.source = source;
+    const btnRec = document.getElementById('btn-source-recommended');
+    const btnHf = document.getElementById('btn-source-hf');
+    const searchInput = document.getElementById('studio-search-input');
+
+    if (btnRec) btnRec.className = `studio-segmented-btn ${source === 'recommended' ? 'active' : ''}`;
+    if (btnHf) btnHf.className = `studio-segmented-btn ${source === 'hf' ? 'active' : ''}`;
+
+    if (searchInput) {
+      searchInput.placeholder = source === 'recommended'
+        ? "Search curated models (e.g. DeepSeek-R1, Qwen2.5, Llama, FLUX)..."
+        : "Search Hugging Face Hub (e.g. mlx-community/..., deepseek, qwen)...";
+    }
+    loadStudioModels();
+  }
+
+  let studioSearchDebounce = null;
+  async function loadStudioModels() {
+    try {
+      const q = studioState.searchQuery || '';
+      let url = `/v1/hub/search?q=${encodeURIComponent(q)}&modality=${studioState.filter}&limit=30`;
+      if (studioState.source === 'hf' && !q) {
+        url = `/v1/hub/search?q=mlx&modality=${studioState.filter}&limit=30`;
+      }
+      const res = await fetch(url);
+      if (!res.ok) return;
+      const data = await res.json();
+      let models = data.models || [];
+
+      if (studioState.source === 'recommended') {
+        models = models.filter(m => m.source === 'curated');
+      }
+
+      studioState.models = models;
+      updateFilterCounts(models);
+      renderStudioCards(models);
+
+      if (models.length > 0) {
+        if (!studioState.selectedModel || !models.some(m => m.repo_id === studioState.selectedModel.repo_id)) {
+          selectModelForInspector(models[0]);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load studio models', err);
+    }
+  }
+
+  function updateFilterCounts(models) {
+    const all = studioState.models;
+    const counts = { all: all.length, chat: 0, reasoning: 0, coder: 0, image: 0, video: 0, audio: 0 };
+    all.forEach(m => {
+      const role = (m.role || '').toLowerCase();
+      const mod = (m.modality || '').toLowerCase();
+      if (role === 'chat' || (mod === 'text' && role !== 'reasoning' && role !== 'coder')) counts.chat++;
+      if (role === 'reasoning') counts.reasoning++;
+      if (role === 'coder') counts.coder++;
+      if (mod.includes('image')) counts.image++;
+      if (mod.includes('video')) counts.video++;
+      if (mod === 'stt' || mod.includes('audio')) counts.audio++;
+    });
+
+    ['all', 'chat', 'reasoning', 'coder', 'image', 'video', 'audio'].forEach(k => {
+      const el = document.getElementById(`count-${k}`);
+      if (el) el.textContent = counts[k] || 0;
+    });
+  }
+
+  function renderStudioCards(models) {
+    const grid = document.getElementById('studio-cards-grid');
+    if (!grid) return;
+    if (!models || models.length === 0) {
+      grid.innerHTML = '<div style="grid-column: 1 / -1; padding: 40px 20px; text-align: center; color: var(--text-dim); background: var(--bg-card); border: 1px dashed var(--border-card); border-radius: 12px;">No matching models found on Hugging Face Hub for this query.</div>';
+      return;
+    }
+
+    grid.innerHTML = '';
+    models.forEach(m => {
+      const card = document.createElement('div');
+      const isSelected = studioState.selectedModel && studioState.selectedModel.repo_id === m.repo_id;
+      card.className = `pack-card ${isSelected ? 'selected' : ''}`;
+      if (isSelected) {
+        card.style.borderColor = '#3b82f6';
+        card.style.background = 'var(--bg-card-inner)';
+      }
+
+      let icon = '💬';
+      const role = (m.role || '').toLowerCase();
+      const mod = (m.modality || '').toLowerCase();
+      if (role === 'reasoning') icon = '🧠';
+      else if (role === 'coder') icon = '💻';
+      else if (mod.includes('image')) icon = '🎨';
+      else if (mod.includes('video')) icon = '🎬';
+      else if (mod === 'stt' || mod.includes('audio')) icon = '🎙️';
+
+      const fit = m.fit || {};
+      let fitBadgeHtml = '<span class="status-badge ok">● Runs Great</span>';
+      if (fit.fit_status === 'good_fit') {
+        fitBadgeHtml = '<span class="nav-badge" style="background: rgba(59, 130, 246, 0.12); color: #3b82f6; border-color: rgba(59, 130, 246, 0.25);">● Good Fit</span>';
+      } else if (fit.fit_status === 'tight_fit') {
+        fitBadgeHtml = '<span class="chip warn-pulse">● Tight Fit</span>';
+      } else if (fit.fit_status === 'requires_more_ram') {
+        fitBadgeHtml = '<span class="chip" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">● Requires More RAM</span>';
+      }
+
+      const sizeGb = ((m.approx_bytes || 4e9) / (1024**3)).toFixed(1);
+
+      card.innerHTML = `
+        <div>
+          <div class="pack-card-header">
+            <span class="pack-card-icon">${icon}</span>
+            <div style="flex: 1; min-width: 0;">
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                <div class="pack-card-title" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(m.title)}</div>
+                ${fitBadgeHtml}
+              </div>
+              <div style="font-size: 10px; color: var(--text-dim); margin-top: 2px;">${escapeHtml(fit.fit_badge || m.family || '')}</div>
+            </div>
+          </div>
+          <div class="pack-card-desc" style="display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+            ${escapeHtml(m.description || m.repo_id)}
+          </div>
+          <div class="pack-meta-grid" style="margin-bottom: 8px;">
+            <div class="pack-meta-item"><span>Architecture</span><strong>${escapeHtml(m.architecture || 'CausalLM')}</strong></div>
+            <div class="pack-meta-item"><span>Format</span><strong>${escapeHtml(m.quant_label || '4-bit')}</strong></div>
+          </div>
+        </div>
+        <div class="pack-card-actions">
+          <span style="font-size: 11px; font-weight: 600; font-family: var(--mono); color: var(--text-title);">~${sizeGb} GB</span>
+          <button class="btn-action ${isSelected ? 'load' : ''}" style="font-size: 11px; padding: 4px 10px;">
+            ${isSelected ? 'Selected ✓' : 'Inspect & Use →'}
+          </button>
+        </div>
+      `;
+
+      card.addEventListener('click', () => {
+        selectModelForInspector(m);
+        renderStudioCards(studioState.models);
+      });
+      grid.appendChild(card);
+    });
+  }
+
+  function selectModelForInspector(m) {
+    studioState.selectedModel = m;
+    const fit = m.fit || {};
+
+    const titleEl = document.getElementById('insp-title');
+    const repoIdEl = document.getElementById('insp-repo-id');
+    const repoLinkEl = document.getElementById('insp-repo-link');
+    const descEl = document.getElementById('insp-desc');
+
+    if (titleEl) titleEl.textContent = m.title;
+    if (repoIdEl) repoIdEl.textContent = m.repo_id;
+    if (repoLinkEl) repoLinkEl.href = `https://huggingface.co/${m.repo_id}`;
+    if (descEl) descEl.textContent = m.description || `Hugging Face model repository ${m.repo_id}`;
+
+    const hwDevice = document.getElementById('studio-hw-device');
+    const hwBudget = document.getElementById('studio-hw-budget');
+    if (hwDevice) hwDevice.textContent = `${fit.device_name || 'Apple Silicon'} · ${fit.total_ram_gb || 16} GB RAM`;
+    if (hwBudget) hwBudget.textContent = `True MLX Budget: ${fit.working_set_gb || 11.8} GB`;
+
+    const archEl = document.getElementById('insp-arch');
+    const quantEl = document.getElementById('insp-quant');
+    const contextEl = document.getElementById('insp-context');
+    const sizeEl = document.getElementById('insp-size');
+
+    const sizeGb = ((m.approx_bytes || 4e9) / (1024**3)).toFixed(1);
+    if (archEl) archEl.textContent = m.architecture || 'CausalLM';
+    if (quantEl) quantEl.textContent = m.quant_label || '4-bit (mlx)';
+    if (contextEl) contextEl.textContent = `${(m.context_max || 32768).toLocaleString()} ctx`;
+    if (sizeEl) sizeEl.textContent = `${sizeGb} GB`;
+
+    const compatBanner = document.getElementById('insp-compat-banner');
+    const compatIcon = document.getElementById('insp-compat-icon');
+    const compatText = document.getElementById('insp-compat-text');
+    if (compatBanner && compatText && compatIcon) {
+      if (fit.compatible) {
+        compatBanner.style.background = 'rgba(16, 185, 129, 0.08)';
+        compatBanner.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+        compatBanner.style.color = '#10b981';
+        compatIcon.textContent = '✔';
+        compatText.textContent = fit.message || `Compatible with Sink on this ${fit.device_name || 'Mac'}.`;
+      } else {
+        compatBanner.style.background = 'rgba(239, 68, 68, 0.08)';
+        compatBanner.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        compatBanner.style.color = '#ef4444';
+        compatIcon.textContent = '⚠';
+        compatText.textContent = fit.message || 'Model memory footprint exceeds unpaged working set budget.';
+      }
+    }
+
+    const barModel = document.getElementById('insp-bar-model');
+    const barOs = document.getElementById('insp-bar-os');
+    const ratioText = document.getElementById('insp-budget-ratio-text');
+    const legModel = document.getElementById('insp-leg-model');
+    const legOs = document.getElementById('insp-leg-os');
+
+    const budgetGb = fit.working_set_gb || 11.8;
+    const modelGb = fit.model_gb || parseFloat(sizeGb);
+    const osGb = fit.macos_baseline_gb || 3.0;
+    const totalWorkingGb = fit.total_working_gb || (modelGb + osGb).toFixed(1);
+
+    const modelPct = Math.min(100, (modelGb / budgetGb) * 100);
+    const osPct = Math.min(100, (osGb / budgetGb) * 100);
+
+    if (barModel) barModel.style.width = `${modelPct.toFixed(1)}%`;
+    if (barOs) barOs.style.width = `${osPct.toFixed(1)}%`;
+    if (ratioText) {
+      ratioText.textContent = `${totalWorkingGb} GB / ${budgetGb} GB True MLX Budget`;
+      ratioText.style.color = fit.fit_color || '#10b981';
+    }
+    if (legModel) legModel.textContent = `Model · ${modelGb} GB`;
+    if (legOs) legOs.textContent = `macOS · ${osGb} GB`;
+
+    const packIdInput = document.getElementById('form-pack-id');
+    const cleanSlug = m.repo_id.split('/').pop().toLowerCase().replace(/[^a-z0-9\.\-]/g, '-');
+    if (packIdInput) packIdInput.value = `local.${cleanSlug}.${m.quality_tier || 'standard'}.v1`;
+
+    ['chat', 'chat-compact', 'coder', 'reasoning', 'image', 'video'].forEach(a => {
+      const chk = document.getElementById(`chk-alias-${a}`);
+      if (chk) chk.checked = false;
+    });
+
+    const role = (m.role || '').toLowerCase();
+    const mod = (m.modality || '').toLowerCase();
+    if (role === 'reasoning') {
+      const chk = document.getElementById('chk-alias-reasoning');
+      if (chk) chk.checked = true;
+    } else if (role === 'coder') {
+      const chk = document.getElementById('chk-alias-coder');
+      if (chk) chk.checked = true;
+    } else if (mod.includes('image')) {
+      const chk = document.getElementById('chk-alias-image');
+      if (chk) chk.checked = true;
+    } else if (mod.includes('video')) {
+      const chk = document.getElementById('chk-alias-video');
+      if (chk) chk.checked = true;
+    } else if (m.quality_tier === 'compact') {
+      const chk = document.getElementById('chk-alias-chat-compact');
+      if (chk) chk.checked = true;
+    } else {
+      const chk = document.getElementById('chk-alias-chat');
+      if (chk) chk.checked = true;
+    }
+
+    const tierSelect = document.getElementById('form-quality-tier');
+    if (tierSelect) tierSelect.value = m.quality_tier || 'standard';
+
+    const tmplSelect = document.getElementById('form-template-family');
+    if (tmplSelect) tmplSelect.value = m.template_family || 'chatml';
+
+    const btnAction = document.getElementById('btn-studio-download');
+    if (btnAction) {
+      btnAction.innerHTML = `⚡ Download & Use (${sizeGb} GB)`;
+    }
+  }
+
+  function toggleStudioAccordion() {
+    studioState.isAccordionOpen = !studioState.isAccordionOpen;
+    const content = document.getElementById('studio-accordion-content');
+    const chevron = document.getElementById('accordion-chevron');
+    if (content) {
+      content.className = `accordion-content ${studioState.isAccordionOpen ? 'open' : ''}`;
+    }
+    if (chevron) {
+      chevron.textContent = studioState.isAccordionOpen ? '▾' : '▸';
+    }
+  }
+
+  function copyInspectorRepo() {
+    if (studioState.selectedModel) {
+      navigator.clipboard.writeText(studioState.selectedModel.repo_id);
+      alert(`Copied repository path: ${studioState.selectedModel.repo_id}`);
+    }
+  }
+
+  function exportPackJson() {
+    if (!studioState.selectedModel) return;
+    const m = studioState.selectedModel;
+    const packIdInput = document.getElementById('form-pack-id');
+    const tierSelect = document.getElementById('form-quality-tier');
+    const tmplSelect = document.getElementById('form-template-family');
+
+    const aliases = [];
+    document.querySelectorAll('input[name="intent-alias"]:checked').forEach(c => aliases.push(c.value));
+
+    const manifest = {
+      id: packIdInput ? packIdInput.value : `local.${m.repo_id.split('/').pop().toLowerCase()}.standard.v1`,
+      title: m.title,
+      family: m.family || "custom",
+      role: m.role || "chat",
+      params_b: m.params_b || 7.0,
+      quality_tier: tierSelect ? tierSelect.value : (m.quality_tier || "standard"),
+      quant_method: m.quant_method || "mlx_4bit",
+      bits_approx: 4.0,
+      ram_gb_min: m.fit ? Math.max(1, Math.round(m.fit.model_gb * 0.8)) : 4.0,
+      ram_gb_comfortable: m.fit ? Math.max(2, Math.round(m.fit.model_gb * 1.3)) : 6.0,
+      modalities: [m.modality || "text"],
+      context_max: m.context_max || 32768,
+      license: m.license || "open-weights",
+      chat_template_id: m.chat_template_id || "chatml-v1",
+      template_family: tmplSelect ? tmplSelect.value : (m.template_family || "chatml"),
+      aliases: aliases,
+      runtime: {
+        primary: "mlx",
+        hf_repo: m.repo_id,
+        hf_revision: null
+      },
+      system_preamble: "You are a helpful assistant running locally via pantry.",
+      listable: true
+    };
+
+    const jsonStr = JSON.stringify(manifest, null, 2);
+    navigator.clipboard.writeText(jsonStr);
+
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${manifest.id}.json`;
+    a.click();
+
+    alert(`Pack JSON exported and copied to clipboard! You can contribute this manifest back to catalog/ or share with the community.`);
+  }
+
+  async function handleStudioDownloadAndUse() {
+    if (!studioState.selectedModel) return;
+    const m = studioState.selectedModel;
+    const packIdInput = document.getElementById('form-pack-id');
+    const tierSelect = document.getElementById('form-quality-tier');
+    const tmplSelect = document.getElementById('form-template-family');
+
+    const aliases = [];
+    document.querySelectorAll('input[name="intent-alias"]:checked').forEach(c => aliases.push(c.value));
+
+    const pkgId = packIdInput ? packIdInput.value : `local.${m.repo_id.split('/').pop().toLowerCase()}.standard.v1`;
+
+    const progressBox = document.getElementById('studio-download-progress-container');
+    const statusText = document.getElementById('studio-download-status-text');
+    const percentText = document.getElementById('studio-download-percent');
+    const btnAction = document.getElementById('btn-studio-download');
+
+    if (progressBox) progressBox.style.display = 'block';
+    if (statusText) statusText.textContent = `Registering ${pkgId} and initiating snapshot download…`;
+    if (percentText) percentText.textContent = 'Pulling…';
+    if (btnAction) {
+      btnAction.disabled = true;
+      btnAction.textContent = '⏳ Downloading Weights…';
+    }
+
+    try {
+      const res = await fetch('/v1/packs/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: pkgId,
+          title: m.title,
+          family: m.family || 'custom',
+          role: m.role || 'chat',
+          params_b: m.params_b || 7.0,
+          quality_tier: tierSelect ? tierSelect.value : 'standard',
+          quant_method: m.quant_method || 'mlx_4bit',
+          bits_approx: 4.0,
+          modality: m.modality || 'text',
+          context_max: m.context_max || 32768,
+          template_family: tmplSelect ? tmplSelect.value : 'chatml',
+          aliases: aliases,
+          hf_repo: m.repo_id,
+          pull_now: true
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        if (statusText) statusText.textContent = `Error: ${err}`;
+        if (btnAction) btnAction.disabled = false;
+        return;
+      }
+
+      let pollCount = 0;
+      const pollTimer = setInterval(async () => {
+        pollCount++;
+        try {
+          const checkRes = await fetch('/v1/packs/intents');
+          if (checkRes.ok) {
+            const data = await checkRes.json();
+            studioState.intents = data.intents || [];
+            renderIntentChips(studioState.intents);
+
+            const readyPkg = (data.intents || []).some(i => i.active_package && i.active_package.package_id === pkgId && i.active_package.weights_ready);
+            if (readyPkg || pollCount >= 10) {
+              clearInterval(pollTimer);
+              if (statusText) statusText.textContent = `✔ Model pack ${pkgId} installed and active!`;
+              if (percentText) percentText.textContent = '100%';
+              if (btnAction) {
+                btnAction.disabled = false;
+                btnAction.innerHTML = '⚡ Pack Ready (Active)';
+              }
+              alert(`Pack ${pkgId} successfully registered and bound to [${aliases.join(', ') || 'default'}]!`);
+            }
+          }
+        } catch (e) {}
+      }, 3000);
+
+    } catch (err) {
+      if (statusText) statusText.textContent = `Network error: ${err.message}`;
+      if (btnAction) btnAction.disabled = false;
+    }
+  }
+
+  function resetInspector() {
+    if (studioState.models.length > 0) {
+      selectModelForInspector(studioState.models[0]);
+    }
+  }
+
+  document.querySelectorAll('#studio-filter-pills .filter-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('#studio-filter-pills .filter-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+      studioState.filter = pill.getAttribute('data-studio-filter') || 'all';
+      loadStudioModels();
     });
   });
+
+  const studioSearchInput = document.getElementById('studio-search-input');
+  if (studioSearchInput) {
+    studioSearchInput.addEventListener('input', (e) => {
+      clearTimeout(studioSearchDebounce);
+      studioSearchDebounce = setTimeout(() => {
+        studioState.searchQuery = e.target.value.trim();
+        loadStudioModels();
+      }, 250);
+    });
+  }
 
   // Models Table Filter Pills & Search
   document.querySelectorAll('.model-filter-pill').forEach(pill => {

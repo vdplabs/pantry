@@ -12,7 +12,16 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, StreamingResponse
 
@@ -24,17 +33,18 @@ from pantry.pull import PullError, pull_package
 from pantry.resolve import ResolveError, find_by_model_string, resolve
 from pantry.runtime import RuntimeHub
 from pantry.scheduler import Scheduler
-from pantry.telemetry import RequestLogTracker, TelemetryCollector, TokenMetricsTracker
 from pantry.schemas import (
     AudioGenerateRequest,
     CapabilityRequest,
     ChatMessage,
     CompleteRequest,
+    CreatePackBody,
     EmbeddingRequest,
     ImageGenerateRequest,
     LoadBody,
     PackageManifest,
     PullBody,
+    RebindPackBody,
     StoragePruneRequest,
     StoragePruneResponse,
     StorageStatsResponse,
@@ -42,6 +52,7 @@ from pantry.schemas import (
     VideoGenerateRequest,
 )
 from pantry.store import PackageStore
+from pantry.telemetry import RequestLogTracker, TelemetryCollector, TokenMetricsTracker
 from pantry.template import apply_chat_template
 
 
@@ -398,6 +409,91 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
     @app.post("/v1/resolve")
     def resolve_http(req: CapabilityRequest) -> dict[str, Any]:
         return svc.resolve_req(req)
+
+    @app.get("/v1/hub/search")
+    def hub_search(
+        q: str = "",
+        modality: str = "all",
+        limit: int = 20,
+    ) -> dict[str, Any]:
+        from pantry.hardware import get_apple_silicon_device_info
+        from pantry.hub import search_hub
+
+        device_info = get_apple_silicon_device_info()
+        models = search_hub(query=q, modality=modality, limit=limit, device_info=device_info)
+        return {"models": models}
+
+    @app.get("/v1/hub/details")
+    def hub_details(repo_id: str) -> dict[str, Any]:
+        from pantry.hardware import get_apple_silicon_device_info
+        from pantry.hub import get_model_details
+
+        try:
+            device_info = get_apple_silicon_device_info()
+            model = get_model_details(repo_id, device_info=device_info)
+            return {"model": model}
+        except Exception as exc:
+            raise HTTPException(status_code=404, detail=f"Failed to fetch model details: {exc}") from exc
+
+    @app.get("/v1/packs/intents")
+    def pack_intents() -> dict[str, Any]:
+        from pantry.hub import get_intent_bindings
+
+        return {"intents": get_intent_bindings(store)}
+
+    @app.post("/v1/packs/rebind")
+    def pack_rebind(req: RebindPackBody) -> dict[str, Any]:
+        from pantry.hub import rebind_intent_alias
+
+        try:
+            target = rebind_intent_alias(store, req.alias, req.package_id)
+            svc.log_event(f"Rebound intent '{req.alias}' to '{req.package_id}'")
+            return {
+                "status": "ok",
+                "alias": req.alias,
+                "package_id": target.id,
+                "aliases": target.aliases,
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/v1/packs/create")
+    def pack_create(req: CreatePackBody, background_tasks: BackgroundTasks) -> dict[str, Any]:
+        from pantry.hub import create_custom_pack
+
+        try:
+            manifest = create_custom_pack(store, req.model_dump())
+            svc.log_event(f"Created custom model pack: {manifest.id}")
+            pull_result = None
+            if req.pull_now and manifest.runtime.hf_repo:
+                def _bg_pull() -> None:
+                    try:
+                        pull_package(store, manifest.id)
+                    except Exception:  # noqa: BLE001, S110
+                        pass
+                background_tasks.add_task(_bg_pull)
+                pull_result = "download_started"
+
+            return {
+                "status": "ok",
+                "package": manifest.model_dump(),
+                "pull": pull_result,
+            }
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.delete("/v1/packs/{package_id:path}")
+    def pack_delete(package_id: str) -> dict[str, Any]:
+        from pantry.hub import delete_custom_pack
+
+        try:
+            deleted = delete_custom_pack(store, package_id)
+            svc.log_event(f"Deleted model pack: {package_id}")
+            return {"status": "ok", "deleted": package_id, "success": deleted}
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/v1/pull")
     def pull(req: PullBody) -> dict[str, Any]:
