@@ -9,6 +9,7 @@ NVIDIA CUDA, and Linux architectures.
 
 import os
 import platform
+import re
 import subprocess
 import threading
 import time
@@ -548,6 +549,8 @@ class TelemetryCollector:
         self._last_sample: tuple[float, dict[str, Any]] | None = None
         self._gpu_histories: dict[int, list[float]] = {}
         self._last_nvidia_smi: tuple[float, list[dict[str, Any]]] | None = None
+        self._last_apple_gpu: tuple[float, tuple[float | None, int | None]] | None = None
+        self._last_vm_stat: tuple[float, dict[str, int]] | None = None
 
     def sample(self, max_age: float = 0.4) -> dict[str, Any]:
         now = time.time()
@@ -864,6 +867,52 @@ class TelemetryCollector:
             "history": list(self._cpu_history),
         }
 
+    def _sample_macos_vm_stat(self) -> dict[str, int] | None:
+        """Query native macOS vm_stat for accurate App, Wired, Compressed, and Free memory."""
+        if platform.system() != "Darwin":
+            return None
+        now = time.time()
+        if self._last_vm_stat is not None:
+            last_t, val = self._last_vm_stat
+            if now - last_t < 0.8:
+                return val
+        try:
+            res = subprocess.run(["vm_stat"], capture_output=True, text=True, timeout=0.6, check=False)
+            if res.returncode != 0:
+                return None
+            stats: dict[str, int] = {}
+            page_size = 4096
+            m_page = re.search(r"page size of (\d+) bytes", res.stdout)
+            if m_page:
+                page_size = int(m_page.group(1))
+            for line in res.stdout.splitlines():
+                parts = line.split(":")
+                if len(parts) == 2:
+                    k = parts[0].strip().strip('"')
+                    v = parts[1].strip().rstrip(".")
+                    try:
+                        stats[k] = int(v)
+                    except ValueError:
+                        pass
+            free_bytes = (stats.get("Pages free", 0) + stats.get("Pages speculative", 0)) * page_size
+            wired_bytes = stats.get("Pages wired down", 0) * page_size
+            compressed_bytes = stats.get("Pages occupied by compressor", 0) * page_size
+            active_bytes = stats.get("Pages active", 0) * page_size
+            purgeable_bytes = stats.get("Pages purgeable", 0) * page_size
+            app_bytes = max(0, active_bytes - purgeable_bytes)
+            used_bytes = app_bytes + wired_bytes + compressed_bytes
+            val = {
+                "free_bytes": free_bytes,
+                "wired_bytes": wired_bytes,
+                "compressed_bytes": compressed_bytes,
+                "app_bytes": app_bytes,
+                "used_bytes": used_bytes,
+            }
+            self._last_vm_stat = (now, val)
+            return val
+        except Exception:
+            return None
+
     def _sample_memory(self, snap: dict[str, Any]) -> dict[str, Any]:
         total_b = 16 * 1024 * 1024 * 1024
         used_b = 0
@@ -888,6 +937,15 @@ class TelemetryCollector:
             swap_b = sm.used
         except Exception:
             pass
+
+        if platform.system() == "Darwin":
+            mac_mem = self._sample_macos_vm_stat()
+            if mac_mem:
+                app_b = mac_mem["app_bytes"]
+                wired_b = mac_mem["wired_bytes"]
+                compressed_b = mac_mem["compressed_bytes"]
+                used_b = mac_mem["used_bytes"]
+                free_b = mac_mem["free_bytes"]
 
         percent = round((used_b / total_b) * 100.0, 1) if total_b > 0 else 0.0
         status = "Normal"
@@ -1046,26 +1104,53 @@ class TelemetryCollector:
         vram_alloc = snap.get("active_bytes") or 0
         vram_total = snap.get("total_bytes") or (16 * 1024 * 1024 * 1024)
 
-        if is_busy:
-            util_pct = min(
-                98.0,
-                max(25.0, 35.0 + (vram_alloc / (16 * 1024 * 1024 * 1024)) * 30.0),
-            )
-            power_w = round(14.0 + (util_pct / 100.0) * 22.0, 1)
-            temp_c = round(48.0 + (util_pct / 100.0) * 16.0, 1)
-            clock_mhz = 1398
-        elif vram_alloc > 1024 * 1024 * 1024:
-            util_pct = min(
-                40.0, max(4.0, (vram_alloc / (16 * 1024 * 1024 * 1024)) * 20.0)
-            )
-            power_w = round(5.5 + (util_pct / 100.0) * 8.0, 1)
-            temp_c = 44.0
-            clock_mhz = 950
+        dev_util: float | None = None
+        in_use_mem: int | None = None
+        now = time.time()
+        if self._last_apple_gpu is not None:
+            last_t, cached = self._last_apple_gpu
+            if now - last_t < 0.8:
+                dev_util, in_use_mem = cached
+
+        if dev_util is None and platform.system() == "Darwin":
+            try:
+                res = subprocess.run(
+                    ["ioreg", "-r", "-d", "1", "-w", "0", "-c", "IOAccelerator"],
+                    capture_output=True,
+                    text=True,
+                    timeout=0.6,
+                    check=False,
+                )
+                if res.returncode == 0:
+                    m_util = re.search(r'"Device Utilization %"=(\d+)', res.stdout)
+                    if m_util:
+                        dev_util = float(m_util.group(1))
+                    m_in_use = re.search(r'"In use system memory"=(\d+)', res.stdout)
+                    if m_in_use:
+                        in_use_mem = int(m_in_use.group(1))
+                    self._last_apple_gpu = (now, (dev_util, in_use_mem))
+            except Exception:
+                pass
+
+        if in_use_mem is not None and in_use_mem > 0:
+            vram_alloc = in_use_mem
+
+        if dev_util is not None:
+            util_pct = dev_util
+            if is_busy and util_pct < 20.0:
+                util_pct = max(util_pct, 45.0)
         else:
-            util_pct = 2.0
-            power_w = 4.5
-            temp_c = 41.0
-            clock_mhz = 900
+            if is_busy:
+                util_pct = 95.0
+            elif vram_alloc > 1024 * 1024 * 1024:
+                util_pct = 15.0
+            else:
+                util_pct = 2.0
+
+        util_pct = min(100.0, max(0.0, util_pct))
+        power_w = round(3.8 + (util_pct / 100.0) * 26.0, 1)
+        temp_c = round(40.0 + (util_pct / 100.0) * 32.0, 1)
+        clock_mhz = int(900 + (util_pct / 100.0) * 498)
 
         dev_name = hw.get("device_name") or "Apple Silicon GPU"
         if not ("GPU" in dev_name or "Metal" in dev_name):

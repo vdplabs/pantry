@@ -1703,6 +1703,45 @@
       color: var(--text-title);
       box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     }
+    .studio-view-toggle {
+      display: inline-flex;
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border-card-subtle);
+      border-radius: 8px;
+      padding: 3px;
+      gap: 2px;
+    }
+    .view-toggle-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 11.5px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+    .view-toggle-btn.active {
+      background: var(--bg-card);
+      color: var(--text-title);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    }
+    .studio-table-row {
+      cursor: pointer;
+      transition: background 0.15s ease;
+    }
+    .studio-table-row:hover {
+      background: var(--bg-card-inner) !important;
+    }
+    .studio-table-row.selected {
+      background: var(--bg-card-inner) !important;
+      outline: 2px solid #3b82f6;
+      outline-offset: -2px;
+    }
 
     .studio-main-layout {
       display: grid;
@@ -3499,45 +3538,58 @@
         </div>
       </div>
 
-      <!-- Active Intent Packs Overview Bar -->
-      <div class="intents-overview-bar">
-        <div class="intents-bar-title">
-          <span>Active Intent Packages Overview</span>
-          <span style="font-size: 10px; color: var(--text-dim); font-weight: normal;">Click any intent to inspect or rebind</span>
-        </div>
-        <div class="intents-chips-row" id="intents-chips-container">
-          <div style="font-size: 11px; color: var(--text-dim); padding: 4px;">Loading intent packages…</div>
-        </div>
-      </div>
-
       <!-- Source Switcher & Filter Pills Bar -->
       <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 14px;">
         <div class="studio-segmented-switch">
-          <button class="studio-segmented-btn active" id="btn-source-recommended" onclick="switchStudioSource('recommended')">★ Recommended</button>
+          <button class="studio-segmented-btn active" id="btn-source-intents" onclick="switchStudioSource('intents')">🎯 Active Intent Packs</button>
+          <button class="studio-segmented-btn" id="btn-source-recommended" onclick="switchStudioSource('recommended')">★ Recommended</button>
           <button class="studio-segmented-btn" id="btn-source-hf" onclick="switchStudioSource('hf')">🤗 Search Hugging Face</button>
         </div>
 
-        <div class="filter-pills" id="studio-filter-pills" style="margin: 0;">
-          <button class="filter-pill active" data-studio-filter="all">All (<span id="count-all">0</span>)</button>
-          <button class="filter-pill" data-studio-filter="chat">Chat (<span id="count-chat">0</span>)</button>
-          <button class="filter-pill" data-studio-filter="reasoning">Reasoning (<span id="count-reasoning">0</span>)</button>
-          <button class="filter-pill" data-studio-filter="coder">Coder (<span id="count-coder">0</span>)</button>
-          <button class="filter-pill" data-studio-filter="image">Image (<span id="count-image">0</span>)</button>
-          <button class="filter-pill" data-studio-filter="video">Video (<span id="count-video">0</span>)</button>
-          <button class="filter-pill" data-studio-filter="audio">Audio (<span id="count-audio">0</span>)</button>
+        <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+          <div class="filter-pills" id="studio-filter-pills" style="margin: 0;">
+            <button class="filter-pill active" data-studio-filter="all">All (<span id="count-all">0</span>)</button>
+            <button class="filter-pill" data-studio-filter="chat">Chat (<span id="count-chat">0</span>)</button>
+            <button class="filter-pill" data-studio-filter="reasoning">Reasoning (<span id="count-reasoning">0</span>)</button>
+            <button class="filter-pill" data-studio-filter="coder">Coder (<span id="count-coder">0</span>)</button>
+            <button class="filter-pill" data-studio-filter="image">Image (<span id="count-image">0</span>)</button>
+            <button class="filter-pill" data-studio-filter="video">Video (<span id="count-video">0</span>)</button>
+            <button class="filter-pill" data-studio-filter="audio">Audio (<span id="count-audio">0</span>)</button>
+          </div>
+          <div class="studio-view-toggle">
+            <button class="view-toggle-btn active" id="btn-view-table" onclick="setStudioViewMode('table')" title="Structured Table View">☰ Table</button>
+            <button class="view-toggle-btn" id="btn-view-cards" onclick="setStudioViewMode('cards')" title="Cards Grid View">⊞ Cards</button>
+          </div>
         </div>
       </div>
 
       <!-- Search Input Bar -->
       <div class="search-filter-bar" style="margin-bottom: 16px;">
-        <input type="text" id="studio-search-input" placeholder="Search curated models or type Hugging Face repo (e.g. DeepSeek-R1, Qwen2.5, Llama-3.2, FLUX)..." class="pack-search-input" />
+        <input type="text" id="studio-search-input" placeholder="Search active intent bindings, aliases, models..." class="pack-search-input" />
       </div>
 
-      <!-- Two-Column Studio Layout: Cards Grid (Left) + Inspector / Pack Creator (Right) -->
+      <!-- Two-Column Studio Layout: Table / Cards Grid (Left) + Inspector / Pack Creator (Right) -->
       <div class="studio-main-layout">
-        <!-- Left: Model Cards Grid -->
-        <div class="packs-grid" id="studio-cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
-          <!-- Populated by renderStudioCards() -->
+        <!-- Left: Model / Intent Content Column -->
+        <div class="studio-content-column">
+          <!-- View 1: Table View (Default) -->
+          <div class="card" id="studio-table-container" style="padding: 0; overflow: hidden; margin-bottom: 0;">
+            <div class="analytics-table-wrap" style="max-height: 740px; overflow-y: auto;">
+              <table class="analytics-table" id="studio-table">
+                <thead id="studio-table-head">
+                  <!-- Populated by renderStudioTable() -->
+                </thead>
+                <tbody id="studio-table-body">
+                  <!-- Populated by renderStudioTable() -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- View 2: Cards Grid -->
+          <div class="packs-grid" id="studio-cards-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); display: none;">
+            <!-- Populated by renderStudioCards() -->
+          </div>
         </div>
 
         <!-- Right: Model Details & Compatibility Inspector -->
@@ -5079,9 +5131,10 @@
   // MODEL PACK STUDIO CONTROLLER
   // ==========================================
   const studioState = {
-    source: 'recommended',
+    source: 'intents', // Active Intent Packs is the default first tab!
     filter: 'all',
     searchQuery: '',
+    viewMode: 'table', // Structured table view by default!
     models: [],
     intents: [],
     selectedModel: null,
@@ -5092,6 +5145,9 @@
 
   async function initModelPacksStudio() {
     await Promise.all([loadIntentBindings(), loadStudioModels()]);
+    if (studioState.source === 'intents' && studioState.intents.length > 0) {
+      selectIntentForInspector(studioState.intents[0]);
+    }
   }
 
   async function loadIntentBindings() {
@@ -5100,37 +5156,32 @@
       if (!res.ok) return;
       const data = await res.json();
       studioState.intents = data.intents || [];
-      renderIntentChips(studioState.intents);
+      if (studioState.source === 'intents') {
+        updateIntentFilterCounts();
+        renderStudioContent();
+      }
     } catch (err) {
       console.warn('Failed to fetch intent bindings', err);
     }
   }
 
-  function renderIntentChips(intents) {
-    const container = document.getElementById('intents-chips-container');
-    if (!container) return;
-    if (!intents || intents.length === 0) {
-      container.innerHTML = '<div style="font-size: 11px; color: var(--text-dim); padding: 4px;">No standard intent packages found.</div>';
-      return;
-    }
-    container.innerHTML = '';
-    intents.forEach(it => {
-      const chip = document.createElement('div');
-      chip.className = 'intent-chip';
-      const active = it.active_package;
-      const isReady = active && active.weights_ready;
-      const diskGb = active ? (active.bytes_on_disk / (1024**3)).toFixed(1) : '0';
-      const pkgDisplay = active ? (active.title || active.package_id) : 'Unbound';
+  function updateIntentFilterCounts() {
+    const all = studioState.intents;
+    const counts = { all: all.length, chat: 0, reasoning: 0, coder: 0, image: 0, video: 0, audio: 0 };
+    all.forEach(it => {
+      const alias = (it.alias || '').toLowerCase();
+      const mod = (it.modality || '').toLowerCase();
+      if (alias.includes('chat') || mod === 'chat' || mod === 'text') counts.chat++;
+      if (alias.includes('reasoning') || mod === 'reasoning') counts.reasoning++;
+      if (alias.includes('coder') || mod === 'coder') counts.coder++;
+      if (alias.includes('image') || mod.includes('image')) counts.image++;
+      if (alias.includes('video') || mod.includes('video')) counts.video++;
+      if (alias.includes('transcribe') || mod.includes('audio') || mod === 'stt') counts.audio++;
+    });
 
-      chip.innerHTML = `
-        <span class="status-dot ${isReady ? 'ready' : 'unready'}" title="${isReady ? 'Ready in memory/cache' : 'Weights not yet pulled'}"></span>
-        <span class="alias-name">${escapeHtml(it.alias)}</span>
-        <span class="pkg-name" title="${escapeHtml(pkgDisplay)}">${escapeHtml(pkgDisplay)}</span>
-        <span style="font-size: 9.5px; color: var(--text-dim); font-family: var(--mono);">${diskGb > 0 ? `${diskGb} GB` : (isReady ? 'Ready' : 'Need Pull')}</span>
-        <button style="background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 0 2px; font-size: 11px;" title="Rebind intent">⇄</button>
-      `;
-      chip.addEventListener('click', () => openRebindModal(it.alias));
-      container.appendChild(chip);
+    ['all', 'chat', 'reasoning', 'coder', 'image', 'video', 'audio'].forEach(k => {
+      const el = document.getElementById(`count-${k}`);
+      if (el) el.textContent = counts[k] || 0;
     });
   }
 
@@ -5198,19 +5249,62 @@
 
   function switchStudioSource(source) {
     studioState.source = source;
+    const btnIntents = document.getElementById('btn-source-intents');
     const btnRec = document.getElementById('btn-source-recommended');
     const btnHf = document.getElementById('btn-source-hf');
     const searchInput = document.getElementById('studio-search-input');
 
+    if (btnIntents) btnIntents.className = `studio-segmented-btn ${source === 'intents' ? 'active' : ''}`;
     if (btnRec) btnRec.className = `studio-segmented-btn ${source === 'recommended' ? 'active' : ''}`;
     if (btnHf) btnHf.className = `studio-segmented-btn ${source === 'hf' ? 'active' : ''}`;
 
     if (searchInput) {
-      searchInput.placeholder = source === 'recommended'
-        ? "Search curated models (e.g. DeepSeek-R1, Qwen2.5, Llama, FLUX)..."
-        : "Search Hugging Face Hub (e.g. mlx-community/..., deepseek, qwen)...";
+      if (source === 'intents') {
+        searchInput.placeholder = "Search active intent bindings, aliases, models...";
+      } else if (source === 'recommended') {
+        searchInput.placeholder = "Search curated models (e.g. DeepSeek-R1, Qwen2.5, Llama, FLUX)...";
+      } else {
+        searchInput.placeholder = "Search Hugging Face Hub (e.g. mlx-community/..., deepseek, qwen)...";
+      }
     }
-    loadStudioModels();
+
+    if (source === 'intents') {
+      updateIntentFilterCounts();
+      renderStudioContent();
+      if (studioState.intents.length > 0) {
+        selectIntentForInspector(studioState.intents[0]);
+      }
+    } else {
+      loadStudioModels();
+    }
+  }
+
+  function setStudioViewMode(mode) {
+    studioState.viewMode = mode;
+    const btnTable = document.getElementById('btn-view-table');
+    const btnCards = document.getElementById('btn-view-cards');
+    const tableWrap = document.getElementById('studio-table-container');
+    const cardsGrid = document.getElementById('studio-cards-grid');
+
+    if (btnTable) btnTable.className = `view-toggle-btn ${mode === 'table' ? 'active' : ''}`;
+    if (btnCards) btnCards.className = `view-toggle-btn ${mode === 'cards' ? 'active' : ''}`;
+
+    if (tableWrap) tableWrap.style.display = mode === 'table' ? 'block' : 'none';
+    if (cardsGrid) cardsGrid.style.display = mode === 'cards' ? 'grid' : 'none';
+
+    renderStudioContent();
+  }
+
+  function renderStudioContent() {
+    if (studioState.source === 'intents') {
+      renderStudioIntents();
+    } else {
+      if (studioState.viewMode === 'table') {
+        renderStudioModelsTable(studioState.models);
+      } else {
+        renderStudioCards(studioState.models);
+      }
+    }
   }
 
   let studioSearchDebounce = null;
@@ -5232,7 +5326,7 @@
 
       studioState.models = models;
       updateFilterCounts(models);
-      renderStudioCards(models);
+      renderStudioContent();
 
       if (models.length > 0) {
         if (!studioState.selectedModel || !models.some(m => m.repo_id === studioState.selectedModel.repo_id)) {
@@ -5262,6 +5356,302 @@
       const el = document.getElementById(`count-${k}`);
       if (el) el.textContent = counts[k] || 0;
     });
+  }
+
+  function renderStudioIntents() {
+    const tableHead = document.getElementById('studio-table-head');
+    const tableBody = document.getElementById('studio-table-body');
+    const cardsGrid = document.getElementById('studio-cards-grid');
+
+    if (!tableBody) return;
+
+    let filtered = studioState.intents;
+    if (studioState.filter !== 'all') {
+      const f = studioState.filter.toLowerCase();
+      filtered = filtered.filter(it => {
+        const alias = (it.alias || '').toLowerCase();
+        const mod = (it.modality || '').toLowerCase();
+        if (f === 'chat') return alias.includes('chat') || mod === 'chat' || mod === 'text';
+        if (f === 'reasoning') return alias.includes('reasoning') || mod === 'reasoning';
+        if (f === 'coder') return alias.includes('coder') || mod === 'coder';
+        if (f === 'image') return alias.includes('image') || mod.includes('image');
+        if (f === 'video') return alias.includes('video') || mod.includes('video');
+        if (f === 'audio') return alias.includes('transcribe') || mod.includes('audio') || mod === 'stt';
+        return true;
+      });
+    }
+
+    if (studioState.searchQuery) {
+      const sq = studioState.searchQuery.toLowerCase();
+      filtered = filtered.filter(it => {
+        const alias = (it.alias || '').toLowerCase();
+        const desc = (it.description || '').toLowerCase();
+        const pkg = it.active_package ? (it.active_package.title || it.active_package.package_id || '').toLowerCase() : '';
+        return alias.includes(sq) || desc.includes(sq) || pkg.includes(sq);
+      });
+    }
+
+    if (tableHead) {
+      tableHead.innerHTML = `
+        <tr>
+          <th>Intent Alias & Role</th>
+          <th>Bound Target Package</th>
+          <th>Modality</th>
+          <th>Status</th>
+          <th>Footprint</th>
+          <th style="text-align: right;">Actions</th>
+        </tr>
+      `;
+    }
+
+    if (filtered.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="6" style="padding: 36px; text-align: center; color: var(--text-muted);">No matching intent packages found for filter "${escapeHtml(studioState.filter)}"</td></tr>`;
+    } else {
+      tableBody.innerHTML = filtered.map(it => {
+        const active = it.active_package;
+        const isReady = active && active.weights_ready;
+        const diskGb = active ? (active.bytes_on_disk / (1024**3)).toFixed(1) : '0';
+        const pkgTitle = active ? (active.title || active.package_id) : 'Unbound';
+        const pkgId = active ? active.package_id : '—';
+        const isSelected = studioState.selectedModel && (studioState.selectedModel.aliases || []).includes(it.alias);
+
+        let icon = '💬';
+        let modClass = 'text';
+        let modLabel = 'CHAT';
+        const alias = (it.alias || '').toLowerCase();
+        if (alias.includes('reasoning')) { icon = '🧠'; modClass = 'text'; modLabel = 'REASON'; }
+        else if (alias.includes('coder')) { icon = '💻'; modClass = 'text'; modLabel = 'CODER'; }
+        else if (alias.includes('image')) { icon = '🎨'; modClass = 'image'; modLabel = 'IMAGE'; }
+        else if (alias.includes('video')) { icon = '🎬'; modClass = 'video'; modLabel = 'VIDEO'; }
+        else if (alias.includes('transcribe')) { icon = '🎙️'; modClass = 'audio'; modLabel = 'STT'; }
+
+        const statusPill = isReady
+          ? `<span class="status-pill loaded">● Installed & Ready</span>`
+          : `<span class="status-pill standby">○ Need Pull</span>`;
+
+        return `
+          <tr class="studio-table-row ${isSelected ? 'selected' : ''}" onclick="selectIntentForInspectorByAlias('${escapeHtml(it.alias)}')">
+            <td>
+              <div class="model-name-cell">
+                <div style="font-size: 15px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: var(--bg-subtle); border-radius: 6px; border: 1px solid var(--border-card-subtle); flex-shrink: 0;">${icon}</div>
+                <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                  <span style="font-weight: 700; color: var(--text-title); font-size: 13px; font-family: var(--mono);">${escapeHtml(it.alias)}</span>
+                  <span style="font-size: 11px; color: var(--text-muted);">${escapeHtml(it.description || 'Standard capability intent')}</span>
+                </div>
+              </div>
+            </td>
+            <td>
+              <div style="display: flex; flex-direction: column; gap: 2px;">
+                <span style="font-weight: 600; color: var(--text-primary); font-size: 12px;">${escapeHtml(pkgTitle)}</span>
+                <span class="font-mono" style="font-size: 10.5px; color: var(--text-dim);">${escapeHtml(pkgId)}</span>
+              </div>
+            </td>
+            <td><span class="modality-pill ${modClass}">${modLabel}</span></td>
+            <td>${statusPill}</td>
+            <td class="font-mono" style="font-size: 11.5px; color: var(--text-title);">${diskGb > 0 ? `~${diskGb} GB` : (isReady ? 'Ready' : '—')}</td>
+            <td style="text-align: right; white-space: nowrap;">
+              <div style="display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px;">
+                <button class="btn-action" style="padding: 3px 9px; font-size: 11px;" onclick="event.stopPropagation(); openRebindModal('${escapeHtml(it.alias)}')">🔄 Rebind</button>
+                <button class="btn-action launch" style="padding: 3px 9px; font-size: 11px;" onclick="event.stopPropagation(); launchInPlayground('${escapeHtml(pkgId)}', '${modLabel.toLowerCase()}')">⚡ Playground</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    if (cardsGrid) {
+      if (filtered.length === 0) {
+        cardsGrid.innerHTML = '<div style="grid-column: 1 / -1; padding: 40px 20px; text-align: center; color: var(--text-dim); background: var(--bg-card); border: 1px dashed var(--border-card); border-radius: 12px;">No matching intent packages found.</div>';
+      } else {
+        cardsGrid.innerHTML = filtered.map(it => {
+          const active = it.active_package;
+          const isReady = active && active.weights_ready;
+          const diskGb = active ? (active.bytes_on_disk / (1024**3)).toFixed(1) : '0';
+          const pkgTitle = active ? (active.title || active.package_id) : 'Unbound';
+          const isSelected = studioState.selectedModel && (studioState.selectedModel.aliases || []).includes(it.alias);
+
+          let icon = '💬';
+          const alias = (it.alias || '').toLowerCase();
+          if (alias.includes('reasoning')) icon = '🧠';
+          else if (alias.includes('coder')) icon = '💻';
+          else if (alias.includes('image')) icon = '🎨';
+          else if (alias.includes('video')) icon = '🎬';
+          else if (alias.includes('transcribe')) icon = '🎙️';
+
+          return `
+            <div class="pack-card ${isSelected ? 'selected' : ''}" onclick="selectIntentForInspectorByAlias('${escapeHtml(it.alias)}')">
+              <div>
+                <div class="pack-card-header">
+                  <span class="pack-card-icon">${icon}</span>
+                  <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 6px;">
+                      <div class="pack-card-title" style="font-family: var(--mono); font-size: 13px;">${escapeHtml(it.alias)}</div>
+                      <span class="status-pill ${isReady ? 'loaded' : 'standby'}">${isReady ? '● Ready' : '○ Need Pull'}</span>
+                    </div>
+                    <div style="font-size: 10.5px; color: var(--text-dim); margin-top: 2px;">${escapeHtml(it.description)}</div>
+                  </div>
+                </div>
+                <div style="background: var(--bg-card-inner); padding: 8px 10px; border-radius: 6px; border: 1px solid var(--border-card-subtle); margin: 8px 0;">
+                  <div style="font-size: 10px; color: var(--text-dim); text-transform: uppercase;">Bound Model Package</div>
+                  <div style="font-weight: 600; font-size: 12px; color: var(--text-primary); margin-top: 2px;">${escapeHtml(pkgTitle)}</div>
+                </div>
+              </div>
+              <div class="pack-card-actions">
+                <span style="font-size: 11px; font-weight: 600; font-family: var(--mono); color: var(--text-title);">${diskGb > 0 ? `~${diskGb} GB` : '—'}</span>
+                <div style="display: flex; gap: 4px;">
+                  <button class="btn-action" style="font-size: 11px; padding: 4px 8px;" onclick="event.stopPropagation(); openRebindModal('${escapeHtml(it.alias)}')">🔄 Rebind</button>
+                  <button class="btn-action launch" style="font-size: 11px; padding: 4px 8px;" onclick="event.stopPropagation(); launchInPlayground('${escapeHtml(active ? active.package_id : '')}', 'chat')">⚡ Playground</button>
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+    }
+  }
+
+  function renderStudioModelsTable(models) {
+    const tableHead = document.getElementById('studio-table-head');
+    const tableBody = document.getElementById('studio-table-body');
+    if (!tableBody) return;
+
+    if (tableHead) {
+      tableHead.innerHTML = `
+        <tr>
+          <th>Model / Package Identifier</th>
+          <th>Modality</th>
+          <th>Hardware Fit</th>
+          <th>RAM Footprint</th>
+          <th>Architecture & Format</th>
+          <th>Context</th>
+          <th style="text-align: right;">Actions</th>
+        </tr>
+      `;
+    }
+
+    if (!models || models.length === 0) {
+      tableBody.innerHTML = `<tr><td colspan="7" style="padding: 36px; text-align: center; color: var(--text-muted);">No matching models found on Hugging Face Hub for this query.</td></tr>`;
+      return;
+    }
+
+    tableBody.innerHTML = models.map(m => {
+      const isSelected = studioState.selectedModel && studioState.selectedModel.repo_id === m.repo_id;
+      let icon = '💬';
+      let modClass = 'text';
+      let modLabel = 'CHAT';
+
+      const role = (m.role || '').toLowerCase();
+      const mod = (m.modality || '').toLowerCase();
+      if (role === 'reasoning') { icon = '🧠'; modClass = 'text'; modLabel = 'REASON'; }
+      else if (role === 'coder') { icon = '💻'; modClass = 'text'; modLabel = 'CODER'; }
+      else if (mod.includes('image')) { icon = '🎨'; modClass = 'image'; modLabel = 'IMAGE'; }
+      else if (mod.includes('video')) { icon = '🎬'; modClass = 'video'; modLabel = 'VIDEO'; }
+      else if (mod === 'stt' || mod.includes('audio')) { icon = '🎙️'; modClass = 'audio'; modLabel = 'STT'; }
+
+      const fit = m.fit || {};
+      let fitBadgeHtml = '<span class="status-badge ok">● Runs Great</span>';
+      if (fit.fit_status === 'good_fit') {
+        fitBadgeHtml = '<span class="nav-badge" style="background: rgba(59, 130, 246, 0.12); color: #3b82f6; border-color: rgba(59, 130, 246, 0.25);">● Good Fit</span>';
+      } else if (fit.fit_status === 'tight_fit') {
+        fitBadgeHtml = '<span class="chip warn-pulse">● Tight Fit</span>';
+      } else if (fit.fit_status === 'requires_more_ram') {
+        fitBadgeHtml = '<span class="chip" style="color: #ef4444; border-color: rgba(239, 68, 68, 0.3);">● Requires More RAM</span>';
+      }
+
+      const sizeGb = ((m.approx_bytes || 4e9) / (1024**3)).toFixed(1);
+      const ctxLabel = m.context_max ? `${m.context_max.toLocaleString()} ctx` : '32k ctx';
+      const archLabel = m.architecture || 'CausalLM';
+      const quantLabel = m.quant_label || '4-bit (mlx)';
+
+      return `
+        <tr class="studio-table-row ${isSelected ? 'selected' : ''}" onclick="selectModelForInspectorByRepo('${escapeHtml(m.repo_id)}')">
+          <td>
+            <div class="model-name-cell">
+              <div style="font-size: 15px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; background: var(--bg-subtle); border-radius: 6px; border: 1px solid var(--border-card-subtle); flex-shrink: 0;">${icon}</div>
+              <div style="display: flex; flex-direction: column; gap: 2px; min-width: 0;">
+                <span style="font-weight: 600; color: var(--text-primary); font-size: 13px;">${escapeHtml(m.title)}</span>
+                <span class="font-mono" style="font-size: 10.5px; color: var(--text-muted); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(m.repo_id)}">${escapeHtml(m.repo_id)}</span>
+              </div>
+            </div>
+          </td>
+          <td><span class="modality-pill ${modClass}">${modLabel}</span></td>
+          <td>${fitBadgeHtml}</td>
+          <td class="font-mono" style="font-size: 11.5px; font-weight: 600; color: var(--text-title);">~${sizeGb} GB</td>
+          <td class="font-mono" style="font-size: 11.5px;">${escapeHtml(archLabel)} · <span style="color: var(--text-dim);">${escapeHtml(quantLabel)}</span></td>
+          <td class="font-mono" style="font-size: 11.5px; color: var(--text-muted);">${escapeHtml(ctxLabel)}</td>
+          <td style="text-align: right; white-space: nowrap;">
+            <button class="btn-action ${isSelected ? 'load' : ''}" style="font-size: 11px; padding: 4px 10px;">
+              ${isSelected ? 'Selected ✓' : 'Inspect & Use →'}
+            </button>
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function selectModelForInspectorByRepo(repoId) {
+    const m = studioState.models.find(x => x.repo_id === repoId);
+    if (m) {
+      selectModelForInspector(m);
+      renderStudioContent();
+    }
+  }
+
+  function selectIntentForInspectorByAlias(alias) {
+    const it = studioState.intents.find(x => x.alias === alias);
+    if (it) {
+      selectIntentForInspector(it);
+      renderStudioContent();
+    }
+  }
+
+  function selectIntentForInspector(it) {
+    const active = it.active_package || {};
+    const sizeBytes = active.bytes_on_disk || (1.5 * 1024**3);
+    const sizeGb = (sizeBytes / (1024**3)).toFixed(1);
+
+    const syntheticModel = {
+      title: active.title || it.alias,
+      repo_id: active.package_id || `intent.${it.alias}`,
+      description: it.description || `Standard capability package for ${it.alias}`,
+      architecture: active.architecture || 'CausalLM',
+      quant_label: active.quantization || '4-bit (mlx)',
+      context_max: active.context_max || 32768,
+      approx_bytes: sizeBytes,
+      role: it.modality || 'chat',
+      modality: it.modality || 'text',
+      quality_tier: 'standard',
+      aliases: [it.alias],
+      fit: {
+        compatible: true,
+        fit_status: 'runs_great',
+        fit_badge: 'Active Default Intent',
+        fit_color: '#10b981',
+        device_name: 'Apple Silicon',
+        total_ram_gb: 16,
+        working_set_gb: 11.8,
+        model_gb: parseFloat(sizeGb) || 1.5,
+        macos_baseline_gb: 3.0,
+        total_working_gb: (3.0 + (parseFloat(sizeGb) || 1.5)).toFixed(1),
+        message: `Active intent binding for '${it.alias}' on this Mac.`
+      }
+    };
+
+    selectModelForInspector(syntheticModel);
+
+    const aliasIdMap = {
+      'chat-standard': 'chk-alias-chat',
+      'chat-compact': 'chk-alias-chat-compact',
+      'coder': 'chk-alias-coder',
+      'reasoning': 'chk-alias-reasoning',
+      'image': 'chk-alias-image',
+      'video': 'chk-alias-video'
+    };
+    if (aliasIdMap[it.alias]) {
+      const chk = document.getElementById(aliasIdMap[it.alias]);
+      if (chk) chk.checked = true;
+    }
   }
 
   function renderStudioCards(models) {
@@ -5583,7 +5973,7 @@
           if (checkRes.ok) {
             const data = await checkRes.json();
             studioState.intents = data.intents || [];
-            renderIntentChips(studioState.intents);
+            renderStudioContent();
 
             const readyPkg = (data.intents || []).some(i => i.active_package && i.active_package.package_id === pkgId && i.active_package.weights_ready);
             if (readyPkg || pollCount >= 10) {
@@ -5617,7 +6007,11 @@
       document.querySelectorAll('#studio-filter-pills .filter-pill').forEach(p => p.classList.remove('active'));
       pill.classList.add('active');
       studioState.filter = pill.getAttribute('data-studio-filter') || 'all';
-      loadStudioModels();
+      if (studioState.source === 'intents') {
+        renderStudioContent();
+      } else {
+        loadStudioModels();
+      }
     });
   });
 
@@ -5627,8 +6021,12 @@
       clearTimeout(studioSearchDebounce);
       studioSearchDebounce = setTimeout(() => {
         studioState.searchQuery = e.target.value.trim();
-        loadStudioModels();
-      }, 250);
+        if (studioState.source === 'intents') {
+          renderStudioContent();
+        } else {
+          loadStudioModels();
+        }
+      }, 200);
     });
   }
 

@@ -234,3 +234,37 @@ def test_cli_hub_and_pack_commands(tmp_path: Path):
     ])
     assert res.exit_code == 0
     assert "Deleted package local.cli-test.v1" in res.stdout
+
+
+def test_telemetry_real_apple_silicon_gpu_and_macos_memory(tmp_path: Path):
+    import time
+    from pantry.telemetry import TelemetryCollector
+
+    store = PackageStore(root=tmp_path)
+    collector = TelemetryCollector(store)
+
+    hw_info = {"device_name": "Apple M1 Pro", "is_apple_silicon": True}
+    snap = {"active_bytes": int(1.5 * 1024**3), "total_bytes": 16 * 1024**3}
+
+    # 1. Real hardware GPU sampling
+    gpu = collector._sample_apple_silicon_gpu(hw_info, snap, is_busy=False)
+    assert 0.0 <= gpu["utilization_percent"] <= 100.0
+    assert "vram_used_human" in gpu
+    assert "Apple" in gpu["name"]
+    assert "GPU" in gpu["name"]
+
+    # 2. Test 100% GPU utilization during video generation (no longer stuck at 38%)
+    collector._last_apple_gpu = (time.time(), (100.0, 1200 * 1024**2))
+    gpu_video = collector._sample_apple_silicon_gpu(hw_info, snap, is_busy=True)
+    assert gpu_video["utilization_percent"] == 100.0
+    assert gpu_video["vram_used_bytes"] == 1200 * 1024**2
+    assert gpu_video["power_watts"] > 25.0
+
+    # 3. Test system memory sample
+    mem = collector._sample_memory(snap)
+    assert mem["total_bytes"] > 0
+    assert mem["used_bytes"] > 0
+    assert "app_human" in mem
+    assert "wired_human" in mem
+    assert "compressed_human" in mem
+
