@@ -24,8 +24,8 @@ pantry is a user-installed **CLI + localhost daemon** providing local and cluste
 
 | Component | Role |
 | --- | --- |
-| **Package store** | Manifests under `PANTRY_HOME`; content-addressed blobs + HF weight trees under `PANTRY_DATA` (defaults to same path) |
-| **Resolve (Patent FIG. 2)** | Multi-constraint capability resolution: maps modality, RAM budget, quality tier, and task intent to concrete package and speculative execution plan |
+| **Package store (CAS)** | Content-Addressed Storage under `PANTRY_DATA/cas/` with SHA-256 chunking, tensor deduplication, and APFS clonefile extent sharing (Patent Claim 2 & RFC-0006) |
+| **Resolve (Patent FIG. 2)** | Multi-constraint capability resolution: maps modality, RAM budget, quality tier, and task intent to concrete package and speculative execution plan (Patent Claim 1 & FIG. 2). See [Patent Claims Specification](Patent-Claims.md). |
 | **Hardware detector** | Discovers Apple Silicon M-series or NVIDIA DGX/CUDA GPUs; maps memory bandwidth and computes roofline throughput |
 | **Runtime hub** | Dynamically routes packages to `mlx` (Apple Silicon Metal) or `cuda` (NVIDIA GPUs / PyTorch / Transformers) |
 | **Template layer** | Host applies chat templates and strips stop tokens |

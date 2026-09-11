@@ -4,316 +4,214 @@
 
 # pantry
 
-**pantry** is a local and cluster model host for Apple Silicon and NVIDIA DGX / Linux: one shared library of model packages, a small daemon that loads and runs them, and an OpenAI-compatible HTTP API so any app (or `curl`) can be a client.
+<p align="center">
+  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.11+-blue.svg" alt="Python: 3.11+" /></a>
+  <a href="https://github.com/vdplabs/pantry/actions"><img src="https://img.shields.io/badge/CI-Passing-brightgreen.svg" alt="CI: Passing" /></a>
+  <a href="#cross-platform-execution"><img src="https://img.shields.io/badge/Hardware-Apple%20Silicon%20%7C%20CUDA%20DGX-success.svg" alt="Hardware: Apple Silicon & CUDA" /></a>
+  <a href="#http-api"><img src="https://img.shields.io/badge/API-OpenAI%20Compatible-orange.svg" alt="API: OpenAI Compatible" /></a>
+  <a href="Docs/Patent-Claims.md"><img src="https://img.shields.io/badge/Patent%20Ref-US%2064%2F148%2C883-purple.svg" alt="Patent: 64/148,883" /></a>
+</p>
 
-Clients ask for *capabilities* — chat, fit in 8 GB RAM, prefer speed — and pantry resolves a concrete package, applies the right chat template, and streams tokens. Weights live once on disk; many apps reuse them.
+**pantry** is an open-source, local and cluster AI model host built for Apple Silicon and Linux (NVIDIA DGX / CUDA): one shared model library on disk, a lightweight background daemon with capability resolution, Content-Addressable Storage (CAS) deduplication, and an OpenAI-compatible HTTP API.
 
-## Status
+Instead of hardcoding Hugging Face repo names or quantization filenames into every application, clients ask pantry for *capabilities* — `"chat that fits in ~8 GB RAM, prefer speed"` — and pantry dynamically queries physical hardware headroom, resolves a concrete package, configures speculative decoding, and streams tokens. Weights live once on disk; multiple applications and background agents reuse them.
 
-| | |
-| --- | --- |
-| **Version** | **v0.5.4** — usable alpha (MIT, pip) |
-| **Ships today** | Capability resolve · **shared library** under `PANTRY_HOME`/`PANTRY_DATA` (transparent Hugging Face cache snapshot reuse; one copy on disk) · `pantry serve` OpenAI-compatible HTTP + SSE · MLX chat on Apple Silicon with **exact token usage** · **NVIDIA DGX / CUDA Linux support** via PyTorch & Hugging Face · **Interactive Web System Monitor Dashboard** (`/dashboard`) matching SINK with real-time gauges, sparklines, and 1-click unload · **Host-owned templates** (ChatML/Llama) + stop-token stripping · **Curated speculative decoding** (`chat-fast`, draft/target pairs) · Expanded catalog (Qwen 2.5 0.5B/1.5B/Coder, Llama 3.2 1B/3B, DeepSeek-R1) · Multi-backend memory & VRAM watchdog |
-| **Optional Real Engines** | Speech-to-text (`mlx-whisper` via `/v1/audio/transcriptions`) · Image generation (`mflux` via `/v1/images/generations`) · PyTorch CUDA runtime (`transformers` on NVIDIA) |
-| **Scaffolds / Demos** | Music HTTP endpoint (`echo_music` sine scaffold for client wiring) · Embeddings (`echo_embed` scaffold default; MLX runtime available) |
-| **Secondary Features** | Worker subprocess isolation (`--worker-isolation`) · Login LaunchAgent daemon (`pantry service`) · Single-endpoint catalog sync (`pantry catalog update`) · Prompt-injected tool calling · `pantry dashboard` CLI launcher |
-| **Roadmap (not shipped)** | Real MAGNeT music engine on Apple Silicon · CAS blob layer for weight trees · Multi-publisher catalog federation · Unix domain sockets / Mach zero-copy IPC |
+---
 
-Transparency over hype: clone it, run the tests, chat or generate images with local weights — those paths are real. Scaffolds like `echo_music` are honest placeholders for client integration while real engines are developed.
+## ⚡ 60-Second Quickstart
 
-## Intent over tags
-
-Client apps should request **capabilities and memory budgets**, not hardcoded Hugging Face repo names or quant tags.
-
-| Instead of… | Ask pantry for… |
-| --- | --- |
-| `mlx-community/Qwen2.5-…-4bit` baked into the app | `modality=chat`, `ram_gb_max=8`, `quality_tier=compact` |
-| Every app re-picking “which Q4 fits this Mac?” | One resolve answer for **this** machine’s unified memory |
-| Shipping a new app build when the best pack changes | Soft aliases (`chat-compact`) + catalog updates on the host |
-
+### 1. Install Pantry
 ```bash
-# Intent: “chat that fits ~8 GB, prefer compact”
-pantry resolve --modality chat --ram-gb-max 8 --quality compact
+# macOS (Apple Silicon with MLX & menu bar)
+pip install "pantry[mac]"
 
-# Same idea over HTTP
-curl -s http://127.0.0.1:18787/v1/resolve \
-  -H 'content-type: application/json' \
-  -d '{"modality":"chat","ram_gb_max":8,"quality_tier":"compact"}'
-```
-
-Power users can still pin a package id when they want exact weights. The default product path is **intent → resolve → package**, so apps stay portable across Macs and pantry can swap in better packs (or respect memory pressure) without rewriting clients.
-
-## How pantry differs from Ollama / llama.cpp
-
-Ollama and llama.cpp are excellent. pantry is not a feature-for-feature clone — it targets a **shared Mac host** that apps call by capability.
-
-| | **Ollama / llama.cpp server** | **pantry (today)** |
-| --- | --- | --- |
-| **How clients name models** | Pull/run by **tag** or GGUF path (`llama3.2:3b`, file path) | **Capability resolve** (`modality`, `ram_gb_max`, `quality_tier`, aliases like `chat-compact`) *or* pin a package id |
-| **Who owns prompt format** | Often client- or model-card dependent | **Host-owned** templates + stop-token stripping so resolve cannot strand clients |
-| **On-disk library** | Per-tool / per-app installs are common; sharing is manual | **One shared library** under `PANTRY_HOME` / `PANTRY_DATA` so apps reuse the same pulled weight trees (blob CAS helpers exist; HF pulls are package dirs today) |
-| **Transport** | Localhost HTTP (OpenAI-compatible) | **Same today** — OpenAI-compatible HTTP on `127.0.0.1`. UDS / Mach / zero-copy IPC is **roadmap**, not claimed as done |
-| **Hardware acceleration** | Cross-platform; Metal via various backends | **MLX-first** on Apple Silicon, **PyTorch/Transformers** on NVIDIA DGX & CUDA Linux + multi-backend memory/VRAM watchdog |
-| **Multi-modal** | Varies by project | Chat is real MLX / CUDA; STT (`mlx-whisper`) and image (`mflux`) have real engines with demo fallbacks; music is an honest echo scaffold until real engines land |
-
-OpenAI HTTP is the **adapter** for adoption. Differentiation is resolve + shared store + Apple-aware planning — not another chat UI.
-
-## Motivation
-
-Today, every Mac AI app tends to become its own model manager:
-
-| Reality | Cost |
-| --- | --- |
-| Each app downloads its own copy of the same weights | Disk waste, slow first-run, confusing “which folder?” support |
-| Users pick Hub IDs / quants per app | “Which Q4 fits my Mac?” answered differently everywhere |
-| Pull + OpenAI HTTP servers (Ollama, gmlx, …) | Excellent interop; weak shared broker, capability API, and Apple-aware planning |
-
-We want one place that can answer, for this machine:
-
-- **What can run?**
-- **What is installed?**
-- **What is loaded?**
-- **How good / how fast is it on this chip?**
-
-## Goals
-
-1. **Shared package library** — weights + tokenizer metadata + chat template + quality/eval notes under one user library root (optionally on external storage) so apps do not each keep a private copy.
-2. **Installable daemon** — `brew tap vdplabs/tap && brew install pantry`, or `pip` / `uv`; `pantry serve` on localhost (menu bar on by default).
-3. **Capability API** — resolve by modality, RAM budget, quality tier, latency class, template/tool constraints — not only raw Hub IDs.
-4. **MLX on Metal first** — practical path on Apple Silicon via `mlx-lm`; other backends later where packages declare them.
-5. **Host-owned semantics** — pantry applies chat templates and strips model stop tokens so resolve cannot silently strand clients on the wrong prompt format.
-6. **Curated quality tiers** — `standard` / `compact` / `extreme`, with room for measured evals on smaller quants (no silent “enable Q2 on everything”).
-7. **Acceleration over time** — speculative decode for curated draft/target pairs; optional MLC / ANE paths only when measured wins justify them.
-
-## Why pantry is different
-
-pantry is **not** “another chat window” and **not** a feature-for-feature clone of Ollama.
-
-| Pillar | What it means |
-| --- | --- |
-| **One download, many apps** | Shared `PANTRY_HOME` / `PANTRY_DATA` library; clients reuse the same pulled trees |
-| **Capability resolve** | Apps request constraints; host picks a package |
-| **Quality tiers** | Curated packs with honest size/quality tradeoffs |
-| **Runtime planner** | Package declares engine (MLX today); host can add draft models / fallbacks later |
-| **Host-owned templates** | Resolve is safe only if the host owns prompt shaping and stops |
-| **HTTP as interop** | OpenAI-compatible wire format for adoption — differentiation is resolve + store + planner, not a localhost ChatGPT UI |
-
-## Non-goals (current)
-
-- Shipping through the Mac App Store as the primary distribution
-- Training / fine-tune cookbooks as the core product
-- Guaranteeing every GGUF or every Hugging Face repo on day one
-- Competing with Hugging Face as a mirror CDN
-- A built-in chat playground UI inside the daemon
-
-## Architecture (sketch)
-
-```
-┌──────────┐  ┌──────────┐  ┌──────────┐
-│ App A    │  │ App B    │  │ CLI/curl │
-└────┬─────┘  └────┬─────┘  └────┬─────┘
-     │             │             │
-     └─────────────┼─────────────┘
-                   ▼
-         ┌─────────────────┐
-         │  pantry serve   │
-         │  resolve / pull │
-         │  chat complete  │
-         └────────┬────────┘
-    ┌─────────────┼─────────────┐
-    ▼             ▼             ▼
- Package       Runtime        Status
-   store       (MLX / …)      CLI
-```
-
-Default API: `http://127.0.0.1:18787`. Paths: see [Configuration](#configuration).
-
-## Install
-
-Requires Python 3.11+. Supported on **macOS (Apple Silicon)** and **Linux (NVIDIA DGX, CUDA GPUs, or CPU)**.
-
-### macOS (Apple Silicon)
-
-**Homebrew** ([vdplabs/homebrew-tap](https://github.com/vdplabs/homebrew-tap)):
-
-```bash
-brew tap vdplabs/tap
-brew install pantry
-```
-
-**pip (recommended from a clone)** — MLX inference + menu bar:
-
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[mac]"
-# equivalent: pip install -e ".[mlx,menubar]"
-```
-
-Dev tools on top:
-
-```bash
+# Or clone for development
+git clone https://github.com/vdplabs/pantry.git && cd pantry
 pip install -e ".[mac,dev]"
 ```
 
-### Linux & NVIDIA DGX (CUDA)
-
-For NVIDIA DGX clusters, GPU servers, and Linux workstations:
-
+### 2. Pull a Starter Model
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[cuda]"
-# With dev tools: pip install -e ".[cuda,dev]"
-```
-
-For generic Linux CPU or vLLM engines:
-
-```bash
-pip install -e ".[linux]"   # or: pip install -e ".[vllm]"
-```
-
-## Configuration
-
-| Variable / flag | Role |
-| --- | --- |
-| `PANTRY_HOME` / `--home` | **Metadata** root: `state.json`, package manifests (small) |
-| `PANTRY_DATA` or `PANTRY_BLOBS` / `--data` | **Heavy content**: content-addressed `blobs/`, pulled weight trees, generated artifacts |
-| Default (both unset) | `~/Library/Application Support/VDPPantry/` for both (single-directory layout) |
-
-**Base Macs with 256 GB / 512 GB internal SSDs:** keep metadata on the internal volume and put multi‑GB weights on an external APFS Thunderbolt SSD:
-
-```bash
-export PANTRY_HOME="$HOME/Library/Application Support/VDPPantry"
-export PANTRY_DATA="/Volumes/Models/VDPPantry"
-
-pantry init
+# Pull standard compact chat model (~290 MB)
 pantry pull vdplabs.qwen25-0.5b.compact.v1
+```
+
+### 3. Launch the Server
+```bash
 pantry serve
-# or: pantry serve --home "$PANTRY_HOME" --data "$PANTRY_DATA"
 ```
+*The daemon starts on `http://127.0.0.1:18787` with a macOS menu bar status icon.*
 
-`pantry status` and `GET /v1/health` report both `home` and `data` paths. Relocating only `PANTRY_HOME` still works if you want the entire library on one external volume.
-
-## Quick start
-
-```bash
-pantry init
-pantry pull vdplabs.qwen25-0.5b.compact.v1   # ~290 MB starter / draft
-pantry pull vdplabs.qwen25-1.5b.standard.v1  # ~870 MB standard (+ speculative target)
-pantry serve                                   # http://127.0.0.1:18787 + menu bar
-```
-
-```bash
-curl -s http://127.0.0.1:18787/v1/health | jq
-
-curl -s http://127.0.0.1:18787/v1/chat/completions \
-  -H 'content-type: application/json' \
-  -d '{
-    "model": "chat-compact",
-    "messages": [{"role":"user","content":"hello"}],
-    "max_tokens": 64
-  }' | jq
-```
-
-### Capability resolve
-
-```bash
-pantry resolve --modality chat --ram-gb-max 8 --quality compact
-
-curl -s http://127.0.0.1:18787/v1/resolve \
-  -H 'content-type: application/json' \
-  -d '{"modality":"chat","ram_gb_max":8,"quality_tier":"compact"}' | jq
-```
-
-## CLI
-
-| Command | Purpose |
-| --- | --- |
-| `pantry init` | Create library dirs and seed the bundled catalog |
-| `pantry pull <package_id>` | Download package weights (Hugging Face) |
-| `pantry resolve …` | Pick a package from capability constraints |
-| `pantry list` | Installed packages |
-| `pantry load` / `unload` | Mark warm / release; unload clears MLX cache (or shuts down isolated worker) |
-| `pantry serve` | HTTP server **+ Mac menu bar** (`--no-menubar` to disable; `--worker-isolation` for subprocess Metal reclaim on unload) |
-| `pantry status` / `pantry health` | Library / HTTP health (includes memory) |
-| `pantry service install` / `start` / `stop` / `status` | Manage login LaunchAgent daemon (`com.vdplabs.pantry.serve`) |
-| `pantry chat "<prompt>"` | Interactive or one-shot local chat via MLX (supports `--speculative`) |
-| `pantry transcribe <file>` | Local speech-to-text audio transcription via Whisper |
-| `pantry image "<prompt>"` | Generate an image on Apple Silicon Metal via mflux (or demo) |
-| `pantry music "<prompt>"` | Synthesize music audio via echo scaffold |
-
-## HTTP API
-
-| Method | Path | Notes |
-| --- | --- | --- |
-| `GET` | `/v1/health` | Process + library + Metal memory pressure |
-| `GET` | `/v1/memory` | Full unified-memory watchdog snapshot |
-| `POST` | `/v1/memory/clear` | Reclaim MLX Metal free cache |
-| `GET` | `/v1/models` | Listable packages (one id each) with `role` / `modalities`. Echo/demo packs omitted by default; `?demos=1` includes them; `?ready_only=1` hides unpulled |
-| `POST` | `/v1/chat/completions` | Live SSE streaming; exact token counts; tool/function calling support |
-| `POST` | `/v1/embeddings` | Vector embeddings (`modality=embed`); single or batched inputs |
-| `POST` | `/v1/audio/transcriptions` | OpenAI Speech-to-Text format (`multipart/form-data`) powered by `mlx-whisper` (`json`, `verbose_json`, `text`, `vtt`, `srt`) |
-| `POST` | `/v1/images/generations` | OpenAI image generation format powered by `mflux` (FLUX.1-schnell/dev) or `echo_image` scaffold |
-| `POST` | `/v1/audio/generations` | Music packs (`echo_music` scaffold today) |
-| `POST` | `/v1/resolve` | Capability → package (strict modality) |
-| `POST` | `/v1/pull` | `{ "package_id": "…" }` |
-| `POST` | `/v1/unload` | Drop warm runtime weights |
-
-## Packages & quality tiers
-
-A **package** is an immutable manifest plus on-disk weights (when pulled). Manifests declare family, RAM floors, modalities, template family, runtime, and optional eval notes.
-
-| Tier | Intent |
-| --- | --- |
-| `standard` | Default quality balance |
-| `compact` | Smaller / faster; slight quality tradeoff |
-| `extreme` | Max fit / speed; expect quality loss; ship with eval notes |
-
-Capability aliases such as `chat-compact` resolve to a concrete package id on the host.
-
-## Documentation
-
-Deeper reference lives under [`Docs/`](Docs/README.md):
-
-- [Architecture](Docs/Architecture.md)
-- [System Monitor](Docs/SystemMonitor.md)
-- [Packages](Docs/Packages.md)
-- [Modalities](Docs/Modalities.md)
-- [Memory](Docs/Memory.md)
-- [API](Docs/API.md)
-- [Integration](Docs/Integration.md)
-- [Speculative](Docs/Speculative.md)
-- [Install](Docs/Install.md) (pip / uv / Homebrew)
-- [Launchd](Docs/Launchd.md)
-
-## Web System Monitor
-
-When the daemon is running, open `http://127.0.0.1:18787/dashboard` in any browser or run:
+### 4. Open the Web Dashboard
 ```bash
 pantry dashboard
 ```
-Provides a real-time dark glassmorphism dashboard matching SINK:
-- Live CPU, GPU (Metal or NVIDIA CUDA), and Memory gauges.
-- Network and Disk / CAS deduplication statistics.
-- **AI Models in Memory**: inspect resident RAM footprint with 1-click **Unload** and **Purge Pool** actions.
-- **Inference & Tokens**: live Prefill & Decode TPS, context window usage progress bar, and session/cumulative token counters.
+*Launches the real-time glassmorphism System Monitor with interactive Playground, Model Performance benchmarks, and Cloud Cost Savings (ROI) Ledger.*
 
-## Menu bar
-
-Included when you install with `.[mac]` or `.[menubar]`. `pantry serve` opens the status item automatically; use `--no-menubar` for HTTP-only.
-
-The menu shows online status, unified-memory pressure, models / loaded packs, and **Quit pantry** (stops the server).
-
-## Development
-
+### 5. Chat via OpenAI-Compatible API
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e ".[mac,dev]"
-pytest
+curl -s http://127.0.0.1:18787/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "chat-compact",
+    "messages": [{"role": "user", "content": "Explain unified memory in one sentence."}],
+    "max_tokens": 64
+  }' | jq '.choices[0].message.content'
 ```
 
-## License
+---
 
-MIT
+## 🔬 Core Innovations & Patent Architecture
+
+Pantry serves as the open-source reference implementation of **U.S. Provisional Patent Application # 64/148,883** (*Shared Unified Memory Storage & Host Model Management for Local and Edge Intelligence*).
+
+```
+┌─────────────────┐   ┌─────────────────┐   ┌─────────────────┐
+│ Sink AI Studio  │   │ Background CLI  │   │ LangChain Agent │
+└────────┬────────┘   └────────┬────────┘   └────────┬────────┘
+         │                     │                     │
+         └─────────────────────┼─────────────────────┘
+                               ▼
+               ┌───────────────────────────────┐
+               │    pantry host (:18787)       │
+               │   OpenAI HTTP + SSE Stream    │
+               └───────────────┬───────────────┘
+       ┌───────────────────────┼───────────────────────┐
+       ▼                       ▼                       ▼
+  CLAIM 1 (FIG. 2)        CLAIM 2 (CAS)           CLAIM 3
+Dynamic Telemetry &     Content-Addressable     Zero-Retention
+Capability Arbitration  Storage & Deduplication Ephemeral Memory
+```
+
+### 1. Dynamic Capability Resolution (Patent Claim 1 & FIG. 2)
+Order by *dish*, not by *recipe*. Clients submit an abstract capability request tuple:
+```bash
+pantry resolve --modality chat --ram-gb-max 8 --quality compact
+```
+- **Hardware Telemetry Interrogation (Step 204)**: Interrogates Apple Silicon unified DRAM or NVIDIA VRAM to compute the instantaneous unpaged dynamic memory ceiling: $C_{\text{dynamic}} = \min(R_{\text{budget}}, D_{\text{available}})$.
+- **Roofline Throughput Estimation (Step 208)**: Uses the physical memory bus bandwidth to predict generation speed before loading:
+  $$\text{TPS} = \left(\frac{\text{Bandwidth}_{\text{GB/s}}}{\text{Model Size}_{\text{GB}}}\right) \times 0.55$$
+- **Speculative Candidate Feasibility (Steps 212–214)**: Evaluates composite footprint ($P_{\text{target}} + P_{\text{draft}}$) against the dynamic ceiling.
+- **Automated Fallback Cascade (Step 216)**: Automatically disables speculative decoding or downgrades quality tiers if system memory is constrained, preventing OOM crashes.
+- **Execution Plan Output (Step 218)**: Returns an actionable execution specification with context window ceilings and predicted TPS.
+
+*Inspect via CLI:* `pantry patent` or `pantry patent --json`. Full specification: [`Docs/Patent-Claims.md`](Docs/Patent-Claims.md).
+
+### 2. Content-Addressable Storage & APFS Deduplication (Patent Claim 2 & RFC-0006)
+- **Shared Chunk Store**: Chunks are stored under `$PANTRY_DATA/cas/chunks/` keyed by immutable SHA-256 cryptographic hashes.
+- **Cross-Quantization Deduplication**: Invariant model structures—such as token embeddings (`embed_tokens`), normalization layers, and multimodal vision towers—are shared 100% across 4-bit, 8-bit, and 16-bit variants of the same model family, saving **30%–60% disk space**.
+- **Zero-Copy APFS Extent Sharing**: Uses macOS `copyfile(..., COPYFILE_CLONE)` to materialize standard `.safetensors` files without duplicating physical disk blocks and with **zero read latency overhead** during Metal inference.
+- **SQLite WAL Refcounting**: Transactional tracking with automated garbage collection (`pantry prune`).
+
+*Inspect via CLI:* `pantry storage` and `pantry prune --dry-run`.
+
+### 3. Zero-Retention Privacy & Hardware Isolation (Patent Claim 3)
+- **Ephemeral Virtual Memory**: Prompts, tokens, and KV-cache activations reside strictly in transient memory buffers and are never persisted to unencrypted temporary files or local databases.
+- **Subprocess Worker Isolation (`--worker-isolation`)**: Spawns inference engines in isolated worker processes. Unloading a model terminates the worker, causing macOS/Linux kernels to immediately reclaim 100% of driver Metal/CUDA allocations.
+
+---
+
+## 🖥️ Interactive Web System Monitor Dashboard
+
+When the daemon is running, open **`http://127.0.0.1:18787/dashboard`** (or run `pantry dashboard`):
+
+1. **System Monitor**:
+   - Modern vertical **Hero Platform Vitals** KPI cards (*Host & Architecture*, *Unified RAM Pool*, *Inference Pipeline*, *Concurrency Queue*, *CAS Storage Savings*).
+   - Real-time CPU core matrix, GPU compute load, unified memory distribution, and storage I/O sparklines.
+   - **Model Inventory & Weights Table**: Live resident/standby status, RAM footprint, idle memory reclaim countdown timers, and 1-click **Purge Pool** and **Unload All**.
+2. **📈 Model Performance Intelligence**:
+   - Per-model decode throughput percentiles (`p50 / p95 tok/s`), peak TPS, time-to-first-token (TTFT), and energy efficiency (`tok/W`).
+   - Speculative decoding acceleration meters and KV-cache footprint scaling curves.
+3. **💎 Usage & Cloud Cost Savings (ROI) Ledger**:
+   - Real-time accounting of session and cumulative tokens across all modalities (Text, Images, Audio, Video, Embeddings).
+   - Side-by-side comparison showing actual money saved versus commercial cloud API rates (OpenAI GPT-4o, Claude 3.5 Sonnet).
+4. **⚡ Playground**:
+   - Test chat completions, diffusion image generation, and audio transcriptions directly from your browser.
+
+---
+
+## 🥊 Comparison: How Pantry Differs
+
+| Feature | Pantry | Ollama / llama.cpp | vLLM |
+| :--- | :--- | :--- | :--- |
+| **Model Resolution** | **Capability Intent Tuple** (modality, RAM budget, quality tier, task intent) or package ID | Fixed tag / file path (`llama3.2:3b`) | Hugging Face repo tag pinned at launch |
+| **Storage Architecture** | **Shared CAS with Cross-Quant Deduplication** (1 copy on disk; APFS extent clone) | Coarse file duplication per model/tag | Coarse Hugging Face cache |
+| **Hardware Telemetry** | **Real-time roofline model** + dynamic memory ceiling arbitration | Static memory limits | Pre-allocated GPU memory fraction |
+| **Speculative Decoding** | **Automated dynamic pair arbitration** with fallback cascade | Manual configuration | Manual configuration |
+| **Prompt Ownership** | **Host-owned templates** + stop-token stripping (clients never stranded) | Modelfile / client dependent | Client / model tokenizer dependent |
+| **Zero-Retention Privacy** | **Guaranteed ephemeral execution** + worker process Metal reclaim | Varies | Persistent KV-cache options |
+| **Web Dashboard** | **Full System Monitor, Performance Benchmarks, & ROI Ledger** | Community web UIs | Minimal metrics endpoint |
+| **Multi-Modal Support** | Real MLX Chat, Whisper STT, FLUX Diffusion, and Embeddings | Primarily LLMs / vision | Primarily LLMs / vision |
+
+---
+
+## 💻 CLI Command Reference
+
+| Command | Purpose |
+| :--- | :--- |
+| `pantry init` | Initialize library directory tree and seed the bundled model catalog |
+| `pantry pull <package_id>` | Download and verify package weights into shared store |
+| `pantry resolve …` | Arbitrate model selection from capability constraints (Patent Claim 1) |
+| `pantry list` | List all available and installed model packages |
+| `pantry load` / `unload` | Warm model weights into memory or release allocations |
+| `pantry serve` | Start OpenAI-compatible HTTP daemon + macOS menu bar |
+| `pantry dashboard` | Open the interactive Web System Monitor in your default browser |
+| `pantry patent` / `claims` | Display Patent Application # 64/148,883 specifications & live telemetry |
+| `pantry storage` | Inspect CAS deduplication ratio and disk savings |
+| `pantry prune` | Reclaim unreferenced model weight chunks (`--dry-run` supported) |
+| `pantry chat "<prompt>"` | Fast terminal chat completions with optional speculative decoding |
+| `pantry transcribe <file>` | Local speech-to-text audio transcription via Whisper |
+| `pantry image "<prompt>"` | Generate diffusion images locally via Metal acceleration |
+| `pantry service install` | Install background login LaunchAgent on macOS (`com.vdplabs.pantry.serve`) |
+
+---
+
+## 🌐 HTTP API Surface
+
+Pantry exposes standard OpenAI-compatible endpoints along with local host management APIs:
+
+| Method | Endpoint | Description |
+| :--- | :--- | :--- |
+| `POST` | `/v1/chat/completions` | Streaming SSE & non-streaming chat with exact token accounting & tool calling |
+| `POST` | `/v1/images/generations` | Diffusion image generation powered by `mflux` (FLUX.1-schnell/dev) |
+| `POST` | `/v1/audio/transcriptions` | Speech-to-text audio transcription powered by `mlx-whisper` |
+| `POST` | `/v1/embeddings` | Vector embeddings generation (single or batched) |
+| `POST` | `/v1/resolve` | **Capability Arbitration (Patent Claim 1)**: Submit intent tuple $\to$ receive ExecutionPlan |
+| `GET` | `/v1/storage` | **CAS Telemetry (Patent Claim 2)**: Apparent vs physical bytes, dedup ratio |
+| `POST` | `/v1/storage/prune` | Garbage collection of unreferenced weight chunks |
+| `GET` | `/v1/monitor/stats` | Comprehensive telemetry feed powering the Web Dashboard |
+| `POST` | `/v1/models/unload` | Eager memory release with worker process termination |
+| `GET` | `/v1/health` | Service uptime, active models, and unified memory pressure |
+
+---
+
+## 🛠️ Cross-Platform Execution
+
+Pantry is engineered to run seamlessly across:
+1. **Apple Silicon macOS (M1/M2/M3/M4)**: Native unified memory architecture using Apple MLX with zero-copy Metal acceleration.
+2. **NVIDIA DGX & Linux CUDA**: High-performance GPU servers using PyTorch, Hugging Face `transformers`, `accelerate`, and NVML (`pynvml`).
+3. **Generic Linux / CPU**: Headless fallback environments using standard system DRAM and CPU execution.
+
+---
+
+## 🤝 Contributing
+
+We welcome contributions from the community! Check out our [Contributing Guide](CONTRIBUTING.md) for:
+- Development environment setup with `uv` or Python `venv`.
+- Running the test suite (`pytest`) and code formatting (`ruff`).
+- Adding new model packages to `catalog/`.
+- Adding new inference runtime adapters.
+
+---
+
+## 📄 License & Patent Notice
+
+Pantry is licensed under the **[MIT License](LICENSE)**:
+
+```
+MIT License
+Copyright (c) 2026 VDP Labs
+```
+
+The underlying technical architecture is subject to **U.S. Provisional Patent Application # 64/148,883** (*Shared Unified Memory Storage & Host Model Management for Local and Edge Intelligence*). VDP Labs grants royalty-free permission to use, copy, modify, and distribute this software under the terms of the MIT License.

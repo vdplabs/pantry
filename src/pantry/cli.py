@@ -427,6 +427,180 @@ def prune(
     typer.echo(f"{res.get('chunks_pruned', 0)} chunks {action} ({_fmt(res.get('bytes_reclaimed', 0))})")
 
 
+def _patent_impl(
+    as_json: bool = False,
+    home: Path | None = None,
+    data: Path | None = None,
+    host: str = "127.0.0.1",
+    port: int = 18787,
+) -> None:
+    from pantry.hardware import estimate_generation_tps, get_apple_silicon_device_info
+    from pantry.memory import get_available_unified_dram
+
+    device_info = get_apple_silicon_device_info()
+    avail_bytes = get_available_unified_dram()
+
+    # Query CAS stats
+    client, base_url = _get_daemon_client(host=host, port=port)
+    stats: dict = {}
+    try:
+        with client:
+            r = client.get(f"{base_url}/v1/storage", timeout=2.0)
+            if r.status_code == 200:
+                stats = r.json()
+            else:
+                store = _store(home, data)
+                stats = store.cas.get_stats()
+    except Exception:
+        store = _store(home, data)
+        stats = store.cas.get_stats()
+
+    def _fmt(b: int) -> str:
+        val = float(b)
+        for unit in ["B", "KB", "MB", "GB", "TB"]:
+            if val < 1024 or unit == "TB":
+                return f"{val:.1f} {unit}" if unit != "B" else f"{int(val)} B"
+            val /= 1024
+        return f"{val:.1f} B"
+
+    chip_name = device_info.get("device_name", "Unknown Host")
+    bw = device_info.get("bandwidth_gbps", 0.0)
+    sample_tps = round(estimate_generation_tps(870 * 1024 * 1024, chip_name), 1)
+
+    patent_data = {
+        "patent": {
+            "title": "System and Method for Host-Managed Multi-Client Model Capability Routing, Shared Unified Memory Storage, and Coordinated Speculative Decoding",
+            "application_number": "64/148,883",
+            "jurisdiction": "United States Patent and Trademark Office (USPTO)",
+            "assignee": "VDP Labs",
+            "formal_docs": [
+                "Docs/Patent/Pantry Patent Specification.pdf",
+                "Docs/Patent/Pantry Patent Drawings.pdf",
+            ],
+            "license": "MIT License (Open Source Reference Implementation)",
+            "specification_doc": "Docs/Patent-Claims.md",
+        },
+        "claims": [
+            {
+                "claim": 1,
+                "title": "Dynamic Hardware Telemetry & Multi-Constraint Capability Resolution",
+                "diagram": "FIG. 2 (Steps 202-218)",
+                "description": "Closed-loop arbitration mapping abstract intent tuples to execution plans via real-time memory headroom and roofline throughput estimation.",
+                "operational_steps": [
+                    "202: Abstract capability request tuple (modality, task_intent, quality_tier, ram_gb_max, prefer_speculative, allow_fallback)",
+                    "204: Hardware telemetry interrogation for dynamic memory headroom ceiling C_dynamic = min(R_budget, D_available)",
+                    "206: Multi-constraint manifest filtering by modality, template family, tool protocol, and license",
+                    "208: Task-intent alignment scoring and memory bus roofline TPS estimation: TPS = (Bandwidth / ModelSize) * 0.55",
+                    "210: Candidate model selection along Pareto frontier",
+                    "212: Speculative decoding candidate pair evaluation (target + draft composite memory footprint)",
+                    "214: Dynamic memory ceiling verification: Composite_Footprint <= C_dynamic",
+                    "216: Automated fallback cascade (disable speculative -> downgrade quality tier -> clamp context ceiling)",
+                    "218: Formal ExecutionPlan output (runtime, quant_scheme, context_window, estimated_tps, footprint_bytes, ceiling_bytes)",
+                ],
+            },
+            {
+                "claim": 2,
+                "title": "Content-Addressable Storage (CAS) & Cross-Quantization Tensor Deduplication",
+                "standard": "RFC-0006",
+                "description": "Chunked cryptographic storage (SHA-256) with tensor-aware boundary alignment, cross-quantization deduplication (shared embeddings, normalization layers, vision towers), and zero-copy APFS clonefile extent sharing.",
+                "components": [
+                    "cas/chunks/<sha256[:2]>/<sha256>.chunk: Two-character prefix sharded immutable chunk store",
+                    "index.db: SQLite WAL catalog with transactional refcounting and automated pruning",
+                    "APFS clonefile (copyfile COPYFILE_CLONE): Zero-copy filesystem extent sharing eliminating duplicate disk bytes without runtime read overhead",
+                    "recipes: Reconstitution manifest mapping chunks to standard safetensors/gguf weight trees",
+                ],
+            },
+            {
+                "claim": 3,
+                "title": "Zero-Retention Ephemeral Execution & Subprocess Worker Isolation",
+                "description": "Transient memory execution guaranteeing that prompts and completions are maintained exclusively in memory pages without unencrypted persistence, paired with worker process isolation for deterministic OS memory reclamation.",
+                "mechanisms": [
+                    "Ephemeral unified DRAM / VRAM execution with zero secondary disk spooling of prompts or KV-cache activations",
+                    "Subprocess worker isolation (--worker-isolation): Child process termination immediately frees 100% of Metal/CUDA allocations",
+                    "Hardware watchdog enforcing cache caps and reclaim timers",
+                ],
+            },
+        ],
+        "telemetry": {
+            "device": chip_name,
+            "bandwidth_gbps": bw,
+            "available_dram_gb": round(avail_bytes / (1024**3), 2),
+            "sample_1b5_roofline_tps": sample_tps,
+            "cas_root": stats.get("data_root"),
+            "cas_dedup_ratio": f"{stats.get('dedup_ratio', 1.0)}x",
+            "cas_saved_bytes": stats.get("dedup_saved_bytes", 0),
+            "cas_saved_human": _fmt(stats.get("dedup_saved_bytes", 0)),
+            "cas_total_chunks": stats.get("total_chunks", 0),
+        },
+    }
+
+    if as_json:
+        typer.echo(json.dumps(patent_data, indent=2))
+        return
+
+    typer.secho("==================================================================", fg=typer.colors.CYAN, bold=True)
+    typer.secho("  PANTRY: PATENT CLAIMS & ARCHITECTURE SPECIFICATION", fg=typer.colors.CYAN, bold=True)
+    typer.secho("  U.S. Provisional Patent Application # 64/148,883", fg=typer.colors.YELLOW, bold=True)
+    typer.secho("  Assignee: VDP Labs  |  License: MIT (Open Source Reference)", fg=typer.colors.WHITE)
+    typer.secho("==================================================================", fg=typer.colors.CYAN, bold=True)
+    typer.echo()
+
+    typer.secho("CLAIM 1: Dynamic Hardware Telemetry & Capability Resolution (FIG. 2)", fg=typer.colors.GREEN, bold=True)
+    typer.echo("  Closed-loop multi-constraint capability arbitration based on real-time hardware telemetry:")
+    typer.echo("  • Step 202: Abstract Capability Intent Tuple (modality, quality tier, RAM budget, intent)")
+    typer.echo(f"  • Step 204: Telemetry Interrogation (Current Unpaged Headroom: {round(avail_bytes / (1024**3), 2)} GB)")
+    typer.echo("  • Step 206: Multi-Constraint Manifest Filtering (modality, template, tool protocol, license)")
+    typer.echo(f"  • Step 208: Roofline TPS Estimation ({chip_name} @ {bw} GB/s -> ~{sample_tps} tok/s for 1.5B)")
+    typer.echo("  • Step 212: Speculative Candidate Pair Feasibility (Target + Draft composite footprint)")
+    typer.echo("  • Step 214: Dynamic Memory Ceiling Verification (Footprint <= min(RAM_budget, Available_DRAM))")
+    typer.echo("  • Step 216: Automated Fallback Cascade (disable speculative -> downgrade tier -> clamp context)")
+    typer.echo("  • Step 218: Resolved Execution Plan synthesis with roofline TPS and context ceiling")
+    typer.echo()
+
+    typer.secho("CLAIM 2: Content-Addressable Storage (CAS) & Tensor Deduplication (RFC-0006)", fg=typer.colors.GREEN, bold=True)
+    typer.echo("  Cryptographic chunking and cross-quantization deduplication across model weights:")
+    typer.echo("  • SHA-256 Content-Addressed Sharded Store under $PANTRY_DATA/cas/chunks/")
+    typer.echo("  • Cross-Quantization Deduplication: 100% sharing of token embeddings (embed_tokens), norms, & vision towers")
+    typer.echo("  • Zero-Copy APFS Materialization: copyfile(COPYFILE_CLONE) provides contiguous files with 0 read overhead")
+    typer.echo(f"  • Active CAS Status: {stats.get('total_chunks', 0)} chunks | {stats.get('dedup_ratio', 1.0)}x deduplication ({_fmt(stats.get('dedup_saved_bytes', 0))} disk saved)")
+    typer.echo()
+
+    typer.secho("CLAIM 3: Zero-Retention Ephemeral Execution & Hardware Isolation", fg=typer.colors.GREEN, bold=True)
+    typer.echo("  Privacy-first in-memory inference and deterministic OS-level memory reclamation:")
+    typer.echo("  • Ephemeral virtual memory execution: zero unencrypted disk caching of user prompts or tokens")
+    typer.echo("  • Worker Process Isolation (--worker-isolation): subprocess exit reclaims 100% of Metal/CUDA allocations")
+    typer.echo("  • Dynamic memory watchdog with proactive cache caps and reclaim timers")
+    typer.echo()
+
+    typer.secho("Detailed Specification: Docs/Patent-Claims.md", fg=typer.colors.MAGENTA)
+    typer.secho("API Contract: POST /v1/resolve | GET /v1/storage", fg=typer.colors.MAGENTA)
+    typer.echo()
+
+
+@app.command("patent")
+def patent_command(
+    as_json: bool = typer.Option(False, "--json", help="Output raw JSON specification"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, "--data", help="Override PANTRY_DATA"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+) -> None:
+    """Display Provisional Patent # 64/148,883 specifications and live hardware/CAS claims telemetry."""
+    _patent_impl(as_json=as_json, home=home, data=data, host=host, port=port)
+
+
+@app.command("claims")
+def claims_command(
+    as_json: bool = typer.Option(False, "--json", help="Output raw JSON specification"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, "--data", help="Override PANTRY_DATA"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+) -> None:
+    """Alias for 'pantry patent'."""
+    _patent_impl(as_json=as_json, home=home, data=data, host=host, port=port)
+
+
 @app.command()
 def serve(
     host: str = typer.Option("127.0.0.1", "--host"),

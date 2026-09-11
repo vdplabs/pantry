@@ -2,6 +2,7 @@
 
 | Doc | Contents |
 | --- | --- |
+| [Patent Claims](Patent-Claims.md) | Technical mapping of U.S. Provisional Patent # 64/148,883 (FIG. 2 resolve flow, CAS deduplication, and zero-retention execution) |
 | [Architecture](Architecture.md) | Cross-platform architecture (macOS Apple Silicon & Linux NVIDIA DGX), store, resolve, runtimes, scheduling |
 | [System Monitor](SystemMonitor.md) | Real-time Web System Monitor dashboard (`/dashboard`), gauges, 1-click unload, and telemetry API |
 | [Packages](Packages.md) | Manifest fields, quality tiers, pull / library layout, MLX / CUDA runtimes |
