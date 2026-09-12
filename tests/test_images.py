@@ -559,6 +559,9 @@ def test_mflux_preflight_swap_controls(tmp_path, monkeypatch):
     rt._preflight(man, model_warm=False)
     monkeypatch.delenv("PANTRY_IGNORE_SWAP")
 
+    # 4b. ignore_swap=True parameter bypasses swap check
+    rt._preflight(man, model_warm=False, ignore_swap=True)
+
     # 5. PANTRY_IMAGE_MAX_SWAP_GB raises threshold
     monkeypatch.setenv("PANTRY_IMAGE_MAX_SWAP_GB", "12.0")
     rt._preflight(man, model_warm=False)

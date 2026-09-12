@@ -288,6 +288,7 @@ class ImageGenerateRequest(BaseModel):
     negative_prompt: str | None = None
     seed: int | None = None
     stream: bool = False
+    ignore_swap: bool = False
 
 
 class AudioGenerateRequest(BaseModel):

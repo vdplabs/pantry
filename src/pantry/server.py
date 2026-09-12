@@ -1236,6 +1236,11 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
 
         want_stream = req.stream or request.headers.get("accept", "").lower() == "text/event-stream"
         want_shm = (req.response_format or "").lower() == "shm" or request.headers.get("x-pantry-transport", "").lower() == "shm"
+        want_ignore_swap = (
+            req.ignore_swap
+            or request.headers.get("x-pantry-ignore-swap", "").lower() in {"1", "true", "yes"}
+            or os.environ.get("PANTRY_IGNORE_SWAP", "").lower() in {"1", "true", "yes"}
+        )
 
         if want_stream:
             async def _stream_generator() -> AsyncIterator[str]:
@@ -1278,6 +1283,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                             guidance=req.guidance,
                             negative_prompt=req.negative_prompt,
                             step_callback=_on_step,
+                            ignore_swap=want_ignore_swap,
                         )
 
                 async def _worker_task() -> None:
@@ -1387,6 +1393,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     num_inference_steps=req.steps,
                     guidance=req.guidance,
                     negative_prompt=req.negative_prompt,
+                    ignore_swap=want_ignore_swap,
                 )
 
         async def _gen() -> list[dict]:

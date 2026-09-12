@@ -85,6 +85,24 @@ def _swap_used_gb() -> float | None:
     return value / 1024.0 if unit == "M" else value
 
 
+def _vm_pressure_level() -> int | None:
+    """Best-effort macOS memory pressure level reading (1=normal, 2=warn, 4=critical)."""
+    import platform
+    import subprocess
+
+    if platform.system() != "Darwin":
+        return None
+    try:
+        out = subprocess.check_output(
+            ["sysctl", "-n", "kern.memorystatus_vm_pressure_level"],
+            text=True,
+            timeout=2,
+        )
+        return int(out.strip())
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
 def _mflux_model_intact(model: Any) -> bool:
     """False when mflux MemorySaver (or similar) has nulled generation modules."""
     return (
@@ -306,7 +324,14 @@ class MFluxImageRuntime:
         os.environ["HF_HOME"] = str(self.store.data_root / "huggingface")
         os.environ["HF_HUB_CACHE"] = str(self.store.data_root / "huggingface" / "hub")
 
-    def _preflight(self, manifest: PackageManifest, *, model_warm: bool = False) -> None:
+    def _preflight(
+        self,
+        manifest: PackageManifest,
+        *,
+        model_warm: bool = False,
+        ignore_swap: bool = False,
+        force_load: bool = False,
+    ) -> None:
         host = _host_ram_gb()
         if host is not None and host + 0.25 < float(manifest.ram_gb_min or 0):
             raise RuntimeError(
@@ -324,7 +349,9 @@ class MFluxImageRuntime:
             return
 
         force = (
-            os.environ.get("PANTRY_FORCE_IMAGE_LOAD", "").lower() in {"1", "true", "yes"}
+            ignore_swap
+            or force_load
+            or os.environ.get("PANTRY_FORCE_IMAGE_LOAD", "").lower() in {"1", "true", "yes"}
             or os.environ.get("PANTRY_IGNORE_SWAP", "").lower() in {"1", "true", "yes"}
         )
         if force:
@@ -338,7 +365,7 @@ class MFluxImageRuntime:
                 "Z-Image / FLUX cold-starts are unreliable under that pressure — Metal will "
                 "often GPU-timeout while compiling shaders. Free memory first: "
                 "`pantry unload`, quit heavy apps, wait for `sysctl vm.swapusage` to drop, "
-                "or reboot (or set PANTRY_IMAGE_MAX_SWAP_GB=16 / PANTRY_FORCE_IMAGE_LOAD=1 to bypass). "
+                "or reboot (or set PANTRY_IMAGE_MAX_SWAP_GB=32 / PANTRY_FORCE_IMAGE_LOAD=1 to bypass). "
                 "Once an image pack is warm (menu bar → Loaded), retries are allowed "
                 "even with residual swap."
             )
@@ -364,7 +391,8 @@ class MFluxImageRuntime:
         model_key = manifest.id
         cached = self._models.get(model_key)
         model_warm = cached is not None and _mflux_model_intact(cached)
-        self._preflight(manifest, model_warm=model_warm)
+        ignore_swap = kwargs.get("ignore_swap", False) or kwargs.get("force_load", False)
+        self._preflight(manifest, model_warm=model_warm, ignore_swap=ignore_swap)
 
         target_width, target_height = _parse_size(size)
         diff_width, diff_height = target_width, target_height
