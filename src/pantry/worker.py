@@ -53,6 +53,8 @@ def _worker_entry(
         temperature = req.get("temperature")
         prefer_speculative = req.get("prefer_speculative", False)
         tools = req.get("tools")
+        tool_choice = req.get("tool_choice")
+        response_format = req.get("response_format")
 
         manifest = PackageManifest.model_validate(manifest_data)
         messages = [ChatMessage.model_validate(m) for m in messages_data]
@@ -71,6 +73,8 @@ def _worker_entry(
                         prefer_speculative=prefer_speculative,
                         usage=usage,
                         tools=tools,
+                        tool_choice=tool_choice,
+                        response_format=response_format,
                     )
                 )
                 loop.close()
@@ -92,6 +96,8 @@ def _worker_entry(
                     ps=prefer_speculative,
                     u=usage,
                     tls=tools,
+                    tc=tool_choice,
+                    rf=response_format,
                 ):
                     async for chunk in runtime.stream(
                         m,
@@ -101,6 +107,8 @@ def _worker_entry(
                         prefer_speculative=ps,
                         usage=u,
                         tools=tls,
+                        tool_choice=tc,
+                        response_format=rf,
                     ):
                         res_q.put({"status": "chunk", "text": chunk})
 
@@ -173,6 +181,9 @@ class IsolatedMLXRuntime(Runtime):
         prefer_speculative: bool = False,
         usage: dict[str, int] | None = None,
         tools: list[dict] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+        response_format: dict[str, Any] | str | None = None,
+        **kwargs: Any,
     ) -> str:
         self._ensure_worker()
         assert self._req_q is not None and self._res_q is not None
@@ -185,6 +196,8 @@ class IsolatedMLXRuntime(Runtime):
             "temperature": temperature,
             "prefer_speculative": prefer_speculative,
             "tools": tools,
+            "tool_choice": tool_choice,
+            "response_format": response_format,
         }
         self._req_q.put(payload)
 
@@ -206,6 +219,9 @@ class IsolatedMLXRuntime(Runtime):
         prefer_speculative: bool = False,
         usage: dict[str, int] | None = None,
         tools: list[dict] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+        response_format: dict[str, Any] | str | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[str]:
         self._ensure_worker()
         assert self._req_q is not None and self._res_q is not None
@@ -218,6 +234,8 @@ class IsolatedMLXRuntime(Runtime):
             "temperature": temperature,
             "prefer_speculative": prefer_speculative,
             "tools": tools,
+            "tool_choice": tool_choice,
+            "response_format": response_format,
         }
         self._req_q.put(payload)
 

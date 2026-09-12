@@ -414,6 +414,24 @@ class TokenMetricsTracker:
                 m["decode_tps_samples"].clear()
                 m["durations_ms"].clear()
 
+    def reset_cumulative(self) -> None:
+        with self._lock:
+            self.cumulative_prompt_tokens = 0
+            self.cumulative_completion_tokens = 0
+            self.cumulative_total_tokens = 0
+            self.cumulative_requests = 0
+            self.cumulative_images_generated = 0
+            self.cumulative_videos_generated = 0
+            self.cumulative_audio_seconds = 0.0
+            self.cumulative_music_seconds = 0.0
+            self.cumulative_embedding_tokens = 0
+            self.cumulative_cached_prompt_tokens = 0
+            for m in self._model_stats.values():
+                m["cumulative_prompt_tokens"] = 0
+                m["cumulative_completion_tokens"] = 0
+                m["cumulative_total_tokens"] = 0
+                m["cumulative_requests"] = 0
+
     def stats(self) -> dict[str, Any]:
         with self._lock:
             pct = 0.0

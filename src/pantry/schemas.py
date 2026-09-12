@@ -204,6 +204,7 @@ class CompleteRequest(BaseModel):
     prefill_step_size: int = 2048
     tools: list[dict[str, Any]] | None = None
     tool_choice: str | dict[str, Any] | None = None
+    response_format: dict[str, Any] | str | None = None
 
     def effective_max_tokens(self) -> int | None:
         if self.max_tokens is not None:
@@ -428,6 +429,21 @@ class PrefixCacheClearResponse(BaseModel):
     ok: bool = True
     cleared_entries: int = 0
     reclaimed_bytes: int = 0
+
+
+class GrammarValidateRequest(BaseModel):
+    content: str
+    schema_def: dict[str, Any] | None = Field(default=None, alias="schema")
+    repair: bool = True
+
+
+class GrammarValidateResponse(BaseModel):
+    valid: bool
+    parsed: Any | None = None
+    repaired: bool = False
+    repaired_content: str | None = None
+    error: str | None = None
+
 
 
 

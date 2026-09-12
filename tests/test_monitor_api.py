@@ -109,6 +109,7 @@ def test_monitor_stats_api(tmp_path):
 def test_token_metrics_tracker_and_reset(tmp_path):
     tracker = TokenMetricsTracker.get()
     tracker.reset_session()
+    tracker.reset_cumulative()
 
     tracker.record_completion(
         prompt_tokens=150,

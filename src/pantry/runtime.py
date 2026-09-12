@@ -33,6 +33,8 @@ class Runtime(ABC):
         prefill_step_size: int = 2048,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+        response_format: dict[str, Any] | str | None = None,
     ) -> str:
         raise NotImplementedError
 
@@ -50,6 +52,8 @@ class Runtime(ABC):
         prefill_step_size: int = 2048,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+        response_format: dict[str, Any] | str | None = None,
     ) -> AsyncIterator[str]:
         text = await self.complete(
             manifest,
@@ -63,6 +67,8 @@ class Runtime(ABC):
             prefill_step_size=prefill_step_size,
             usage=usage,
             tools=tools,
+            tool_choice=tool_choice,
+            response_format=response_format,
         )
         step = max(8, len(text) // 8 or 1)
         for i in range(0, len(text), step):
@@ -87,6 +93,8 @@ class EchoRuntime(Runtime):
         prefill_step_size: int = 2048,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+        response_format: dict[str, Any] | str | None = None,
     ) -> str:
         prompt = apply_chat_template(manifest, messages, tools=tools)
         last_user = ""
@@ -114,15 +122,44 @@ class EchoRuntime(Runtime):
                 _, _, cached_tokens = cache_mgr.lookup(manifest.id, pseudo_tokens)
                 cache_mgr.insert(manifest.id, pseudo_tokens, "echo_cached_state", nbytes=len(pseudo_tokens) * 64)
 
-        cache_note = f"\n[prefix cache: {cached_tokens} tokens reused]" if cached_tokens > 0 else ""
-        body = (
-            f"[pantry echo · {manifest.id} · template={manifest.template_family}]\n"
-            f"You said: {last_user or '(empty)'}\n"
-            f"Prompt chars: {len(prompt)}{draft}{cache_note}"
-        )
-        max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
-        body = body[: max_toks * 4]
-        cleaned = strip_stop_tokens(body, manifest)
+        if response_format and isinstance(response_format, dict):
+            import json
+            from pantry.grammar import generate_schema_mock
+
+            rf_type = response_format.get("type")
+            if rf_type == "json_schema":
+                schema = response_format.get("json_schema", {}).get("schema")
+                mock = generate_schema_mock(schema)
+                cleaned = json.dumps(mock, indent=2)
+            else:
+                cleaned = json.dumps({"status": "ok", "message": f"Echo JSON from {manifest.id}", "input": last_user})
+        elif tools and (tool_choice or any("tool" in m.text().lower() or "weather" in m.text().lower() for m in messages if m.role == "user")):
+            import json
+            from pantry.grammar import generate_schema_mock
+
+            selected_tool = tools[0]
+            if isinstance(tool_choice, dict):
+                t_name = tool_choice.get("function", {}).get("name")
+                for t in tools:
+                    fn = t.get("function", t) if isinstance(t, dict) else {}
+                    if fn.get("name") == t_name:
+                        selected_tool = t
+                        break
+            fn_info = selected_tool.get("function", selected_tool)
+            fn_name = fn_info.get("name", "tool_call")
+            params = fn_info.get("parameters", {})
+            args_mock = generate_schema_mock(params)
+            cleaned = f"<tool_call>{json.dumps({'name': fn_name, 'arguments': args_mock})}</tool_call>"
+        else:
+            cache_note = f"\n[prefix cache: {cached_tokens} tokens reused]" if cached_tokens > 0 else ""
+            body = (
+                f"[pantry echo · {manifest.id} · template={manifest.template_family}]\n"
+                f"You said: {last_user or '(empty)'}\n"
+                f"Prompt chars: {len(prompt)}{draft}{cache_note}"
+            )
+            max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
+            body = body[: max_toks * 4]
+            cleaned = strip_stop_tokens(body, manifest)
         if usage is not None:
             p_toks = max(1, len(prompt.split()))
             c_toks = max(1, len(cleaned.split()))
@@ -246,6 +283,8 @@ class MLXRuntime(Runtime):
         prefill_step_size: int = 2048,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+        response_format: dict[str, Any] | str | None = None,
     ) -> str:
         parts: list[str] = []
         async for chunk in self.stream(
@@ -260,9 +299,16 @@ class MLXRuntime(Runtime):
             prefill_step_size=prefill_step_size,
             usage=usage,
             tools=tools,
+            tool_choice=tool_choice,
+            response_format=response_format,
         ):
             parts.append(chunk)
-        return strip_stop_tokens("".join(parts), manifest)
+        raw = strip_stop_tokens("".join(parts), manifest)
+        if response_format:
+            from pantry.grammar import StrictToolCallGuard
+
+            return StrictToolCallGuard.enforce_response_format(raw, response_format)
+        return raw
 
     async def stream(
         self,
@@ -278,6 +324,8 @@ class MLXRuntime(Runtime):
         prefill_step_size: int = 2048,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+        response_format: dict[str, Any] | str | None = None,
     ) -> AsyncIterator[str]:
         try:
             from mlx_lm import load, stream_generate  # type: ignore
@@ -373,6 +421,13 @@ class MLXRuntime(Runtime):
                     repetition_context_size=128 if is_reasoning else 64,
                     frequency_penalty=0.35 if is_reasoning else 0.2,
                 )
+                if response_format:
+                    try:
+                        from pantry.grammar import JsonLogitsProcessor
+
+                        processors.append(JsonLogitsProcessor(tokenizer))
+                    except Exception as e:
+                        logger.warning("Could not attach JsonLogitsProcessor: %s", e)
                 kwargs: dict = {
                     "max_tokens": max_toks,
                     "sampler": sampler,
@@ -579,7 +634,13 @@ class CUDARuntime(Runtime):
             **kwargs,
         ):
             parts.append(chunk)
-        return strip_stop_tokens("".join(parts), manifest)
+        raw = strip_stop_tokens("".join(parts), manifest)
+        response_format = kwargs.get("response_format")
+        if response_format:
+            from pantry.grammar import StrictToolCallGuard
+
+            return StrictToolCallGuard.enforce_response_format(raw, response_format)
+        return raw
 
     async def stream(
         self,

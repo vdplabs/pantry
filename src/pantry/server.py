@@ -43,6 +43,8 @@ from pantry.schemas import (
     CompleteRequest,
     CreatePackBody,
     EmbeddingRequest,
+    GrammarValidateRequest,
+    GrammarValidateResponse,
     ImageGenerateRequest,
     LoadBody,
     PackageManifest,
@@ -108,30 +110,14 @@ def _is_embed_package(pkg: PackageManifest) -> bool:
     return "embed" in mods or (pkg.role or "").lower() in {"embed", "embedding"}
 
 
-def _parse_tool_calls(text: str) -> list[dict[str, Any]] | None:
-    import re
+def _parse_tool_calls(
+    text: str,
+    tools: list[dict[str, Any]] | None = None,
+    tool_choice: Any = None,
+) -> list[dict[str, Any]] | None:
+    from pantry.grammar import StrictToolCallGuard
 
-    tool_calls: list[dict[str, Any]] = []
-    matches = re.findall(r"<tool_call>\s*(.*?)\s*</tool_call>", text, re.DOTALL)
-    for m in matches:
-        try:
-            parsed = json.loads(m)
-            if isinstance(parsed, dict) and "name" in parsed:
-                args = parsed.get("arguments", {})
-                args_str = json.dumps(args) if isinstance(args, dict) else str(args)
-                tool_calls.append(
-                    {
-                        "id": f"call_{uuid.uuid4().hex[:8]}",
-                        "type": "function",
-                        "function": {
-                            "name": str(parsed["name"]),
-                            "arguments": args_str,
-                        },
-                    }
-                )
-        except Exception:  # noqa: BLE001, S112
-            continue
-    return tool_calls if tool_calls else None
+    return StrictToolCallGuard.parse_and_validate(text, tools=tools, tool_choice=tool_choice)
 
 
 class Service:
@@ -414,6 +400,45 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         svc.log_event(f"Cleared prefix KV-cache (reclaimed {res.reclaimed_bytes} bytes)")
         return res
 
+    @app.post("/v1/grammar/validate", response_model=GrammarValidateResponse)
+    def grammar_validate(req: GrammarValidateRequest) -> GrammarValidateResponse:
+        from pantry.grammar import extract_json_block, repair_truncated_json, validate_json_schema
+
+        raw = req.content
+        extracted = extract_json_block(raw)
+        repaired_str = repair_truncated_json(extracted) if req.repair else extracted
+        repaired_flag = repaired_str != raw.strip()
+
+        try:
+            parsed = json.loads(repaired_str)
+        except Exception as exc:
+            return GrammarValidateResponse(
+                valid=False,
+                parsed=None,
+                repaired=repaired_flag,
+                repaired_content=repaired_str if req.repair else None,
+                error=f"JSON parse error: {exc}",
+            )
+
+        if req.schema_def:
+            valid, err = validate_json_schema(parsed, req.schema_def)
+            if not valid:
+                return GrammarValidateResponse(
+                    valid=False,
+                    parsed=parsed,
+                    repaired=repaired_flag,
+                    repaired_content=repaired_str if req.repair else None,
+                    error=f"Schema validation error: {err}",
+                )
+
+        return GrammarValidateResponse(
+            valid=True,
+            parsed=parsed,
+            repaired=repaired_flag,
+            repaired_content=repaired_str if req.repair else None,
+            error=None,
+        )
+
     @app.get("/v1/models")
     def models(
         demos: bool = False,
@@ -620,6 +645,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     prefill_step_size=req.prefill_step_size,
                     usage=usage_info,
                     tools=req.tools,
+                    tool_choice=req.tool_choice,
+                    response_format=req.response_format,
                 )
 
         if not req.stream:
@@ -627,7 +654,11 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             try:
                 text = await svc.scheduler.run(req.priority, _complete, modality="text", model=req.model, description="Generating chat response…")
                 duration_s = max(0.01, time.time() - t0)
-                tool_calls = _parse_tool_calls(text) if req.tools else None
+                tool_calls = _parse_tool_calls(text, tools=req.tools, tool_choice=req.tool_choice) if (req.tools or req.tool_choice) else None
+                if not tool_calls and req.response_format:
+                    from pantry.grammar import StrictToolCallGuard
+
+                    text = StrictToolCallGuard.enforce_response_format(text, req.response_format)
                 message_obj: dict[str, Any] = {
                     "role": "assistant",
                     "content": None if tool_calls else text,
@@ -731,6 +762,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                             prefill_step_size=req.prefill_step_size,
                             usage=stream_usage,
                             tools=req.tools,
+                            tool_choice=req.tool_choice,
+                            response_format=req.response_format,
                         ):
                             yield chunk
 
@@ -755,7 +788,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     yield f"data: {json.dumps(payload)}\n\n".encode()
 
                 full_text = "".join(assembled)
-                tool_calls = _parse_tool_calls(full_text) if req.tools else None
+                tool_calls = _parse_tool_calls(full_text, tools=req.tools, tool_choice=req.tool_choice) if (req.tools or req.tool_choice) else None
                 finish_reason = "tool_calls" if tool_calls else "stop"
 
                 usage = stream_usage if stream_usage else _estimate_usage(pkg, req.messages, full_text)
