@@ -35,6 +35,7 @@ class Runtime(ABC):
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
+        adapters: list[str] | None = None,
     ) -> str:
         raise NotImplementedError
 
@@ -54,6 +55,7 @@ class Runtime(ABC):
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
+        adapters: list[str] | None = None,
     ) -> AsyncIterator[str]:
         text = await self.complete(
             manifest,
@@ -69,6 +71,7 @@ class Runtime(ABC):
             tools=tools,
             tool_choice=tool_choice,
             response_format=response_format,
+            adapters=adapters,
         )
         step = max(8, len(text) // 8 or 1)
         for i in range(0, len(text), step):
@@ -95,6 +98,7 @@ class EchoRuntime(Runtime):
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
+        adapters: list[str] | None = None,
     ) -> str:
         prompt = apply_chat_template(manifest, messages, tools=tools)
         last_user = ""
@@ -110,6 +114,16 @@ class EchoRuntime(Runtime):
                 draft_id = "vdplabs.demo-chat.compact.v1"
             if draft_id:
                 draft = f"\n[speculative draft={draft_id}]"
+
+        adapters_list = adapters or []
+        adapter_note = ""
+        if adapters_list:
+            from pantry.lora import LoRAAdapterManager
+
+            lora_mgr = LoRAAdapterManager.get()
+            for ad_id in adapters_list:
+                lora_mgr.apply_adapter(manifest.id, ad_id)
+            adapter_note = f"\n[active lora: {', '.join(adapters_list)}]"
 
         cached_tokens = 0
         if prefer_prefix_cache:
@@ -157,7 +171,7 @@ class EchoRuntime(Runtime):
             body = (
                 f"[pantry echo · {manifest.id} · template={manifest.template_family}]\n"
                 f"You said: {last_user or '(empty)'}\n"
-                f"Prompt chars: {len(prompt)}{draft}{cache_note}{vision_note}"
+                f"Prompt chars: {len(prompt)}{draft}{cache_note}{vision_note}{adapter_note}"
             )
             max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
             body = body[: max_toks * 4]
@@ -169,6 +183,8 @@ class EchoRuntime(Runtime):
             usage["completion_tokens"] = c_toks
             usage["total_tokens"] = p_toks + c_toks
             usage["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
+            if adapters_list:
+                usage["active_adapters"] = adapters_list
             if draft_id:
                 k = int(num_draft_tokens or 2)
                 acc = int(c_toks * 0.75)
@@ -287,6 +303,7 @@ class MLXRuntime(Runtime):
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
+        adapters: list[str] | None = None,
     ) -> str:
         parts: list[str] = []
         async for chunk in self.stream(
@@ -303,6 +320,7 @@ class MLXRuntime(Runtime):
             tools=tools,
             tool_choice=tool_choice,
             response_format=response_format,
+            adapters=adapters,
         ):
             parts.append(chunk)
         raw = strip_stop_tokens("".join(parts), manifest)
@@ -328,6 +346,7 @@ class MLXRuntime(Runtime):
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
+        adapters: list[str] | None = None,
     ) -> AsyncIterator[str]:
         try:
             from mlx_lm import load, stream_generate  # type: ignore
@@ -344,6 +363,13 @@ class MLXRuntime(Runtime):
         if self.store is not None:
             self.store.mark_loaded(manifest.id, pin=False)
         model, tokenizer = self._models[model_path]
+
+        if adapters:
+            from pantry.lora import LoRAAdapterManager
+
+            lora_mgr = LoRAAdapterManager.get()
+            for ad_id in adapters:
+                lora_mgr.apply_adapter(manifest.id, ad_id, model_instance=model)
 
         draft_path, draft_id = resolve_draft_path(
             self.store,

@@ -107,6 +107,7 @@ class EchoVisionRuntime(VisionRuntime):
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
+        adapters: list[str] | None = None,
     ) -> str:
         # Collect all image references from all messages
         all_images: list[dict[str, Any]] = []
@@ -182,6 +183,7 @@ class EchoVisionRuntime(VisionRuntime):
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
+        adapters: list[str] | None = None,
     ) -> AsyncIterator[str]:
         text = await self.complete(
             manifest,
@@ -197,6 +199,7 @@ class EchoVisionRuntime(VisionRuntime):
             tools=tools,
             tool_choice=tool_choice,
             response_format=response_format,
+            adapters=adapters,
         )
         step = max(8, len(text) // 8 or 1)
         for i in range(0, len(text), step):
@@ -242,6 +245,7 @@ class MLXVisionRuntime(VisionRuntime):
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
+        adapters: list[str] | None = None,
     ) -> str:
         try:
             from mlx_vlm import generate, load  # type: ignore
@@ -313,6 +317,7 @@ class MLXVisionRuntime(VisionRuntime):
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
+        adapters: list[str] | None = None,
     ) -> AsyncIterator[str]:
         text = await self.complete(
             manifest,
@@ -328,6 +333,7 @@ class MLXVisionRuntime(VisionRuntime):
             tools=tools,
             tool_choice=tool_choice,
             response_format=response_format,
+            adapters=adapters,
         )
         step = max(8, len(text) // 8 or 1)
         for i in range(0, len(text), step):

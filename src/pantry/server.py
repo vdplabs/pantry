@@ -37,6 +37,12 @@ from pantry.resolve import ResolveError, find_by_model_string, resolve
 from pantry.runtime import RuntimeHub
 from pantry.scheduler import Scheduler
 from pantry.schemas import (
+    AdapterApplyRequest,
+    AdapterApplyResponse,
+    AdapterInfo,
+    AdapterListResponse,
+    AdapterUnloadRequest,
+    AdapterUnloadResponse,
     AudioGenerateRequest,
     CapabilityRequest,
     ChatMessage,
@@ -308,6 +314,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "video": "/v1/video/generations",
             "memory": "/v1/memory",
             "resolve": "/v1/resolve",
+            "adapters": "/v1/adapters",
             "shm": "/v1/shm",
             "storage": "/v1/storage",
         }
@@ -454,6 +461,44 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             repaired=repaired_flag,
             repaired_content=repaired_str if req.repair else None,
             error=None,
+        )
+
+    @app.get("/v1/adapters", response_model=AdapterListResponse)
+    def list_adapters() -> AdapterListResponse:
+        from pantry.lora import LoRAAdapterManager
+
+        adapters = LoRAAdapterManager.get().list_adapters()
+        return AdapterListResponse(adapters=adapters)
+
+    @app.post("/v1/adapters/apply", response_model=AdapterApplyResponse)
+    def apply_adapter(req: AdapterApplyRequest) -> AdapterApplyResponse:
+        from pantry.lora import LoRAAdapterManager
+
+        pkg = svc.resolve_model(req.model)
+        svc.touch_model(pkg.id)
+        duration_ms = LoRAAdapterManager.get().apply_adapter(pkg.id, req.adapter, req.scale)
+        active = LoRAAdapterManager.get().get_active_adapters(pkg.id)
+        svc.log_event(f"Applied LoRA adapter '{req.adapter}' to model '{pkg.id}' in {duration_ms:.2f}ms")
+        return AdapterApplyResponse(
+            ok=True,
+            model=pkg.id,
+            adapter=req.adapter,
+            scale=req.scale,
+            swap_duration_ms=duration_ms,
+            active_adapters=active,
+        )
+
+    @app.post("/v1/adapters/unload", response_model=AdapterUnloadResponse)
+    def unload_adapter(req: AdapterUnloadRequest) -> AdapterUnloadResponse:
+        from pantry.lora import LoRAAdapterManager
+
+        pkg = svc.resolve_model(req.model)
+        unloaded = LoRAAdapterManager.get().unload_adapter(pkg.id, req.adapter)
+        svc.log_event(f"Unloaded adapter(s) {unloaded} from model '{pkg.id}'")
+        return AdapterUnloadResponse(
+            ok=True,
+            model=pkg.id,
+            unloaded_adapters=unloaded,
         )
 
     @app.get("/v1/models")
@@ -645,7 +690,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             store, pkg, prefer_speculative=want_spec, draft_model=req.draft_model
         )
         speculative = draft_path is not None
-
+        req_adapters = req.adapters or ([req.adapter] if req.adapter else None)
         usage_info: dict[str, Any] = {}
 
         async def _complete() -> str:
@@ -664,6 +709,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     tools=req.tools,
                     tool_choice=req.tool_choice,
                     response_format=req.response_format,
+                    adapters=req_adapters,
                 )
 
         if not req.stream:
@@ -741,6 +787,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     ],
                     "usage": usage,
                 }
+                if req_adapters:
+                    res["adapters"] = req_adapters
                 if speculative and isinstance(usage.get("speculative"), dict):
                     res["speculative_details"] = usage["speculative"]
                 return res
@@ -781,6 +829,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                             tools=req.tools,
                             tool_choice=req.tool_choice,
                             response_format=req.response_format,
+                            adapters=req_adapters,
                         ):
                             yield chunk
 

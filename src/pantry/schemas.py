@@ -227,6 +227,8 @@ class CompleteRequest(BaseModel):
     tools: list[dict[str, Any]] | None = None
     tool_choice: str | dict[str, Any] | None = None
     response_format: dict[str, Any] | str | None = None
+    adapters: list[str] | None = None
+    adapter: str | None = None
 
     def effective_max_tokens(self) -> int | None:
         if self.max_tokens is not None:
@@ -503,5 +505,43 @@ class RerankResponse(BaseModel):
     meta: RerankMeta = Field(default_factory=RerankMeta)
 
 
+class AdapterInfo(BaseModel):
+    id: str
+    name: str = ""
+    base_family: str = ""
+    rank: int = 16
+    alpha: float = 32.0
+    target_modules: list[str] = Field(default_factory=list)
+    path: str = ""
+    size_bytes: int = 0
+    attached_models: list[str] = Field(default_factory=list)
 
 
+class AdapterListResponse(BaseModel):
+    adapters: list[AdapterInfo]
+
+
+class AdapterApplyRequest(BaseModel):
+    model: str = "chat-standard"
+    adapter: str
+    scale: float = 1.0
+
+
+class AdapterApplyResponse(BaseModel):
+    ok: bool = True
+    model: str
+    adapter: str
+    scale: float = 1.0
+    swap_duration_ms: float = 0.0
+    active_adapters: list[str] = Field(default_factory=list)
+
+
+class AdapterUnloadRequest(BaseModel):
+    model: str = "chat-standard"
+    adapter: str | None = None
+
+
+class AdapterUnloadResponse(BaseModel):
+    ok: bool = True
+    model: str
+    unloaded_adapters: list[str] = Field(default_factory=list)

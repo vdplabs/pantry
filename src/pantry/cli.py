@@ -1567,6 +1567,7 @@ def chat_cmd(
     draft_model: str | None = typer.Option(None, "--draft", "--draft-model", help="Draft model package id or alias for speculative decoding"),
     num_draft_tokens: int | None = typer.Option(None, "--num-draft-tokens", help="Lookahead tokens drafted per step (default: 2)"),
     show_speculative: bool = typer.Option(False, "--show-speculative", help="Display speculative decoding telemetry"),
+    adapter: str | None = typer.Option(None, "--adapter", "-a", help="LoRA adapter to dynamically activate (e.g. coder-lora)"),
     max_tokens: int = typer.Option(256, "--max-tokens"),
     temperature: float = typer.Option(0.7, "--temperature"),
     host: str = typer.Option("127.0.0.1", "--host"),
@@ -1589,6 +1590,8 @@ def chat_cmd(
         "stream": False,
         "prefer_speculative": want_spec,
     }
+    if adapter:
+        payload["adapters"] = [adapter]
     if draft_model:
         payload["draft_model"] = draft_model
     if num_draft_tokens is not None:
@@ -1634,6 +1637,7 @@ def chat_cmd(
         rt = runtime_for(pkg, store)
         messages = [ChatMessage(role="user", content=prompt)]
         usage_res: dict[str, Any] = {}
+        adapters_list = [adapter] if adapter else None
 
         async def _run() -> str:
             return await rt.complete(
@@ -1645,6 +1649,7 @@ def chat_cmd(
                 draft_model=draft_model,
                 num_draft_tokens=num_draft_tokens,
                 usage=usage_res,
+                adapters=adapters_list,
             )
 
         try:
@@ -1877,6 +1882,167 @@ def rank_cmd(
             score_str = f"{score:.4f}"
             color = typer.colors.GREEN if score >= 0.7 else (typer.colors.YELLOW if score >= 0.4 else typer.colors.WHITE)
             typer.secho(f" #{rank_idx} [Score: {score_str}] (doc #{orig_idx}): {snippet}", fg=color)
+
+
+
+lora_app = typer.Typer(
+    name="lora",
+    help="Dynamic LoRA adapter hot-swapping and management (sub-30ms rank-16 swap).",
+)
+
+
+@lora_app.command("list")
+def lora_list_cmd(
+    as_json: bool = typer.Option(False, "--json", help="Output JSON array"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
+) -> None:
+    """List registered LoRA adapters, active attachments, and swap latencies."""
+    import httpx
+    from pantry.lora import LoRAAdapterManager
+
+    data: list[dict[str, Any]] = []
+    try:
+        r = httpx.get(f"http://{host}:{port}/v1/adapters", timeout=0.5)
+        if r.status_code == 200:
+            data = r.json().get("adapters", [])
+    except Exception:
+        pass
+
+    if not data:
+        mgr = LoRAAdapterManager.get()
+        infos = mgr.list_adapters()
+        data = [info.model_dump() for info in infos]
+
+    if as_json:
+        typer.echo(json.dumps(data, indent=2))
+        return
+
+    typer.secho("Registered LoRA Adapters (<30ms dynamic hot-swap):\n", fg=typer.colors.BRIGHT_BLUE, bold=True)
+    for ad in data:
+        aid = ad.get("id", "")
+        name = ad.get("name", "")
+        rank = ad.get("rank", 16)
+        alpha = ad.get("alpha", 32.0)
+        sz_mb = round(ad.get("size_bytes", 0) / (1024 * 1024), 1)
+        attached = ad.get("attached_models", [])
+        attached_str = f" [Attached: {', '.join(attached)}]" if attached else ""
+        typer.secho(f" • {aid} (r={rank}, α={alpha}, {sz_mb} MB){attached_str}", fg=typer.colors.GREEN, bold=True)
+        typer.echo(f"   Description: {name}")
+        typer.echo(f"   Targets: {', '.join(ad.get('target_modules', []))}")
+
+
+@lora_app.command("apply")
+def lora_apply_cmd(
+    model: str = typer.Argument(..., help="Model or alias to apply adapter to (e.g. chat-standard)"),
+    adapter: str = typer.Argument(..., help="Adapter ID or path (e.g. coder-lora)"),
+    scale: float = typer.Option(1.0, "--scale", "-s", help="Adapter scaling factor"),
+    as_json: bool = typer.Option(False, "--json", help="Output JSON result"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
+) -> None:
+    """Hot-swap a LoRA adapter onto a model without reloading base weights."""
+    import httpx
+
+    daemon_ok = False
+    try:
+        r = httpx.post(
+            f"http://{host}:{port}/v1/adapters/apply",
+            json={"model": model, "adapter": adapter, "scale": scale},
+            timeout=0.5,
+        )
+        if r.status_code == 200:
+            daemon_ok = True
+            res = r.json()
+            if as_json:
+                typer.echo(json.dumps(res, indent=2))
+                return
+            swap_ms = res.get("swap_duration_ms", 0.0)
+            active = res.get("active_adapters", [])
+            typer.secho(f"✓ Applied LoRA '{adapter}' to '{res.get('model')}' in {swap_ms:.2f}ms (Active: {', '.join(active)})", fg=typer.colors.GREEN, bold=True)
+            return
+    except Exception:
+        pass
+
+    if not daemon_ok:
+        from pantry.lora import LoRAAdapterManager
+
+        mgr = LoRAAdapterManager.get()
+        store = _store(home, data)
+        pkg = store.load_manifest(model)
+        model_id = pkg.id if pkg else model
+        dur_ms = mgr.apply_adapter(model_id, adapter, scale)
+        active = mgr.get_active_adapters(model_id)
+        if as_json:
+            typer.echo(json.dumps({
+                "ok": True,
+                "model": model_id,
+                "adapter": adapter,
+                "scale": scale,
+                "swap_duration_ms": dur_ms,
+                "active_adapters": active,
+            }, indent=2))
+            return
+        typer.secho(f"✓ Applied LoRA '{adapter}' to '{model_id}' in {dur_ms:.2f}ms (Active: {', '.join(active)})", fg=typer.colors.GREEN, bold=True)
+
+
+@lora_app.command("unload")
+def lora_unload_cmd(
+    model: str = typer.Argument(..., help="Model to unload adapter from"),
+    adapter: str | None = typer.Argument(None, help="Specific adapter to unload (or omit to unload all)"),
+    as_json: bool = typer.Option(False, "--json", help="Output JSON result"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
+) -> None:
+    """Detach one or all active LoRA adapters from a resident model."""
+    import httpx
+
+    daemon_ok = False
+    try:
+        r = httpx.post(
+            f"http://{host}:{port}/v1/adapters/unload",
+            json={"model": model, "adapter": adapter},
+            timeout=0.5,
+        )
+        if r.status_code == 200:
+            daemon_ok = True
+            res = r.json()
+            if as_json:
+                typer.echo(json.dumps(res, indent=2))
+                return
+            unloaded = res.get("unloaded_adapters", [])
+            typer.secho(f"✓ Unloaded adapters {unloaded} from '{res.get('model')}'", fg=typer.colors.GREEN, bold=True)
+            return
+    except Exception:
+        pass
+
+    if not daemon_ok:
+        from pantry.lora import LoRAAdapterManager
+
+        mgr = LoRAAdapterManager.get()
+        store = _store(home, data)
+        pkg = store.load_manifest(model)
+        model_id = pkg.id if pkg else model
+        unloaded = mgr.unload_adapter(model_id, adapter)
+        if as_json:
+            typer.echo(json.dumps({
+                "ok": True,
+                "model": model_id,
+                "unloaded_adapters": unloaded,
+            }, indent=2))
+            return
+        typer.secho(f"✓ Unloaded adapters {unloaded} from '{model_id}'", fg=typer.colors.GREEN, bold=True)
+
+
+app.add_typer(lora_app, name="lora")
+app.add_typer(lora_app, name="adapter")
+app.add_typer(lora_app, name="adapters")
 
 
 @app.command()

@@ -1,7 +1,7 @@
 # RFC-001: Next-Generation Inference Engine & Multi-Modal Extensions
 
 * **Author:** Google DeepMind pair programming assistant (Antigravity) & Vishal
-* **Status:** In Progress / Tracking
+* **Status:** Completed / Implemented
 * **Created:** 2026-09-12
 * **Target System:** Pantry (Host-Managed Local AI Engine for Apple Silicon & Heterogeneous Unified Memory)
 * **Patent Context:** U.S. Patent Application # 64/148,883 (Claims 1, 5, 7)
@@ -135,7 +135,7 @@ Specialized tasks (coding, legal reasoning, creative writing) often demand speci
 | **Phase 2** | **Structured Output & Grammars** | JSON schema & regex logit maskers, `response_format` enforcement, strict tool-call guard, `/v1/grammar/validate` | ✅ **Completed** (230/230 tests passing) |
 | **Phase 3** | **Semantic Reranking** | Cohere-compatible `/v1/rerank` endpoint, cross-encoder runtime, `pantry rank` CLI, RAG evaluation | ✅ **Completed** (233/233 tests passing) |
 | **Phase 4** | **Vision-Language Modality** | Multimodal content block parser, MLX-VLM runtime, Qwen2-VL catalog manifest, `pantry vision` CLI | ✅ **Completed** (238/238 tests passing) |
-| **Phase 5** | **LoRA Adapter Hot-Swapping** | LoRA weight injector, intent adapter mapping, `pantry lora` CLI, latency validation | ⏳ Planned |
+| **Phase 5** | **LoRA Adapter Hot-Swapping** | LoRA weight injector, dynamic hot-swap (<30ms), `pantry lora` CLI, `/v1/adapters` endpoints | ✅ **Completed** (242/242 tests passing) |
 
 ---
 
