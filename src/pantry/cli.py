@@ -1666,6 +1666,121 @@ def chat_cmd(
             raise typer.Exit(1) from e
 
 
+@app.command("rank")
+def rank_cmd(
+    query: str = typer.Argument(..., help="Search or relevance query"),
+    documents: list[str] = typer.Argument(None, help="Candidate documents to rank"),
+    file: Path | None = typer.Option(None, "-f", "--file", help="File containing documents (one per line or JSON array)"),
+    model: str = typer.Option("rerank-standard", "--model", "-m", help="Reranker model, package id, or alias"),
+    top_n: int | None = typer.Option(None, "--top-n", "-n", help="Top N results to return"),
+    json_out: bool = typer.Option(False, "--json", help="Output results in JSON format"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
+) -> None:
+    """Rerank candidate documents against a query using semantic cross-encoders."""
+    import httpx
+
+    doc_list: list[str] = []
+    if file is not None:
+        p = Path(file).expanduser().resolve()
+        if not p.is_file():
+            typer.secho(f"File not found: {p}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+        raw = p.read_text(encoding="utf-8").strip()
+        if raw.startswith("["):
+            try:
+                doc_list = [str(x) for x in json.loads(raw)]
+            except Exception:
+                doc_list = [line.strip() for line in raw.splitlines() if line.strip()]
+        else:
+            doc_list = [line.strip() for line in raw.splitlines() if line.strip()]
+
+    if documents:
+        doc_list.extend(documents)
+
+    if not doc_list:
+        typer.secho("Error: No documents provided to rank. Pass documents as arguments or use --file.", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+
+    daemon_ok = False
+    url = f"http://{host}:{port}/v1/rerank"
+    payload = {
+        "model": model,
+        "query": query,
+        "documents": doc_list,
+        "top_n": top_n,
+        "return_documents": True,
+    }
+
+    try:
+        resp = httpx.post(url, json=payload, timeout=30.0)
+        if resp.status_code == 200:
+            daemon_ok = True
+            data_res = resp.json()
+            if json_out:
+                typer.echo(json.dumps(data_res, indent=2))
+                return
+            results = data_res.get("results", [])
+            typer.secho(f"Reranked {len(doc_list)} documents against query: \"{query}\"\n", fg=typer.colors.BRIGHT_BLUE, bold=True)
+            for rank_idx, r in enumerate(results, 1):
+                score = r.get("relevance_score", 0.0)
+                orig_idx = r.get("index", 0)
+                doc_text = r.get("document", {}).get("text", "")
+                snippet = (doc_text[:90] + "…") if len(doc_text) > 90 else doc_text
+                score_str = f"{score:.4f}"
+                color = typer.colors.GREEN if score >= 0.7 else (typer.colors.YELLOW if score >= 0.4 else typer.colors.WHITE)
+                typer.secho(f" #{rank_idx} [Score: {score_str}] (doc #{orig_idx}): {snippet}", fg=color)
+            return
+    except Exception:
+        daemon_ok = False
+
+    if not daemon_ok:
+        from pantry.resolve import find_by_model_string
+        from pantry.rerank import rerank_runtime_for
+
+        store = _store(home, data)
+        pkg = store.load_manifest(model)
+        if pkg is None:
+            pkg = find_by_model_string(model, store.list_manifests(), is_ready=store.weights_ready)
+        if pkg is None:
+            from pantry.config import bundled_catalog_dir
+
+            store.seed_from_catalog(bundled_catalog_dir())
+            pkg = store.load_manifest(model) or find_by_model_string(model, store.list_manifests(), is_ready=store.weights_ready)
+        if pkg is None:
+            # Fallback to demo-rerank
+            pkg = store.load_manifest("vdplabs.demo-rerank.compact.v1")
+        if pkg is None:
+            typer.secho(f"unknown rerank model: {model}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+
+        rt = rerank_runtime_for(pkg, store)
+        scored_pairs, usage = rt.rank(pkg, query, doc_list)
+        limit = top_n if (top_n is not None and top_n > 0) else len(scored_pairs)
+
+        if json_out:
+            out_obj = {
+                "id": "rerank-local",
+                "results": [
+                    {"index": idx, "relevance_score": sc, "document": {"text": doc_list[idx]}}
+                    for idx, sc in scored_pairs[:limit]
+                ],
+                "meta": {"tokens": usage},
+            }
+            typer.echo(json.dumps(out_obj, indent=2))
+            return
+
+        typer.secho(f"Reranked {len(doc_list)} documents against query: \"{query}\"\n", fg=typer.colors.BRIGHT_BLUE, bold=True)
+        for rank_idx, (orig_idx, score) in enumerate(scored_pairs[:limit], 1):
+            doc_text = doc_list[orig_idx]
+            snippet = (doc_text[:90] + "…") if len(doc_text) > 90 else doc_text
+            score_str = f"{score:.4f}"
+            color = typer.colors.GREEN if score >= 0.7 else (typer.colors.YELLOW if score >= 0.4 else typer.colors.WHITE)
+            typer.secho(f" #{rank_idx} [Score: {score_str}] (doc #{orig_idx}): {snippet}", fg=color)
+
+
 @app.command()
 def dashboard(
     host: str = typer.Option("127.0.0.1", "--host"),

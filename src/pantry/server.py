@@ -53,6 +53,12 @@ from pantry.schemas import (
     PullBody,
     QualityTier,
     RebindPackBody,
+    RerankMeta,
+    RerankMetaBilledUnits,
+    RerankMetaTokens,
+    RerankRequest,
+    RerankResponse,
+    RerankResultItem,
     StoragePruneRequest,
     StoragePruneResponse,
     StorageStatsResponse,
@@ -108,6 +114,11 @@ def _is_stt_package(pkg: PackageManifest) -> bool:
 def _is_embed_package(pkg: PackageManifest) -> bool:
     mods = {m.lower() for m in pkg.modalities}
     return "embed" in mods or (pkg.role or "").lower() in {"embed", "embedding"}
+
+
+def _is_rerank_package(pkg: PackageManifest) -> bool:
+    mods = {m.lower() for m in pkg.modalities}
+    return bool(mods & {"rerank", "cross-encoder", "rank"}) or (pkg.role or "").lower() in {"rerank", "cross-encoder", "rank"}
 
 
 def _parse_tool_calls(
@@ -286,6 +297,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "chat": "/v1/chat/completions",
             "responses": "/v1/responses",
             "embeddings": "/v1/embeddings",
+            "rerank": "/v1/rerank",
             "images": "/v1/images/generations",
             "audio": "/v1/audio/generations",
             "video": "/v1/video/generations",
@@ -1288,6 +1300,85 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "model": req.model,
             "usage": usage,
         }
+
+    @app.post("/v1/rerank", response_model=RerankResponse)
+    async def rerank(req: RerankRequest) -> RerankResponse:
+        pkg = svc.resolve_model(req.model)
+        svc.touch_model(pkg.id)
+        if not _is_rerank_package(pkg) and "demo" not in (pkg.family or "").lower():
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"package {pkg.id} is not a rerank/cross-encoder model "
+                    f"(modalities={pkg.modalities}); use /v1/embeddings for embeddings or /v1/chat/completions for chat"
+                ),
+            )
+        if not store.weights_ready(pkg):
+            raise HTTPException(
+                status_code=409,
+                detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
+            )
+
+        from pantry.rerank import rerank_runtime_for
+
+        runtime = rerank_runtime_for(pkg, store)
+
+        doc_strings: list[str] = []
+        for d in req.documents:
+            if isinstance(d, str):
+                doc_strings.append(d)
+            elif isinstance(d, dict):
+                doc_strings.append(str(d.get("text") or d.get("content") or ""))
+            else:
+                doc_strings.append(str(d))
+
+        t0 = time.time()
+
+        def _run_rerank() -> tuple[list[tuple[int, float]], dict[str, int]]:
+            return runtime.rank(pkg, req.query, doc_strings)
+
+        scored_pairs, usage = await svc.scheduler.run(
+            req.priority,
+            lambda: asyncio.to_thread(_run_rerank),
+            modality="rerank",
+            model=req.model,
+            description="Ranking candidate documents…",
+        )
+        duration_s = max(0.01, time.time() - t0)
+
+        TokenMetricsTracker.get().record_rerank(
+            model=req.model,
+            documents_count=len(doc_strings),
+            tokens=usage.get("total_tokens", 0),
+        )
+        RequestLogTracker.get().record_request(
+            model=req.model,
+            tokens_in=usage.get("input_tokens", 0),
+            tokens_out=0,
+            duration_ms=int(duration_s * 1000),
+            status=200,
+        )
+
+        limit = req.top_n if (req.top_n is not None and req.top_n > 0) else len(scored_pairs)
+        results: list[RerankResultItem] = []
+        for idx, score in scored_pairs[:limit]:
+            doc_obj = None
+            if req.return_documents:
+                raw_doc = req.documents[idx]
+                doc_obj = {"text": raw_doc} if isinstance(raw_doc, str) else dict(raw_doc)
+            results.append(RerankResultItem(index=idx, relevance_score=score, document=doc_obj))
+
+        return RerankResponse(
+            id=f"rerank-{uuid.uuid4().hex[:12]}",
+            results=results,
+            meta=RerankMeta(
+                billed_units=RerankMetaBilledUnits(search_units=max(1, len(doc_strings) // 100 or 1)),
+                tokens=RerankMetaTokens(
+                    input_tokens=usage.get("input_tokens", 0),
+                    output_tokens=usage.get("output_tokens", 0),
+                ),
+            ),
+        )
 
     @app.post("/v1/images/generations")
     async def images_generations(

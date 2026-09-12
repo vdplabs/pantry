@@ -445,5 +445,41 @@ class GrammarValidateResponse(BaseModel):
     error: str | None = None
 
 
+class RerankRequest(BaseModel):
+    model: str = "rerank-standard"
+    query: str
+    documents: list[str | dict[str, Any]]
+    top_n: int | None = None
+    return_documents: bool = False
+    max_chunks_per_doc: int | None = None
+    priority: str = "interactive"
+
+
+class RerankResultItem(BaseModel):
+    index: int
+    relevance_score: float
+    document: dict[str, Any] | None = None
+
+
+class RerankMetaBilledUnits(BaseModel):
+    search_units: int = 1
+
+
+class RerankMetaTokens(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+
+class RerankMeta(BaseModel):
+    billed_units: RerankMetaBilledUnits = Field(default_factory=RerankMetaBilledUnits)
+    tokens: RerankMetaTokens = Field(default_factory=RerankMetaTokens)
+
+
+class RerankResponse(BaseModel):
+    id: str
+    results: list[RerankResultItem]
+    meta: RerankMeta = Field(default_factory=RerankMeta)
+
+
 
 

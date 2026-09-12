@@ -1,0 +1,30 @@
+{
+  "id": "vdplabs.demo-rerank.compact.v1",
+  "family": "demo-rerank",
+  "role": "rerank",
+  "params_b": 0.05,
+  "quality_tier": "compact",
+  "quant_method": "none",
+  "bits_approx": null,
+  "ram_gb_min": 0.2,
+  "ram_gb_comfortable": 0.5,
+  "modalities": ["rerank"],
+  "context_max": 2048,
+  "license": "mit",
+  "chat_template_id": "none",
+  "template_family": "none",
+  "tool_protocol": null,
+  "aliases": ["rerank-compact", "rerank-standard", "rerank-demo", "bge-reranker-base"],
+  "listable": false,
+  "runtime": {
+    "primary": "echo_rerank",
+    "hf_repo": null,
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-rerank-smoke-2026.09",
+    "score": 0.99,
+    "notes": "Deterministic demo semantic cross-encoder reranker for smoke testing and offline verification."
+  },
+  "system_preamble": ""
+}

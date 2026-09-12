@@ -129,12 +129,16 @@ class TokenMetricsTracker:
         self.session_audio_seconds: float = 0.0
         self.session_music_seconds: float = 0.0
         self.session_embedding_tokens: int = 0
+        self.session_rerank_requests: int = 0
+        self.session_rerank_documents: int = 0
 
         self.cumulative_images_generated: int = 0
         self.cumulative_videos_generated: int = 0
         self.cumulative_audio_seconds: float = 0.0
         self.cumulative_music_seconds: float = 0.0
         self.cumulative_embedding_tokens: int = 0
+        self.cumulative_rerank_requests: int = 0
+        self.cumulative_rerank_documents: int = 0
 
         # Speculative decoding metrics
         self.speculative_draft_tokens: int = 0
@@ -360,6 +364,19 @@ class TokenMetricsTracker:
                 if len(m_entry["durations_ms"]) > 200:
                     m_entry["durations_ms"].pop(0)
 
+    def record_rerank(self, *, model: str, documents_count: int = 0, tokens: int = 0) -> None:
+        with self._lock:
+            self.session_rerank_requests += 1
+            self.session_rerank_documents += max(0, documents_count)
+            self.session_requests += 1
+            self.cumulative_rerank_requests += 1
+            self.cumulative_rerank_documents += max(0, documents_count)
+            self.cumulative_requests += 1
+            m_entry = self._get_or_create_model_entry(model, modality="rerank")
+            m_entry["session_requests"] += 1
+            m_entry["cumulative_requests"] += 1
+            m_entry["last_active"] = time.time()
+
     def record_speculative(self, *, draft_tokens: int, accepted_tokens: int) -> None:
         with self._lock:
             self.speculative_draft_tokens += max(0, draft_tokens)
@@ -392,6 +409,8 @@ class TokenMetricsTracker:
             self.session_audio_seconds = 0.0
             self.session_music_seconds = 0.0
             self.session_embedding_tokens = 0
+            self.session_rerank_requests = 0
+            self.session_rerank_documents = 0
             self.speculative_draft_tokens = 0
             self.speculative_accepted_tokens = 0
             self.session_cached_prompt_tokens = 0
@@ -426,6 +445,8 @@ class TokenMetricsTracker:
             self.cumulative_music_seconds = 0.0
             self.cumulative_embedding_tokens = 0
             self.cumulative_cached_prompt_tokens = 0
+            self.cumulative_rerank_requests = 0
+            self.cumulative_rerank_documents = 0
             for m in self._model_stats.values():
                 m["cumulative_prompt_tokens"] = 0
                 m["cumulative_completion_tokens"] = 0
@@ -568,6 +589,7 @@ class TokenMetricsTracker:
                     "audio_seconds_transcribed": round(self.session_audio_seconds, 1),
                     "music_seconds_generated": round(self.session_music_seconds, 1),
                     "embedding_tokens": self.session_embedding_tokens,
+                    "rerank_documents": self.session_rerank_documents,
                 },
                 "cloud_savings": {
                     "session_saved_usd": round(session_cost, 2),
