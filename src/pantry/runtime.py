@@ -152,10 +152,12 @@ class EchoRuntime(Runtime):
             cleaned = f"<tool_call>{json.dumps({'name': fn_name, 'arguments': args_mock})}</tool_call>"
         else:
             cache_note = f"\n[prefix cache: {cached_tokens} tokens reused]" if cached_tokens > 0 else ""
+            img_count = sum(len(m.images()) for m in messages)
+            vision_note = f"\n[vision: {img_count} image(s) processed]" if img_count > 0 else ""
             body = (
                 f"[pantry echo · {manifest.id} · template={manifest.template_family}]\n"
                 f"You said: {last_user or '(empty)'}\n"
-                f"Prompt chars: {len(prompt)}{draft}{cache_note}"
+                f"Prompt chars: {len(prompt)}{draft}{cache_note}{vision_note}"
             )
             max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
             body = body[: max_toks * 4]
@@ -741,6 +743,14 @@ class RuntimeHub:
                 except Exception:
                     pass
                 return self.echo
+        if primary in {"echo_vlm", "echo-vlm", "vlm-echo", "vision_echo"}:
+            from pantry.vision import EchoVisionRuntime
+
+            return EchoVisionRuntime(self.store)
+        if primary in {"mlx_vlm", "mlx-vlm"}:
+            from pantry.vision import vision_runtime_for
+
+            return vision_runtime_for(manifest, self.store)
         if primary in {"cuda", "vllm", "transformers", "pytorch"}:
             return self.cuda
         return self.echo
@@ -788,6 +798,14 @@ def runtime_for(manifest: PackageManifest, store: PackageStore | None = None) ->
     if hub is not None:
         return hub.for_manifest(manifest)
     primary = (manifest.runtime.primary or "echo").lower()
+    if primary in {"echo_vlm", "echo-vlm", "vlm-echo", "vision_echo"}:
+        from pantry.vision import EchoVisionRuntime
+
+        return EchoVisionRuntime(store)
+    if primary in {"mlx_vlm", "mlx-vlm"}:
+        from pantry.vision import vision_runtime_for
+
+        return vision_runtime_for(manifest, store)
     if primary in {"mlx", "mlx_lm", "mlx-lm"}:
         try:
             import mlx.core  # type: ignore

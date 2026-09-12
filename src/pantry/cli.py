@@ -1666,6 +1666,104 @@ def chat_cmd(
             raise typer.Exit(1) from e
 
 
+@app.command("vision")
+def vision_cmd(
+    image: Path = typer.Argument(..., help="Path to image file to inspect"),
+    prompt: str = typer.Argument("Describe this image in detail.", help="Visual prompt or question"),
+    model: str = typer.Option("vision-standard", "--model", "-m", help="Vision-language model or alias"),
+    max_tokens: int = typer.Option(300, "--max-tokens"),
+    temperature: float = typer.Option(0.2, "--temperature"),
+    host: str = typer.Option("127.0.0.1", "--host"),
+    port: int = typer.Option(18787, "--port"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
+) -> None:
+    """Analyze an image or document using local Vision-Language Models (VLM)."""
+    import httpx
+    from pantry.schemas import ChatMessage
+
+    p = Path(image).expanduser().resolve()
+    if not p.is_file():
+        typer.secho(f"Image file not found: {p}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+
+    daemon_ok = False
+    url = f"http://{host}:{port}/v1/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"file://{p}"}},
+                ],
+            }
+        ],
+        "max_tokens": max_tokens,
+        "temperature": temperature,
+        "stream": False,
+    }
+
+    try:
+        resp = httpx.post(url, json=payload, timeout=60.0)
+        if resp.status_code == 200:
+            daemon_ok = True
+            choices = resp.json().get("choices", [])
+            if choices:
+                content = choices[0].get("message", {}).get("content", "")
+                typer.echo(content)
+                return
+    except Exception:
+        daemon_ok = False
+
+    if not daemon_ok:
+        import asyncio
+        from pantry.resolve import find_by_model_string
+        from pantry.runtime import runtime_for
+
+        store = _store(home, data)
+        pkg = store.load_manifest(model)
+        if pkg is None:
+            pkg = find_by_model_string(model, store.list_manifests(), is_ready=store.weights_ready)
+        if pkg is None:
+            from pantry.config import bundled_catalog_dir
+
+            store.seed_from_catalog(bundled_catalog_dir())
+            pkg = store.load_manifest(model) or find_by_model_string(model, store.list_manifests(), is_ready=store.weights_ready)
+        if pkg is None:
+            pkg = store.load_manifest("vdplabs.demo-vision.compact.v1")
+        if pkg is None:
+            typer.secho(f"unknown vision model: {model}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
+
+        rt = runtime_for(pkg, store)
+        messages = [
+            ChatMessage(
+                role="user",
+                content=[
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"file://{p}"}},
+                ],
+            )
+        ]
+
+        async def _run() -> str:
+            return await rt.complete(
+                pkg,
+                messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+            )
+
+        try:
+            result = asyncio.run(_run())
+            typer.echo(result)
+        except Exception as e:
+            typer.secho(f"vision generation failed: {e}", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1) from e
+
+
 @app.command("rank")
 def rank_cmd(
     query: str = typer.Argument(..., help="Search or relevance query"),

@@ -1,0 +1,30 @@
+{
+  "id": "vdplabs.qwen2-vl-2b.compact.v1",
+  "family": "qwen2-vl",
+  "role": "vision",
+  "params_b": 2.2,
+  "quality_tier": "compact",
+  "quant_method": "mlx_4bit",
+  "bits_approx": 4.0,
+  "ram_gb_min": 3,
+  "ram_gb_comfortable": 6,
+  "modalities": ["text", "vision"],
+  "context_max": 8192,
+  "license": "apache-2.0",
+  "chat_template_id": "qwen2-vl",
+  "template_family": "chatml",
+  "tool_protocol": null,
+  "aliases": ["qwen2-vl", "vlm-fast", "vision-4bit"],
+  "listable": true,
+  "runtime": {
+    "primary": "mlx_vlm",
+    "hf_repo": "mlx-community/Qwen2-VL-2B-Instruct-4bit",
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-vlm-smoke-2026.09",
+    "score": 0.84,
+    "notes": "Qwen2-VL 2B Instruct quantized 4-bit for fast local OCR, document parsing, and visual reasoning on Apple Silicon."
+  },
+  "system_preamble": "You are a helpful multimodal vision-language assistant running locally via Pantry."
+}

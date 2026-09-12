@@ -88,7 +88,12 @@ def _estimate_usage(pkg: PackageManifest, messages: list, completion: str) -> di
 
 def _is_text_package(pkg: PackageManifest) -> bool:
     mods = {m.lower() for m in pkg.modalities}
-    return "text" in mods or (pkg.role or "").lower() in {"chat", "text"}
+    return bool(mods & {"text", "vision", "vlm", "multimodal"}) or (pkg.role or "").lower() in {"chat", "text", "vision", "vlm"}
+
+
+def _is_vision_package(pkg: PackageManifest) -> bool:
+    mods = {m.lower() for m in pkg.modalities}
+    return bool(mods & {"vision", "vlm", "multimodal"}) or (pkg.role or "").lower() in {"vision", "vlm"}
 
 
 def _is_image_package(pkg: PackageManifest) -> bool:

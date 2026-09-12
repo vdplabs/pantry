@@ -1,0 +1,30 @@
+{
+  "id": "vdplabs.demo-vision.compact.v1",
+  "family": "demo-vision",
+  "role": "vision",
+  "params_b": 0.05,
+  "quality_tier": "compact",
+  "quant_method": "none",
+  "bits_approx": null,
+  "ram_gb_min": 0.5,
+  "ram_gb_comfortable": 1.0,
+  "modalities": ["text", "vision"],
+  "context_max": 4096,
+  "license": "mit",
+  "chat_template_id": "chatml-v1",
+  "template_family": "chatml",
+  "tool_protocol": null,
+  "aliases": ["vision-compact", "vision-standard", "vision-demo", "vlm-compact"],
+  "listable": false,
+  "runtime": {
+    "primary": "echo_vlm",
+    "hf_repo": null,
+    "draft_package_id": null
+  },
+  "eval": {
+    "suite_id": "vdplabs-vlm-smoke-2026.09",
+    "score": 0.99,
+    "notes": "Deterministic demo vision-language model for smoke testing and multimodal verification."
+  },
+  "system_preamble": ""
+}

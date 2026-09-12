@@ -168,6 +168,28 @@ class ChatMessage(BaseModel):
     def text(self) -> str:
         return normalize_message_content(self.content)
 
+    def images(self) -> list[str]:
+        return extract_message_images(self.content)
+
+
+def extract_message_images(content: str | list[Any] | None) -> list[str]:
+    if not isinstance(content, list):
+        return []
+    imgs: list[str] = []
+    for part in content:
+        if isinstance(part, dict):
+            p_type = part.get("type")
+            if p_type == "image_url":
+                img_info = part.get("image_url", {})
+                url = img_info.get("url") if isinstance(img_info, dict) else str(img_info)
+                if url:
+                    imgs.append(url)
+            elif p_type in ("image", "image_data"):
+                url = part.get("url") or part.get("data")
+                if url:
+                    imgs.append(str(url))
+    return imgs
+
 
 def normalize_message_content(content: str | list[Any] | None) -> str:
     if content is None:

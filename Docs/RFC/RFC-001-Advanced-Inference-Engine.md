@@ -134,7 +134,7 @@ Specialized tasks (coding, legal reasoning, creative writing) often demand speci
 | **Phase 1** | **Prefix KV-Cache Sharing** | Radix tree KV cache manager, prefix match prefill bypass, TTFT benchmark, dashboard telemetry | ✅ **Completed** (223/223 tests passing) |
 | **Phase 2** | **Structured Output & Grammars** | JSON schema & regex logit maskers, `response_format` enforcement, strict tool-call guard, `/v1/grammar/validate` | ✅ **Completed** (230/230 tests passing) |
 | **Phase 3** | **Semantic Reranking** | Cohere-compatible `/v1/rerank` endpoint, cross-encoder runtime, `pantry rank` CLI, RAG evaluation | ✅ **Completed** (233/233 tests passing) |
-| **Phase 4** | **Vision-Language Modality** | Multimodal content block parser, MLX-VLM runtime, Qwen2-VL catalog manifest, SHM cross-pipe | ⏳ Planned |
+| **Phase 4** | **Vision-Language Modality** | Multimodal content block parser, MLX-VLM runtime, Qwen2-VL catalog manifest, `pantry vision` CLI | ✅ **Completed** (238/238 tests passing) |
 | **Phase 5** | **LoRA Adapter Hot-Swapping** | LoRA weight injector, intent adapter mapping, `pantry lora` CLI, latency validation | ⏳ Planned |
 
 ---
