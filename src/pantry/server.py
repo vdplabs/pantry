@@ -46,6 +46,8 @@ from pantry.schemas import (
     ImageGenerateRequest,
     LoadBody,
     PackageManifest,
+    PrefixCacheClearResponse,
+    PrefixCacheStats,
     PullBody,
     QualityTier,
     RebindPackBody,
@@ -63,7 +65,7 @@ from pantry.telemetry import RequestLogTracker, TelemetryCollector, TokenMetrics
 from pantry.template import apply_chat_template
 
 
-def _estimate_usage(pkg: PackageManifest, messages: list, completion: str) -> dict[str, int]:
+def _estimate_usage(pkg: PackageManifest, messages: list, completion: str) -> dict[str, Any]:
     """Rough token counts fallback when runtime cannot report exact counts."""
     prompt = apply_chat_template(pkg, messages)
     prompt_tokens = max(1, len(prompt) // 4)
@@ -72,6 +74,7 @@ def _estimate_usage(pkg: PackageManifest, messages: list, completion: str) -> di
         "prompt_tokens": prompt_tokens,
         "completion_tokens": completion_tokens,
         "total_tokens": prompt_tokens + completion_tokens,
+        "prompt_tokens_details": {"cached_tokens": 0},
     }
 
 
@@ -397,6 +400,20 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         svc.log_event("Purged unused memory pool caches (Metal / CUDA / GC)")
         return res
 
+    @app.get("/v1/cache/prefix/stats", response_model=PrefixCacheStats)
+    def prefix_cache_stats(model: str | None = None) -> PrefixCacheStats:
+        from pantry.prefix_cache import PrefixCacheManager
+
+        return PrefixCacheManager.get().stats(model)
+
+    @app.post("/v1/cache/prefix/clear", response_model=PrefixCacheClearResponse)
+    def prefix_cache_clear(model: str | None = None) -> PrefixCacheClearResponse:
+        from pantry.prefix_cache import PrefixCacheManager
+
+        res = PrefixCacheManager.get().clear(model)
+        svc.log_event(f"Cleared prefix KV-cache (reclaimed {res.reclaimed_bytes} bytes)")
+        return res
+
     @app.get("/v1/models")
     def models(
         demos: bool = False,
@@ -599,6 +616,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     prefer_speculative=want_spec,
                     draft_model=req.draft_model,
                     num_draft_tokens=req.num_draft_tokens,
+                    prefer_prefix_cache=req.prefer_prefix_cache,
+                    prefill_step_size=req.prefill_step_size,
                     usage=usage_info,
                     tools=req.tools,
                 )
@@ -618,6 +637,12 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 finish_reason = "tool_calls" if tool_calls else "stop"
 
                 usage = usage_info if usage_info else _estimate_usage(pkg, req.messages, text)
+                cached_tokens = 0
+                if "prompt_tokens_details" in usage and isinstance(usage["prompt_tokens_details"], dict):
+                    cached_tokens = int(usage["prompt_tokens_details"].get("cached_tokens", 0))
+                else:
+                    usage["prompt_tokens_details"] = {"cached_tokens": 0}
+
                 TokenMetricsTracker.get().record_completion(
                     model=req.model,
                     prompt_tokens=usage.get("prompt_tokens", 0),
@@ -625,6 +650,11 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     decode_duration_s=duration_s,
                     context_limit=getattr(pkg, "context_max", 4096),
                     model_params_b=getattr(pkg, "params_b", 3.0),
+                )
+                TokenMetricsTracker.get().record_prefix_cache(
+                    cached_tokens=cached_tokens,
+                    hit=cached_tokens > 0,
+                    saved_ms=cached_tokens * 0.05,
                 )
                 if speculative:
                     spec_info = usage.get("speculative") if isinstance(usage.get("speculative"), dict) else None
@@ -697,6 +727,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                             prefer_speculative=want_spec,
                             draft_model=req.draft_model,
                             num_draft_tokens=req.num_draft_tokens,
+                            prefer_prefix_cache=req.prefer_prefix_cache,
+                            prefill_step_size=req.prefill_step_size,
                             usage=stream_usage,
                             tools=req.tools,
                         ):
@@ -727,6 +759,12 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 finish_reason = "tool_calls" if tool_calls else "stop"
 
                 usage = stream_usage if stream_usage else _estimate_usage(pkg, req.messages, full_text)
+                cached_tokens = 0
+                if "prompt_tokens_details" in usage and isinstance(usage["prompt_tokens_details"], dict):
+                    cached_tokens = int(usage["prompt_tokens_details"].get("cached_tokens", 0))
+                else:
+                    usage["prompt_tokens_details"] = {"cached_tokens": 0}
+
                 duration_s = max(0.01, time.time() - t_stream_start)
                 TokenMetricsTracker.get().record_completion(
                     model=req.model,
@@ -735,6 +773,11 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     decode_duration_s=duration_s,
                     context_limit=getattr(pkg, "context_max", 4096),
                     model_params_b=getattr(pkg, "params_b", 3.0),
+                )
+                TokenMetricsTracker.get().record_prefix_cache(
+                    cached_tokens=cached_tokens,
+                    hit=cached_tokens > 0,
+                    saved_ms=cached_tokens * 0.05,
                 )
                 if speculative:
                     spec_info = usage.get("speculative") if isinstance(usage.get("speculative"), dict) else None

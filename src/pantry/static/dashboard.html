@@ -3655,6 +3655,36 @@
                   Unified RAM zero-copy avoids GPU-CPU bus transfer bottlenecks during attention computation.
                 </div>
               </div>
+
+              <!-- Radix Prefix KV-Cache Reuse (Patent Claim 7) -->
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title"><span>⚡</span> Radix Prefix KV-Cache Reuse</div>
+                  <span class="status-badge ok" id="perf-prefix-badge">Zero-Cost Reuse</span>
+                </div>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">
+                  Shared virtual memory pages bypass prompt re-computation for multi-turn chats and system preambles (Patent Claim 7).
+                </p>
+                <div class="row-meta">
+                  <span>Reused Prompt Tokens</span>
+                  <span class="val font-mono" id="perf-prefix-tokens">0</span>
+                </div>
+                <div class="row-meta">
+                  <span>Prefix Cache Hit Rate</span>
+                  <span class="val font-mono" id="perf-prefix-rate">0.0%</span>
+                </div>
+                <div class="row-meta">
+                  <span>Prefill Latency Saved</span>
+                  <span class="val font-mono" id="perf-prefix-saved">0.0 ms</span>
+                </div>
+                <div class="progress-bar" style="margin-top: 8px;">
+                  <div class="progress-fill" id="perf-prefix-fill"
+                    style="width: 0%; background: linear-gradient(90deg, #10b981, #06b6d4);"></div>
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+                  Endpoints: <code>GET /v1/cache/prefix/stats</code> · <code>POST /v1/cache/prefix/clear</code>
+                </div>
+              </div>
             </div>
 
             <!-- Speculative Decoding Candidate Pairs & Benchmark Studio -->
@@ -5611,6 +5641,21 @@
       if (perfMaxCtx) perfMaxCtx.textContent = `${(ctx.max_tokens || 32768).toLocaleString()} tokens`;
       if (perfCtxFill) perfCtxFill.style.width = `${Math.min(100, ctx.percent || 0)}%`;
       if (perfKvRam) perfKvRam.textContent = inf.kv_cache_human || '0 B';
+
+      // Prefix cache card
+      const pfx = inf.prefix_cache || {};
+      const pfxBadge = document.getElementById('perf-prefix-badge');
+      const pfxTokens = document.getElementById('perf-prefix-tokens');
+      const pfxRate = document.getElementById('perf-prefix-rate');
+      const pfxSaved = document.getElementById('perf-prefix-saved');
+      const pfxFill = document.getElementById('perf-prefix-fill');
+
+      const hitRate = pfx.hit_rate_percent != null ? Number(pfx.hit_rate_percent) : 0.0;
+      if (pfxBadge) pfxBadge.textContent = `${hitRate.toFixed(1)}% Hit Rate`;
+      if (pfxTokens) pfxTokens.textContent = (pfx.cached_prompt_tokens || 0).toLocaleString();
+      if (pfxRate) pfxRate.textContent = `${hitRate.toFixed(1)}% (${pfx.hits || 0} hits / ${pfx.misses || 0} misses)`;
+      if (pfxSaved) pfxSaved.textContent = `${(pfx.saved_prefill_ms || 0).toFixed(1)} ms`;
+      if (pfxFill) pfxFill.style.width = `${Math.min(100, hitRate)}%`;
     }
 
     function renderUsage(data) {

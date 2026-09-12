@@ -88,6 +88,7 @@ class CapabilityRequest(BaseModel):
     tool_protocol: str | None = None
     prefer_speculative: bool = False
     draft_model: str | None = None
+    prefer_prefix_cache: bool = True
     # When set, resolve will not cross this family.
     pin_family: str | None = None
     # Task-specific intent (coding, reasoning, chat, general, embed)
@@ -199,6 +200,8 @@ class CompleteRequest(BaseModel):
     prefer_speculative: bool = False
     draft_model: str | None = Field(default=None, alias="draft_package_id")
     num_draft_tokens: int | None = None
+    prefer_prefix_cache: bool = True
+    prefill_step_size: int = 2048
     tools: list[dict[str, Any]] | None = None
     tool_choice: str | dict[str, Any] | None = None
 
@@ -398,5 +401,33 @@ class CreatePackBody(BaseModel):
     primary: str = "mlx"
     system_preamble: str = "You are a helpful assistant running locally via pantry."
     pull_now: bool = False
+
+
+class PromptTokensDetails(BaseModel):
+    cached_tokens: int = 0
+
+
+class UsageInfo(BaseModel):
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_tokens: int = 0
+    prompt_tokens_details: PromptTokensDetails = Field(default_factory=PromptTokensDetails)
+
+
+class PrefixCacheStats(BaseModel):
+    total_nodes: int = 0
+    total_entries: int = 0
+    cached_tokens: int = 0
+    memory_bytes: int = 0
+    hit_count: int = 0
+    miss_count: int = 0
+    hit_rate_percent: float = 0.0
+
+
+class PrefixCacheClearResponse(BaseModel):
+    ok: bool = True
+    cleared_entries: int = 0
+    reclaimed_bytes: int = 0
+
 
 

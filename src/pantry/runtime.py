@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import asyncio
 import gc
+import logging
 import threading
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 
 from typing import Any
+
+logger = logging.getLogger("pantry.runtime")
 
 from pantry.limits import clamp_max_tokens
 from pantry.schemas import ChatMessage, PackageManifest, QualityTier
@@ -26,6 +29,8 @@ class Runtime(ABC):
         prefer_speculative: bool = False,
         draft_model: str | None = None,
         num_draft_tokens: int | None = None,
+        prefer_prefix_cache: bool = True,
+        prefill_step_size: int = 2048,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
     ) -> str:
@@ -41,6 +46,8 @@ class Runtime(ABC):
         prefer_speculative: bool = False,
         draft_model: str | None = None,
         num_draft_tokens: int | None = None,
+        prefer_prefix_cache: bool = True,
+        prefill_step_size: int = 2048,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
     ) -> AsyncIterator[str]:
@@ -52,6 +59,8 @@ class Runtime(ABC):
             prefer_speculative=prefer_speculative,
             draft_model=draft_model,
             num_draft_tokens=num_draft_tokens,
+            prefer_prefix_cache=prefer_prefix_cache,
+            prefill_step_size=prefill_step_size,
             usage=usage,
             tools=tools,
         )
@@ -74,6 +83,8 @@ class EchoRuntime(Runtime):
         prefer_speculative: bool = False,
         draft_model: str | None = None,
         num_draft_tokens: int | None = None,
+        prefer_prefix_cache: bool = True,
+        prefill_step_size: int = 2048,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
     ) -> str:
@@ -91,10 +102,23 @@ class EchoRuntime(Runtime):
                 draft_id = "vdplabs.demo-chat.compact.v1"
             if draft_id:
                 draft = f"\n[speculative draft={draft_id}]"
+
+        cached_tokens = 0
+        if prefer_prefix_cache:
+            from pantry.prefix_cache import PrefixCacheManager
+
+            cache_mgr = PrefixCacheManager.get()
+            words = prompt.split()
+            pseudo_tokens = [abs(hash(w)) % 100000 + 1 for w in words]
+            if pseudo_tokens:
+                _, _, cached_tokens = cache_mgr.lookup(manifest.id, pseudo_tokens)
+                cache_mgr.insert(manifest.id, pseudo_tokens, "echo_cached_state", nbytes=len(pseudo_tokens) * 64)
+
+        cache_note = f"\n[prefix cache: {cached_tokens} tokens reused]" if cached_tokens > 0 else ""
         body = (
             f"[pantry echo · {manifest.id} · template={manifest.template_family}]\n"
             f"You said: {last_user or '(empty)'}\n"
-            f"Prompt chars: {len(prompt)}{draft}"
+            f"Prompt chars: {len(prompt)}{draft}{cache_note}"
         )
         max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
         body = body[: max_toks * 4]
@@ -105,6 +129,7 @@ class EchoRuntime(Runtime):
             usage["prompt_tokens"] = p_toks
             usage["completion_tokens"] = c_toks
             usage["total_tokens"] = p_toks + c_toks
+            usage["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
             if draft_id:
                 k = int(num_draft_tokens or 2)
                 acc = int(c_toks * 0.75)
@@ -217,6 +242,8 @@ class MLXRuntime(Runtime):
         prefer_speculative: bool = False,
         draft_model: str | None = None,
         num_draft_tokens: int | None = None,
+        prefer_prefix_cache: bool = True,
+        prefill_step_size: int = 2048,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
     ) -> str:
@@ -229,6 +256,8 @@ class MLXRuntime(Runtime):
             prefer_speculative=prefer_speculative,
             draft_model=draft_model,
             num_draft_tokens=num_draft_tokens,
+            prefer_prefix_cache=prefer_prefix_cache,
+            prefill_step_size=prefill_step_size,
             usage=usage,
             tools=tools,
         ):
@@ -245,6 +274,8 @@ class MLXRuntime(Runtime):
         prefer_speculative: bool = False,
         draft_model: str | None = None,
         num_draft_tokens: int | None = None,
+        prefer_prefix_cache: bool = True,
+        prefill_step_size: int = 2048,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
     ) -> AsyncIterator[str]:
@@ -281,16 +312,32 @@ class MLXRuntime(Runtime):
         max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
         temp = 0.0 if temperature is None else float(temperature)
 
-        prompt_tokens_count = 0
+        prompt_tokens: list[int] = []
         try:
-            prompt_tokens_count = len(tokenizer.encode(prompt))
+            prompt_tokens = list(tokenizer.encode(prompt))
         except Exception:  # noqa: BLE001
-            prompt_tokens_count = max(1, len(prompt) // 4)
+            prompt_tokens = [abs(hash(w)) % 100000 + 1 for w in prompt.split()]
+        prompt_tokens_count = len(prompt_tokens)
+
+        from pantry.prefix_cache import PrefixCacheManager
+
+        cache_mgr = PrefixCacheManager.get()
+        cached_tokens_count = 0
+        cached_kv_state = None
+        gen_prompt: Any = prompt_tokens if prompt_tokens else prompt
+
+        if prefer_prefix_cache and prompt_tokens:
+            cached_kv_state, remaining_tokens, cached_tokens_count = cache_mgr.lookup(
+                model_path, prompt_tokens
+            )
+            if cached_kv_state is not None:
+                gen_prompt = remaining_tokens
 
         if usage is not None:
             usage["prompt_tokens"] = prompt_tokens_count
             usage["completion_tokens"] = 0
             usage["total_tokens"] = prompt_tokens_count
+            usage["prompt_tokens_details"] = {"cached_tokens": cached_tokens_count}
 
         queue: asyncio.Queue[str | None] = asyncio.Queue()
         loop = asyncio.get_running_loop()
@@ -298,13 +345,22 @@ class MLXRuntime(Runtime):
         cancel = threading.Event()
         gen_tokens_count = [0]
         accepted_tokens_count = [0]
+        generated_token_ids: list[int] = []
+        active_cache = cached_kv_state
 
         def _produce() -> None:
+            nonlocal active_cache
             try:
+                from mlx_lm.models.cache import make_prompt_cache
                 from mlx_lm.sample_utils import (  # type: ignore
                     make_logits_processors,
                     make_sampler,
                 )
+
+                if active_cache is None:
+                    active_cache = make_prompt_cache(model)
+                    if draft_model_obj is not None:
+                        active_cache += make_prompt_cache(draft_model_obj)
 
                 sampler = make_sampler(temp=temp)
                 # Small instruct / R1-distill models often skip EOS and restate CoT;
@@ -321,12 +377,14 @@ class MLXRuntime(Runtime):
                     "max_tokens": max_toks,
                     "sampler": sampler,
                     "logits_processors": processors,
+                    "prompt_cache": active_cache,
+                    "prefill_step_size": prefill_step_size,
                 }
                 if draft_model_obj is not None:
                     kwargs["draft_model"] = draft_model_obj
                     if num_draft_tokens is not None:
                         kwargs["num_draft_tokens"] = int(num_draft_tokens)
-                gen = stream_generate(model, tokenizer, prompt=prompt, **kwargs)
+                gen = stream_generate(model, tokenizer, prompt=gen_prompt, **kwargs)
                 for item in gen:
                     if cancel.is_set():
                         break
@@ -337,12 +395,26 @@ class MLXRuntime(Runtime):
                         gen_tokens_count[0] += 1
                     if getattr(item, "from_draft", False):
                         accepted_tokens_count[0] += 1
+                    tok = getattr(item, "token", None)
+                    if tok is not None:
+                        generated_token_ids.append(int(tok))
                     text = getattr(item, "text", None) or ""
                     if text:
                         loop.call_soon_threadsafe(queue.put_nowait, text)
             except BaseException as exc:  # noqa: BLE001 — surface to async consumer
                 errors.append(exc)
             finally:
+                if (
+                    prefer_prefix_cache
+                    and active_cache is not None
+                    and not cancel.is_set()
+                    and prompt_tokens
+                ):
+                    try:
+                        full_tokens = prompt_tokens + generated_token_ids
+                        cache_mgr.insert(model_path, full_tokens, active_cache)
+                    except Exception as e:
+                        logger.warning("Failed to index prefix cache: %s", e)
                 loop.call_soon_threadsafe(queue.put_nowait, None)
 
         from pantry.stop import StreamStopper
@@ -483,8 +555,13 @@ class CUDARuntime(Runtime):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
-        usage: dict[str, int] | None = None,
+        draft_model: str | None = None,
+        num_draft_tokens: int | None = None,
+        prefer_prefix_cache: bool = True,
+        prefill_step_size: int = 2048,
+        usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
+        **kwargs: Any,
     ) -> str:
         parts: list[str] = []
         async for chunk in self.stream(
@@ -493,8 +570,13 @@ class CUDARuntime(Runtime):
             max_tokens=max_tokens,
             temperature=temperature,
             prefer_speculative=prefer_speculative,
+            draft_model=draft_model,
+            num_draft_tokens=num_draft_tokens,
+            prefer_prefix_cache=prefer_prefix_cache,
+            prefill_step_size=prefill_step_size,
             usage=usage,
             tools=tools,
+            **kwargs,
         ):
             parts.append(chunk)
         return strip_stop_tokens("".join(parts), manifest)
@@ -507,8 +589,13 @@ class CUDARuntime(Runtime):
         max_tokens: int | None,
         temperature: float | None,
         prefer_speculative: bool = False,
-        usage: dict[str, int] | None = None,
+        draft_model: str | None = None,
+        num_draft_tokens: int | None = None,
+        prefer_prefix_cache: bool = True,
+        prefill_step_size: int = 2048,
+        usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[str]:
         try:
             from transformers import TextIteratorStreamer  # type: ignore

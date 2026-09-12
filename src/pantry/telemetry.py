@@ -140,6 +140,13 @@ class TokenMetricsTracker:
         self.speculative_draft_tokens: int = 0
         self.speculative_accepted_tokens: int = 0
 
+        # Prefix cache metrics (Patent Claim 7)
+        self.session_cached_prompt_tokens: int = 0
+        self.cumulative_cached_prompt_tokens: int = 0
+        self.prefix_cache_hits: int = 0
+        self.prefix_cache_misses: int = 0
+        self.saved_prefill_ms: float = 0.0
+
         self.last_prefill_ms: float = 0.0
         self.last_prefill_tps: float = 0.0
         self.last_decode_tps: float = 0.0
@@ -358,6 +365,22 @@ class TokenMetricsTracker:
             self.speculative_draft_tokens += max(0, draft_tokens)
             self.speculative_accepted_tokens += max(0, accepted_tokens)
 
+    def record_prefix_cache(
+        self,
+        *,
+        cached_tokens: int,
+        hit: bool = True,
+        saved_ms: float = 0.0,
+    ) -> None:
+        with self._lock:
+            if hit:
+                self.prefix_cache_hits += 1
+                self.session_cached_prompt_tokens += max(0, cached_tokens)
+                self.cumulative_cached_prompt_tokens += max(0, cached_tokens)
+                self.saved_prefill_ms += max(0.0, saved_ms)
+            else:
+                self.prefix_cache_misses += 1
+
     def reset_session(self) -> None:
         with self._lock:
             self.session_prompt_tokens = 0
@@ -371,6 +394,10 @@ class TokenMetricsTracker:
             self.session_embedding_tokens = 0
             self.speculative_draft_tokens = 0
             self.speculative_accepted_tokens = 0
+            self.session_cached_prompt_tokens = 0
+            self.prefix_cache_hits = 0
+            self.prefix_cache_misses = 0
+            self.saved_prefill_ms = 0.0
             self.last_prefill_ms = 0.0
             self.last_prefill_tps = 0.0
             self.last_decode_tps = 0.0
@@ -478,6 +505,13 @@ class TokenMetricsTracker:
                 spec_rate = round((self.speculative_accepted_tokens / self.speculative_draft_tokens) * 100.0, 1)
                 spec_speedup = round(1.0 + (self.speculative_accepted_tokens / self.speculative_draft_tokens) * 0.85, 2)
 
+            total_cache_reqs = self.prefix_cache_hits + self.prefix_cache_misses
+            prefix_hit_rate = (
+                round((self.prefix_cache_hits / max(1, total_cache_reqs)) * 100.0, 1)
+                if total_cache_reqs > 0
+                else 0.0
+            )
+
             return {
                 "session": {
                     "prompt_tokens": self.session_prompt_tokens,
@@ -528,6 +562,14 @@ class TokenMetricsTracker:
                     "accepted_tokens": self.speculative_accepted_tokens,
                     "acceptance_rate_percent": spec_rate,
                     "speedup_factor": spec_speedup,
+                },
+                "prefix_cache": {
+                    "cached_prompt_tokens": self.session_cached_prompt_tokens,
+                    "cumulative_cached_tokens": self.cumulative_cached_prompt_tokens,
+                    "hits": self.prefix_cache_hits,
+                    "misses": self.prefix_cache_misses,
+                    "hit_rate_percent": prefix_hit_rate,
+                    "saved_prefill_ms": round(self.saved_prefill_ms, 1),
                 },
             }
 
