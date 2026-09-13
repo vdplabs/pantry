@@ -513,7 +513,7 @@ class MFluxImageRuntime:
 
             adapters_list = adapters or []
             if adapters_list:
-                from pantry.lora import LoRAAdapterManager
+                from pantry.lora import LoRAAdapter, LoRAAdapterManager
 
                 lora_mgr = LoRAAdapterManager.get()
                 scales = adapter_scales or [1.0] * len(adapters_list)
@@ -522,7 +522,10 @@ class MFluxImageRuntime:
                     resolved = lora_mgr.resolve_adapter_path(ad_id)
                     if resolved:
                         ad = lora_mgr.get_adapter(ad_id)
-                        if ad:
+                        if ad is None:
+                            ad = LoRAAdapter(adapter_id=ad_id, name=ad_id, path=resolved)
+                            lora_mgr.register_adapter(ad)
+                        else:
                             ad.path = resolved
                     lora_mgr.apply_adapter(manifest.id, ad_id, scale=scale, model_instance=model)
 

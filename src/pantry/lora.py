@@ -7,6 +7,7 @@ injecting and hot-swapping low-rank (20MB-100MB) adapter matrices in <30ms.
 """
 
 import logging
+from pathlib import Path
 import threading
 import time
 from typing import Any
@@ -183,8 +184,13 @@ class LoRAAdapterManager:
             ad = self._registry.get(adapter_id)
             if ad is None:
                 # Auto-register ad-hoc adapter path or ID
-                ad = LoRAAdapter(adapter_id=adapter_id, name=adapter_id, path=adapter_id)
+                resolved = self.resolve_adapter_path(adapter_id)
+                ad = LoRAAdapter(adapter_id=adapter_id, name=adapter_id, path=resolved or adapter_id)
                 self._registry[adapter_id] = ad
+            elif ad.path and not Path(ad.path).is_file():
+                resolved = self.resolve_adapter_path(ad.path) or self.resolve_adapter_path(ad.id)
+                if resolved:
+                    ad.path = resolved
 
             if model_instance is not None:
                 # If an MLX or PyTorch model object is provided, inject weights into linear layers
@@ -222,6 +228,12 @@ class LoRAAdapterManager:
             if hasattr(model, "transformer"):
                 from pathlib import Path
 
+                resolved_path = adapter.path
+                if not resolved_path or not Path(resolved_path).is_file():
+                    resolved_path = self.resolve_adapter_path(adapter.id) or self.resolve_adapter_path(adapter.name)
+                    if resolved_path:
+                        adapter.path = resolved_path
+
                 if adapter.path and Path(adapter.path).is_file():
                     from mflux.models.common.lora.mapping.lora_loader import LoRALoader
 
@@ -241,10 +253,11 @@ class LoRAAdapterManager:
                         lora_scales=[scale],
                     )
                 else:
+                    logger.warning("LoRA adapter '%s' has no valid file path on disk (%s) — weights not loaded!", adapter.id, adapter.path)
                     setattr(model.transformer, "_active_lora_id", adapter.id)
                     setattr(model.transformer, "_active_lora_scale", scale)
         except Exception as exc:
-            logger.debug("MFlux LoRA dynamic injection notice: %s", exc)
+            logger.warning("MFlux LoRA dynamic injection notice: %s", exc)
 
     def resolve_adapter_path(self, adapter_id_or_path: str) -> str | None:
         from pathlib import Path
@@ -263,13 +276,33 @@ class LoRAAdapterManager:
             default_home() / "adapters",
             Path.home() / ".pantry" / "adapters",
         ]
+        variations = [
+            adapter_id_or_path,
+            adapter_id_or_path.replace("-", " "),
+            adapter_id_or_path.replace("_", " "),
+            adapter_id_or_path.replace(" ", "-"),
+            adapter_id_or_path.replace(" ", "_"),
+        ]
         for sdir in search_dirs:
-            cand = sdir / f"{adapter_id_or_path}.safetensors"
-            if cand.is_file():
-                return str(cand)
-            cand_raw = sdir / adapter_id_or_path
-            if cand_raw.is_file():
-                return str(cand_raw)
+            if not sdir.is_dir():
+                continue
+            for var in variations:
+                cand = sdir / f"{var}.safetensors"
+                if cand.is_file():
+                    return str(cand)
+                cand_raw = sdir / var
+                if cand_raw.is_file():
+                    return str(cand_raw)
+            # Case-insensitive / normalized match across directory
+            try:
+                norm_target = adapter_id_or_path.lower().replace("-", "").replace("_", "").replace(" ", "").replace(".safetensors", "")
+                for item in sdir.iterdir():
+                    if item.suffix.lower() == ".safetensors":
+                        stem_norm = item.stem.lower().replace("-", "").replace("_", "").replace(" ", "")
+                        if stem_norm == norm_target or (len(stem_norm) >= 4 and stem_norm in norm_target) or (len(norm_target) >= 4 and norm_target in stem_norm):
+                            return str(item)
+            except Exception:
+                pass
         return None
 
     def unload_adapter(self, model_id: str, adapter_id: str | None = None) -> list[str]:
