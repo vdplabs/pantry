@@ -317,6 +317,10 @@ class ImageGenerateRequest(BaseModel):
     seed: int | None = None
     stream: bool = False
     ignore_swap: bool = False
+    adapters: list[str] | None = None
+    adapter: str | None = None
+    adapter_scales: list[float] | None = None
+    scale: float | None = None
 
 
 class AudioGenerateRequest(BaseModel):
@@ -509,6 +513,7 @@ class AdapterInfo(BaseModel):
     id: str
     name: str = ""
     base_family: str = ""
+    modality: str = "text"
     rank: int = 16
     alpha: float = 32.0
     target_modules: list[str] = Field(default_factory=list)

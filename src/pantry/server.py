@@ -1502,6 +1502,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             or request.headers.get("x-pantry-ignore-swap", "").lower() in {"1", "true", "yes"}
             or os.environ.get("PANTRY_IGNORE_SWAP", "").lower() in {"1", "true", "yes"}
         )
+        effective_adapters = req.adapters or ([req.adapter] if req.adapter else None)
+        effective_scales = req.adapter_scales or ([req.scale] if req.scale is not None else None)
 
         if want_stream:
             async def _stream_generator() -> AsyncIterator[str]:
@@ -1545,6 +1547,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                             negative_prompt=req.negative_prompt,
                             step_callback=_on_step,
                             ignore_swap=want_ignore_swap,
+                            adapters=effective_adapters,
+                            adapter_scales=effective_scales,
                         )
 
                 async def _worker_task() -> None:
@@ -1655,6 +1659,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     guidance=req.guidance,
                     negative_prompt=req.negative_prompt,
                     ignore_swap=want_ignore_swap,
+                    adapters=effective_adapters,
+                    adapter_scales=effective_scales,
                 )
 
         async def _gen() -> list[dict]:

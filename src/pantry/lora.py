@@ -22,6 +22,7 @@ class LoRAAdapter:
         adapter_id: str,
         name: str = "",
         base_family: str = "",
+        modality: str = "text",
         rank: int = 16,
         alpha: float = 32.0,
         target_modules: list[str] | None = None,
@@ -31,6 +32,7 @@ class LoRAAdapter:
         self.id = adapter_id
         self.name = name or adapter_id
         self.base_family = base_family
+        self.modality = modality
         self.rank = rank
         self.alpha = alpha
         self.scale = alpha / rank if rank > 0 else 1.0
@@ -44,6 +46,7 @@ class LoRAAdapter:
             id=self.id,
             name=self.name,
             base_family=self.base_family,
+            modality=self.modality,
             rank=self.rank,
             alpha=self.alpha,
             target_modules=list(self.target_modules),
@@ -67,12 +70,13 @@ class LoRAAdapterManager:
         self._init_defaults()
 
     def _init_defaults(self) -> None:
-        # Pre-register common curated adapters
+        # Pre-register common curated LLM adapters
         self.register_adapter(
             LoRAAdapter(
                 adapter_id="coder-lora",
                 name="Qwen/Llama Coding & Python Specialist",
                 base_family="qwen",
+                modality="text",
                 rank=16,
                 alpha=32.0,
                 target_modules=["q_proj", "k_proj", "v_proj", "o_proj"],
@@ -84,6 +88,7 @@ class LoRAAdapterManager:
                 adapter_id="reasoning-lora",
                 name="Step-by-Step Chain-of-Thought Specialist",
                 base_family="qwen",
+                modality="text",
                 rank=16,
                 alpha=32.0,
                 target_modules=["q_proj", "v_proj", "gate_proj", "up_proj"],
@@ -95,10 +100,36 @@ class LoRAAdapterManager:
                 adapter_id="medical-lora",
                 name="Clinical & Biomedical Synthesis Specialist",
                 base_family="llama",
+                modality="text",
                 rank=8,
                 alpha=16.0,
                 target_modules=["q_proj", "v_proj"],
                 size_bytes=18 * 1024 * 1024,
+            )
+        )
+        # Pre-register common curated Diffusion / Flux image adapters
+        self.register_adapter(
+            LoRAAdapter(
+                adapter_id="flux-realism-lora",
+                name="Flux Photorealism & Detail Specialist",
+                base_family="flux",
+                modality="image",
+                rank=16,
+                alpha=16.0,
+                target_modules=["double_blocks", "single_blocks"],
+                size_bytes=24 * 1024 * 1024,
+            )
+        )
+        self.register_adapter(
+            LoRAAdapter(
+                adapter_id="flux-anime-lora",
+                name="Flux Anime & Stylized Illustration",
+                base_family="flux",
+                modality="image",
+                rank=16,
+                alpha=16.0,
+                target_modules=["double_blocks", "single_blocks"],
+                size_bytes=24 * 1024 * 1024,
             )
         )
 
@@ -174,11 +205,8 @@ class LoRAAdapterManager:
 
     def _inject_weights_into_model(self, model: Any, adapter: LoRAAdapter, scale: float) -> None:
         """Dynamically composes LoRA weights into target linear layers if supported."""
-        # For MLX models
+        # For MLX LLM models
         try:
-            import mlx.core as mx
-            import mlx.nn as nn
-
             if hasattr(model, "layers"):
                 for layer in model.layers:
                     for mod_name in adapter.target_modules:
@@ -188,6 +216,49 @@ class LoRAAdapterManager:
                             setattr(submod, "_active_lora_scale", scale)
         except Exception:
             pass
+
+        # For MFlux / Diffusion image models
+        try:
+            if hasattr(model, "transformer"):
+                from pathlib import Path
+
+                if adapter.path and Path(adapter.path).is_file():
+                    from mflux.models.common.lora.mapping.lora_loader import LoRALoader
+                    from mflux.models.flux.weights.flux_lora_mapping import FluxLoRAMapping
+
+                    lora_mapping = FluxLoRAMapping.get_mapping()
+                    LoRALoader.load_and_apply_lora(
+                        lora_mapping=lora_mapping,
+                        transformer=model.transformer,
+                        lora_paths=[str(adapter.path)],
+                        lora_scales=[scale],
+                    )
+                else:
+                    setattr(model.transformer, "_active_lora_id", adapter.id)
+                    setattr(model.transformer, "_active_lora_scale", scale)
+        except Exception as exc:
+            logger.debug("MFlux LoRA dynamic injection notice: %s", exc)
+
+    def resolve_adapter_path(self, adapter_id_or_path: str) -> str | None:
+        from pathlib import Path
+
+        p = Path(adapter_id_or_path).expanduser()
+        if p.is_file():
+            return str(p)
+        ad = self.get_adapter(adapter_id_or_path)
+        if ad and ad.path:
+            ad_p = Path(ad.path).expanduser()
+            if ad_p.is_file():
+                return str(ad_p)
+        from pantry.config import default_home
+
+        cand = default_home() / "adapters" / f"{adapter_id_or_path}.safetensors"
+        if cand.is_file():
+            return str(cand)
+        cand_raw = default_home() / "adapters" / adapter_id_or_path
+        if cand_raw.is_file():
+            return str(cand_raw)
+        return None
 
     def unload_adapter(self, model_id: str, adapter_id: str | None = None) -> list[str]:
         """Detaches adapter(s) from a model."""

@@ -1431,6 +1431,8 @@ def image_cmd(
     prompt: str = typer.Argument(..., help="Text prompt describing the desired image"),
     model: str = typer.Option("image-compact", "--model", help="Model name, package id, or alias"),
     size: str = typer.Option("512x512", "--size", help="Image dimensions, e.g. 512x512 or 1024x1024"),
+    adapter: str | None = typer.Option(None, "--adapter", "-a", help="LoRA adapter name or path to apply (e.g. flux-realism-lora)"),
+    scale: float = typer.Option(1.0, "--scale", help="LoRA adapter scaling factor"),
     output: Path | None = typer.Option(None, "--output", "-o", help="File to save the generated image to"),
     host: str = typer.Option("127.0.0.1", "--host"),
     port: int = typer.Option(18787, "--port"),
@@ -1444,6 +1446,9 @@ def image_cmd(
 
     url = f"{_daemon_base(host, port)}/v1/images/generations"
     payload = {"model": model, "prompt": prompt, "size": size, "response_format": "b64_json"}
+    if adapter:
+        payload["adapters"] = [adapter]
+        payload["adapter_scales"] = [scale]
     daemon_ok = False
     try:
         resp = httpx.post(url, json=payload, timeout=120.0)
@@ -1474,7 +1479,14 @@ def image_cmd(
 
         runtime = image_runtime_for(pkg, store)
         try:
-            items = runtime.generate(pkg, prompt=prompt, size=size, response_format="b64_json")
+            items = runtime.generate(
+                pkg,
+                prompt=prompt,
+                size=size,
+                response_format="b64_json",
+                adapters=[adapter] if adapter else None,
+                adapter_scales=[scale] if adapter else None,
+            )
         except Exception as e:
             typer.secho(f"image generation failed: {e}", fg=typer.colors.RED, err=True)
             raise typer.Exit(1) from e

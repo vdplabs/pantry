@@ -267,6 +267,8 @@ class EchoImageRuntime:
         guidance: float | None = None,
         negative_prompt: str | None = None,
         step_callback: Any | None = None,
+        adapters: list[str] | None = None,
+        adapter_scales: list[float] | None = None,
         **kwargs: Any,
     ) -> list[dict]:
         width, height = _parse_size(size)
@@ -275,6 +277,16 @@ class EchoImageRuntime:
         artifacts = self.store.artifacts_dir / manifest.id
         artifacts.mkdir(parents=True, exist_ok=True)
         total_steps = num_inference_steps or 4
+
+        adapters_list = adapters or []
+        if adapters_list:
+            from pantry.lora import LoRAAdapterManager
+
+            lora_mgr = LoRAAdapterManager.get()
+            scales = adapter_scales or [1.0] * len(adapters_list)
+            for idx, ad_id in enumerate(adapters_list):
+                scale = scales[idx] if idx < len(scales) else 1.0
+                lora_mgr.apply_adapter(manifest.id, ad_id, scale=scale)
 
         out: list[dict] = []
         for i in range(n):
@@ -285,13 +297,15 @@ class EchoImageRuntime:
             png = _solid_png(width, height, color)
             path = artifacts / f"echo-{width}x{height}-{i}.png"
             path.write_bytes(png)
+            revised = f"[pantry echo_image · {manifest.id}] {prompt.strip()[:200]}"
+            if adapters_list:
+                revised += f" [active lora: {', '.join(adapters_list)}]"
             item: dict = {
-                "revised_prompt": (
-                    f"[pantry echo_image · {manifest.id}] {prompt.strip()[:200]}"
-                ),
+                "revised_prompt": revised,
                 "path": str(path),
                 "width": width,
                 "height": height,
+                "adapters": list(adapters_list),
             }
             fmt = (response_format or "b64_json").lower()
             if fmt == "b64_json":
@@ -383,6 +397,8 @@ class MFluxImageRuntime:
         guidance: float | None = None,
         negative_prompt: str | None = None,
         step_callback: Any | None = None,
+        adapters: list[str] | None = None,
+        adapter_scales: list[float] | None = None,
         **kwargs: Any,
     ) -> list[dict]:
         import time
@@ -494,6 +510,21 @@ class MFluxImageRuntime:
                 model = self._models[model_key]
                 _enable_mflux_low_ram(model)
                 steps = num_inference_steps or (2 if "schnell" in manifest.id.lower() else 4)
+
+            adapters_list = adapters or []
+            if adapters_list:
+                from pantry.lora import LoRAAdapterManager
+
+                lora_mgr = LoRAAdapterManager.get()
+                scales = adapter_scales or [1.0] * len(adapters_list)
+                for idx, ad_id in enumerate(adapters_list):
+                    scale = scales[idx] if idx < len(scales) else 1.0
+                    resolved = lora_mgr.resolve_adapter_path(ad_id)
+                    if resolved:
+                        ad = lora_mgr.get_adapter(ad_id)
+                        if ad:
+                            ad.path = resolved
+                    lora_mgr.apply_adapter(manifest.id, ad_id, scale=scale, model_instance=model)
 
             out: list[dict] = []
             for i in range(n):
@@ -652,11 +683,15 @@ class MFluxImageRuntime:
                 img.save(str(path))
                 png_bytes = path.read_bytes()
 
+                revised = prompt.strip()
+                if adapters_list:
+                    revised += f" [active lora: {', '.join(adapters_list)}]"
                 item: dict = {
-                    "revised_prompt": prompt.strip(),
+                    "revised_prompt": revised,
                     "path": str(path),
                     "width": out_width,
                     "height": out_height,
+                    "adapters": list(adapters_list),
                 }
                 fmt = (response_format or "b64_json").lower()
                 if fmt == "b64_json":

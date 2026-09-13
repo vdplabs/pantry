@@ -749,6 +749,61 @@ def test_mflux_image_runtime_generated_image_resize(tmp_path, monkeypatch):
     assert saved.size == (2048, 2048)
 
 
+def test_images_generations_with_adapters(client):
+    r = client.post(
+        "/v1/images/generations",
+        json={
+            "model": "image-compact",
+            "prompt": "a cyberpunk street in neon rain",
+            "size": "512x512",
+            "adapters": ["flux-realism-lora"],
+            "adapter_scales": [0.8],
+        },
+    )
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert len(body["data"]) == 1
+    item = body["data"][0]
+    assert item["adapters"] == ["flux-realism-lora"]
+    assert "[active lora: flux-realism-lora]" in item["revised_prompt"]
+
+
+def test_cli_image_with_adapter(tmp_path: Path, catalog_dir: Path):
+    from typer.testing import CliRunner
+    from pantry.cli import app as cli_app
+    from pantry.store import PackageStore
+
+    store = PackageStore(tmp_path / "pantry-home")
+    store.ensure()
+    store.seed_from_catalog(catalog_dir)
+    runner = CliRunner()
+    out_img = tmp_path / "lora_test.png"
+
+    res = runner.invoke(
+        cli_app,
+        [
+            "image",
+            "a mountain view",
+            "--model",
+            "image-compact",
+            "-a",
+            "flux-realism-lora",
+            "--scale",
+            "0.85",
+            "-o",
+            str(out_img),
+            "--port",
+            "59999",
+            "--home",
+            str(store.root),
+            "--data",
+            str(store.data_root),
+        ],
+    )
+    assert res.exit_code == 0
+    assert out_img.is_file()
+
+
 
 
 

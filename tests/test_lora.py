@@ -20,6 +20,13 @@ def test_lora_manager_registry_and_benchmarking():
     assert "coder-lora" in ids
     assert "reasoning-lora" in ids
     assert "medical-lora" in ids
+    assert "flux-realism-lora" in ids
+    assert "flux-anime-lora" in ids
+
+    realism = mgr.get_adapter("flux-realism-lora")
+    assert realism is not None
+    assert realism.modality == "image"
+    assert realism.base_family == "flux"
 
     # Test custom adapter registration
     custom = LoRAAdapter(
