@@ -224,9 +224,16 @@ class LoRAAdapterManager:
 
                 if adapter.path and Path(adapter.path).is_file():
                     from mflux.models.common.lora.mapping.lora_loader import LoRALoader
-                    from mflux.models.flux.weights.flux_lora_mapping import FluxLoRAMapping
 
-                    lora_mapping = FluxLoRAMapping.get_mapping()
+                    if type(model).__name__ == "ZImage" or "z_image" in type(model).__module__:
+                        from mflux.models.z_image.weights.z_image_lora_mapping import ZImageLoRAMapping
+
+                        lora_mapping = ZImageLoRAMapping.get_mapping()
+                    else:
+                        from mflux.models.flux.weights.flux_lora_mapping import FluxLoRAMapping
+
+                        lora_mapping = FluxLoRAMapping.get_mapping()
+
                     LoRALoader.load_and_apply_lora(
                         lora_mapping=lora_mapping,
                         transformer=model.transformer,
@@ -252,12 +259,17 @@ class LoRAAdapterManager:
                 return str(ad_p)
         from pantry.config import default_home
 
-        cand = default_home() / "adapters" / f"{adapter_id_or_path}.safetensors"
-        if cand.is_file():
-            return str(cand)
-        cand_raw = default_home() / "adapters" / adapter_id_or_path
-        if cand_raw.is_file():
-            return str(cand_raw)
+        search_dirs = [
+            default_home() / "adapters",
+            Path.home() / ".pantry" / "adapters",
+        ]
+        for sdir in search_dirs:
+            cand = sdir / f"{adapter_id_or_path}.safetensors"
+            if cand.is_file():
+                return str(cand)
+            cand_raw = sdir / adapter_id_or_path
+            if cand_raw.is_file():
+                return str(cand_raw)
         return None
 
     def unload_adapter(self, model_id: str, adapter_id: str | None = None) -> list[str]:
