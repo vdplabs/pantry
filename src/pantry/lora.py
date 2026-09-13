@@ -251,6 +251,7 @@ class LoRAAdapterManager:
                         transformer=model.transformer,
                         lora_paths=[str(adapter.path)],
                         lora_scales=[scale],
+                        bake_lora=False,
                     )
                 else:
                     logger.warning("LoRA adapter '%s' has no valid file path on disk (%s) — weights not loaded!", adapter.id, adapter.path)
@@ -258,6 +259,128 @@ class LoRAAdapterManager:
                     setattr(model.transformer, "_active_lora_scale", scale)
         except Exception as exc:
             logger.warning("MFlux LoRA dynamic injection notice: %s", exc)
+
+    @staticmethod
+    def restore_base_linear_layers(transformer: Any) -> int:
+        """Restores any LoRALinear, LoKrLinear, or FusedLoRALinear layers to their original base Linear layers."""
+        try:
+            from mflux.models.common.lora.layer.linear_lora_layer import LoRALinear
+            from mflux.models.common.lora.layer.linear_lokr_layer import LoKrLinear
+            from mflux.models.common.lora.layer.fused_linear_lora_layer import FusedLoRALinear
+            from mflux.models.common.lora.mapping.lora_loader import LoRALoader
+
+            restored = 0
+            lora_targets = []
+            for path, module in transformer.named_modules():
+                if isinstance(module, FusedLoRALinear):
+                    lora_targets.append((path, module.base_linear))
+                elif isinstance(module, (LoRALinear, LoKrLinear)):
+                    lora_targets.append((path, module.linear))
+
+            for path, base_lin in lora_targets:
+                try:
+                    LoRALoader._replace_target_module(transformer, path, base_lin)
+                    restored += 1
+                except Exception as exc:
+                    logger.debug("Failed to restore base layer at %s: %s", path, exc)
+
+            return restored
+        except Exception as exc:
+            logger.debug("Error restoring base linear layers: %s", exc)
+            return 0
+
+    @staticmethod
+    def update_transformer_lora_scale(transformer: Any, scale: float) -> int:
+        """Dynamically updates the scale attribute of all active LoRALinear/LoKrLinear layers without re-loading."""
+        try:
+            from mflux.models.common.lora.layer.linear_lora_layer import LoRALinear
+            from mflux.models.common.lora.layer.linear_lokr_layer import LoKrLinear
+            from mflux.models.common.lora.layer.fused_linear_lora_layer import FusedLoRALinear
+
+            updated = 0
+            for path, module in transformer.named_modules():
+                if isinstance(module, (LoRALinear, LoKrLinear)):
+                    module.scale = scale
+                    updated += 1
+                elif isinstance(module, FusedLoRALinear):
+                    for lora in module.loras:
+                        lora.scale = scale
+                    updated += 1
+            return updated
+        except Exception as exc:
+            logger.debug("Error updating lora scale: %s", exc)
+            return 0
+
+    def sync_model_adapters(
+        self,
+        model_id: str,
+        desired_adapter_ids: list[str],
+        scales: list[float] | None = None,
+        model_instance: Any = None,
+    ) -> None:
+        """Synchronizes resident model weights with the requested adapters without accumulating weights."""
+        with self._lock:
+            # Case A: No adapters requested -> restore pristine base model
+            if not desired_adapter_ids:
+                if model_instance is not None and hasattr(model_instance, "transformer"):
+                    t = model_instance.transformer
+                    if getattr(t, "_active_lora_id", None) is not None:
+                        count = self.restore_base_linear_layers(t)
+                        logger.info("Restored %d base layers to pristine state (no adapter requested)", count)
+                        setattr(t, "_active_lora_id", None)
+                        setattr(t, "_active_lora_scale", None)
+                        setattr(t, "_active_lora_path", None)
+                self._active_adapters[model_id] = []
+                return
+
+            # Case B: Adapter requested
+            scales_list = scales or [1.0] * len(desired_adapter_ids)
+            target_ad_id = desired_adapter_ids[0]
+            target_scale = scales_list[0] if scales_list else 1.0
+
+            # Resolve adapter
+            resolved = self.resolve_adapter_path(target_ad_id)
+            ad = self.get_adapter(target_ad_id)
+            if ad is None:
+                ad = LoRAAdapter(adapter_id=target_ad_id, name=target_ad_id, path=resolved or target_ad_id)
+                self.register_adapter(ad)
+            elif resolved and (not ad.path or not Path(ad.path).is_file()):
+                ad.path = resolved
+
+            if model_instance is not None and hasattr(model_instance, "transformer"):
+                t = model_instance.transformer
+                active_id = getattr(t, "_active_lora_id", None)
+                active_scale = getattr(t, "_active_lora_scale", None)
+                active_path = getattr(t, "_active_lora_path", None)
+                resolved_str = str(ad.path) if ad.path else None
+
+                # Sub-case B1: Same adapter, same scale -> already active!
+                if active_id == target_ad_id and active_path == resolved_str and active_scale is not None and abs(active_scale - target_scale) < 1e-4:
+                    logger.debug("LoRA adapter '%s' already active at scale %.2f — skipping reload", target_ad_id, target_scale)
+                    self._active_adapters[model_id] = [target_ad_id]
+                    return
+
+                # Sub-case B2: Same adapter, only scale changed -> hot-swap scale in <1ms!
+                if active_id == target_ad_id and active_path == resolved_str and active_id is not None:
+                    logger.info("Updating LoRA '%s' scale: %.2f -> %.2f (instant in-memory)", target_ad_id, active_scale or 1.0, target_scale)
+                    self.update_transformer_lora_scale(t, target_scale)
+                    setattr(t, "_active_lora_scale", target_scale)
+                    self._active_adapters[model_id] = [target_ad_id]
+                    return
+
+                # Sub-case B3: Different adapter (or first time) -> restore base layers, then apply with bake_lora=False
+                if active_id is not None:
+                    self.restore_base_linear_layers(t)
+                    logger.info("Unloaded previous adapter '%s' before loading '%s'", active_id, target_ad_id)
+
+                self._inject_weights_into_model(model_instance, ad, target_scale)
+                setattr(t, "_active_lora_id", target_ad_id)
+                setattr(t, "_active_lora_scale", target_scale)
+                setattr(t, "_active_lora_path", resolved_str)
+            else:
+                self.apply_adapter(model_id, target_ad_id, scale=target_scale, model_instance=model_instance)
+
+            self._active_adapters[model_id] = [target_ad_id]
 
     def resolve_adapter_path(self, adapter_id_or_path: str) -> str | None:
         from pathlib import Path

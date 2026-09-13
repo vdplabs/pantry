@@ -512,22 +512,15 @@ class MFluxImageRuntime:
                 steps = num_inference_steps or (2 if "schnell" in manifest.id.lower() else 4)
 
             adapters_list = adapters or []
-            if adapters_list:
-                from pantry.lora import LoRAAdapter, LoRAAdapterManager
+            from pantry.lora import LoRAAdapterManager
 
-                lora_mgr = LoRAAdapterManager.get()
-                scales = adapter_scales or [1.0] * len(adapters_list)
-                for idx, ad_id in enumerate(adapters_list):
-                    scale = scales[idx] if idx < len(scales) else 1.0
-                    resolved = lora_mgr.resolve_adapter_path(ad_id)
-                    if resolved:
-                        ad = lora_mgr.get_adapter(ad_id)
-                        if ad is None:
-                            ad = LoRAAdapter(adapter_id=ad_id, name=ad_id, path=resolved)
-                            lora_mgr.register_adapter(ad)
-                        else:
-                            ad.path = resolved
-                    lora_mgr.apply_adapter(manifest.id, ad_id, scale=scale, model_instance=model)
+            lora_mgr = LoRAAdapterManager.get()
+            lora_mgr.sync_model_adapters(
+                model_id=manifest.id,
+                desired_adapter_ids=adapters_list,
+                scales=adapter_scales,
+                model_instance=model,
+            )
 
             out: list[dict] = []
             for i in range(n):
