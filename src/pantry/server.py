@@ -75,7 +75,12 @@ from pantry.schemas import (
     VideoGenerateRequest,
 )
 from pantry.store import PackageStore
-from pantry.telemetry import RequestLogTracker, TelemetryCollector, TokenMetricsTracker
+from pantry.telemetry import (
+    RequestLogTracker,
+    TelemetryCollector,
+    TelemetryPersistenceManager,
+    TokenMetricsTracker,
+)
 from pantry.template import apply_chat_template
 
 
@@ -152,10 +157,24 @@ class Service:
         self._idle_timeout_seconds: float = float(os.environ.get("PANTRY_IDLE_TIMEOUT", "300"))
         self._start_time: float = time.time()
         self._active_operations: dict[str, dict[str, Any]] = {}
-        self._recent_events: list[dict[str, Any]] = [
-            {"time": time.strftime("%H:%M:%S"), "message": f"Daemon started (v{__version__}) on 127.0.0.1:18787"}
-        ]
         self._lock = threading.Lock()
+
+        # Telemetry & activity persistence across daemon restarts
+        self._persistence = TelemetryPersistenceManager.get(self.store.root)
+        persisted_events = self._persistence.load()
+        if persisted_events:
+            self._recent_events = list(persisted_events)[-25:]
+            self._recent_events.append({
+                "time": time.strftime("%H:%M:%S"),
+                "timestamp": time.time(),
+                "message": f"Daemon started (v{__version__}) on 127.0.0.1:18787",
+            })
+        else:
+            self._recent_events = [
+                {"time": time.strftime("%H:%M:%S"), "timestamp": time.time(), "message": f"Daemon started (v{__version__}) on 127.0.0.1:18787"}
+            ]
+        self._persistence.set_activity_provider(lambda: self._recent_events)
+        self._persistence.ensure_atexit_hook()
 
     def touch_model(self, model_id: str) -> None:
         with self._lock:
@@ -178,6 +197,10 @@ class Service:
             })
             if len(self._recent_events) > 30:
                 self._recent_events.pop(0)
+        try:
+            self._persistence.save(self._recent_events)
+        except Exception:
+            pass
 
     def start_operation(self, op_id: str, model_or_package_id: str, activity: str, modality: str = "text") -> None:
         with self._lock:
@@ -195,6 +218,10 @@ class Service:
             })
             if len(self._recent_events) > 30:
                 self._recent_events.pop(0)
+        try:
+            self._persistence.save(self._recent_events)
+        except Exception:
+            pass
 
     def finish_operation(self, op_id: str) -> None:
         with self._lock:
@@ -208,6 +235,10 @@ class Service:
                 })
             if len(self._recent_events) > 30:
                 self._recent_events.pop(0)
+        try:
+            self._persistence.save(self._recent_events)
+        except Exception:
+            pass
 
     def set_loading(self, model_or_package_id: str | None, activity: str | None = None) -> None:
         with self._lock:
@@ -329,8 +360,17 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             return {"ok": False, "error": str(exc)}
 
     @app.post("/v1/monitor/reset")
-    def monitor_reset() -> dict[str, Any]:
+    def monitor_reset(all: bool = False) -> dict[str, Any]:
         TokenMetricsTracker.get().reset_session()
+        if all:
+            TokenMetricsTracker.get().reset_cumulative()
+            RequestLogTracker.get().clear()
+            if hasattr(svc, "_persistence"):
+                svc._persistence.clear()
+            with svc._lock:
+                svc._recent_events = [
+                    {"time": time.strftime("%H:%M:%S"), "timestamp": time.time(), "message": "Telemetry & stats reset"}
+                ]
         return {"ok": True}
 
     @app.get("/v1/health")

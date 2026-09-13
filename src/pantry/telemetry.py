@@ -7,7 +7,10 @@ Aggregates system metrics (CPU, GPU, RAM/VRAM, Disk, Network) and AI inference m
 NVIDIA CUDA, and Linux architectures.
 """
 
+import json
+import logging
 import os
+from pathlib import Path
 import platform
 import re
 import subprocess
@@ -16,10 +19,13 @@ import time
 from typing import Any
 
 from pantry import __version__
+from pantry.config import default_home
 from pantry.hardware import get_hardware_device_info, get_memory_bandwidth_gbps
 from pantry.memory import _fmt_bytes, get_available_unified_dram
 from pantry.memory import snapshot as memory_snapshot
 from pantry.store import PackageStore
+
+logger = logging.getLogger("pantry.telemetry")
 
 _SERVER_START_TIME = time.time()
 
@@ -80,8 +86,20 @@ class RequestLogTracker:
             self._requests.insert(0, entry)
             if len(self._requests) > self.max_items:
                 self._requests.pop()
+        try:
+            TelemetryPersistenceManager.get().save()
+        except Exception:
+            pass
 
     def get_requests(self) -> list[dict[str, Any]]:
+        with self._lock:
+            return list(self._requests)
+
+    def load_persisted(self, requests: list[dict[str, Any]]) -> None:
+        with self._lock:
+            self._requests = list(requests)[: self.max_items]
+
+    def dump_persisted(self) -> list[dict[str, Any]]:
         with self._lock:
             return list(self._requests)
 
@@ -199,6 +217,12 @@ class TokenMetricsTracker:
             }
         return self._model_stats[mid]
 
+    def _trigger_save(self) -> None:
+        try:
+            TelemetryPersistenceManager.get().save()
+        except Exception:
+            pass
+
     def record_completion(
         self,
         *,
@@ -213,40 +237,34 @@ class TokenMetricsTracker:
         with self._lock:
             self.session_prompt_tokens += prompt_tokens
             self.session_completion_tokens += completion_tokens
-            self.session_total_tokens += (prompt_tokens + completion_tokens)
+            self.session_total_tokens += prompt_tokens + completion_tokens
             self.session_requests += 1
 
             self.cumulative_prompt_tokens += prompt_tokens
             self.cumulative_completion_tokens += completion_tokens
-            self.cumulative_total_tokens += (prompt_tokens + completion_tokens)
+            self.cumulative_total_tokens += prompt_tokens + completion_tokens
             self.cumulative_requests += 1
 
             m_entry = self._get_or_create_model_entry(model, modality="text")
             m_entry["session_prompt_tokens"] += prompt_tokens
             m_entry["session_completion_tokens"] += completion_tokens
-            m_entry["session_total_tokens"] += (prompt_tokens + completion_tokens)
+            m_entry["session_total_tokens"] += prompt_tokens + completion_tokens
             m_entry["session_requests"] += 1
             m_entry["cumulative_prompt_tokens"] += prompt_tokens
             m_entry["cumulative_completion_tokens"] += completion_tokens
-            m_entry["cumulative_total_tokens"] += (prompt_tokens + completion_tokens)
+            m_entry["cumulative_total_tokens"] += prompt_tokens + completion_tokens
             m_entry["cumulative_requests"] += 1
             m_entry["last_active"] = time.time()
 
-            dur_ms = max(1.0, (prefill_ms if prefill_ms > 0 else 0) + (decode_duration_s * 1000.0))
-            m_entry["durations_ms"].append(round(dur_ms, 1))
-            if len(m_entry["durations_ms"]) > 200:
-                m_entry["durations_ms"].pop(0)
-
             if prefill_ms > 0:
                 self.last_prefill_ms = round(prefill_ms, 1)
-                self.session_ttft_ms_samples.append(round(prefill_ms, 1))
+                m_entry["last_prefill_ms"] = round(prefill_ms, 1)
+                if prompt_tokens > 0:
+                    self.last_prefill_tps = round(prompt_tokens / (prefill_ms / 1000.0), 1)
+                self.session_ttft_ms_samples.append(prefill_ms)
                 if len(self.session_ttft_ms_samples) > 500:
                     self.session_ttft_ms_samples.pop(0)
-                if prompt_tokens > 0:
-                    self.last_prefill_tps = round((prompt_tokens / (prefill_ms / 1000.0)), 1)
-
-                m_entry["last_prefill_ms"] = round(prefill_ms, 1)
-                m_entry["ttft_samples"].append(round(prefill_ms, 1))
+                m_entry["ttft_samples"].append(prefill_ms)
                 if len(m_entry["ttft_samples"]) > 200:
                     m_entry["ttft_samples"].pop(0)
 
@@ -271,6 +289,7 @@ class TokenMetricsTracker:
             self.max_context_tokens = max(512, context_limit)
             bytes_per_tok = max(32, int(model_params_b * 80)) * 2
             self.est_kv_cache_bytes = self.active_context_tokens * bytes_per_tok
+        self._trigger_save()
 
     def record_image_generation(self, *, model: str, count: int = 1, duration_ms: float = 0.0) -> None:
         with self._lock:
@@ -287,6 +306,7 @@ class TokenMetricsTracker:
                 m_entry["durations_ms"].append(round(duration_ms, 1))
                 if len(m_entry["durations_ms"]) > 200:
                     m_entry["durations_ms"].pop(0)
+        self._trigger_save()
 
     def record_video_generation(
         self,
@@ -311,6 +331,7 @@ class TokenMetricsTracker:
                 m_entry["durations_ms"].append(round(duration_ms, 1))
                 if len(m_entry["durations_ms"]) > 200:
                     m_entry["durations_ms"].pop(0)
+        self._trigger_save()
 
     def record_audio_transcription(self, *, model: str, audio_seconds: float = 0.0, duration_ms: float = 0.0) -> None:
         with self._lock:
@@ -327,6 +348,7 @@ class TokenMetricsTracker:
                 m_entry["durations_ms"].append(round(duration_ms, 1))
                 if len(m_entry["durations_ms"]) > 200:
                     m_entry["durations_ms"].pop(0)
+        self._trigger_save()
 
     def record_music_generation(self, *, model: str, audio_seconds: float = 0.0, duration_ms: float = 0.0) -> None:
         with self._lock:
@@ -343,6 +365,7 @@ class TokenMetricsTracker:
                 m_entry["durations_ms"].append(round(duration_ms, 1))
                 if len(m_entry["durations_ms"]) > 200:
                     m_entry["durations_ms"].pop(0)
+        self._trigger_save()
 
     def record_embeddings(self, *, model: str, tokens: int = 0, duration_ms: float = 0.0) -> None:
         with self._lock:
@@ -363,6 +386,7 @@ class TokenMetricsTracker:
                 m_entry["durations_ms"].append(round(duration_ms, 1))
                 if len(m_entry["durations_ms"]) > 200:
                     m_entry["durations_ms"].pop(0)
+        self._trigger_save()
 
     def record_rerank(self, *, model: str, documents_count: int = 0, tokens: int = 0) -> None:
         with self._lock:
@@ -376,6 +400,7 @@ class TokenMetricsTracker:
             m_entry["session_requests"] += 1
             m_entry["cumulative_requests"] += 1
             m_entry["last_active"] = time.time()
+        self._trigger_save()
 
     def record_speculative(self, *, draft_tokens: int, accepted_tokens: int) -> None:
         with self._lock:
@@ -397,6 +422,7 @@ class TokenMetricsTracker:
                 self.saved_prefill_ms += max(0.0, saved_ms)
             else:
                 self.prefix_cache_misses += 1
+        self._trigger_save()
 
     def reset_session(self) -> None:
         with self._lock:
@@ -447,11 +473,92 @@ class TokenMetricsTracker:
             self.cumulative_cached_prompt_tokens = 0
             self.cumulative_rerank_requests = 0
             self.cumulative_rerank_documents = 0
+            self.prefix_cache_hits = 0
+            self.prefix_cache_misses = 0
+            self.saved_prefill_ms = 0.0
+            self.peak_decode_tps = 0.0
             for m in self._model_stats.values():
                 m["cumulative_prompt_tokens"] = 0
                 m["cumulative_completion_tokens"] = 0
                 m["cumulative_total_tokens"] = 0
                 m["cumulative_requests"] = 0
+                m["peak_decode_tps"] = 0.0
+                m["last_decode_tps"] = 0.0
+                m["last_prefill_ms"] = 0.0
+
+    def dump_persisted(self) -> dict[str, Any]:
+        with self._lock:
+            models_clean: dict[str, dict[str, Any]] = {}
+            for mid, m in self._model_stats.items():
+                models_clean[mid] = {
+                    "model": m.get("model", mid),
+                    "modality": m.get("modality", "text"),
+                    "cumulative_prompt_tokens": m.get("cumulative_prompt_tokens", 0),
+                    "cumulative_completion_tokens": m.get("cumulative_completion_tokens", 0),
+                    "cumulative_total_tokens": m.get("cumulative_total_tokens", 0),
+                    "cumulative_requests": m.get("cumulative_requests", 0),
+                    "ttft_samples": list(m.get("ttft_samples", []))[-200:],
+                    "decode_tps_samples": list(m.get("decode_tps_samples", []))[-200:],
+                    "durations_ms": list(m.get("durations_ms", []))[-200:],
+                    "last_active": m.get("last_active"),
+                    "peak_decode_tps": m.get("peak_decode_tps", 0.0),
+                    "last_decode_tps": m.get("last_decode_tps", 0.0),
+                    "last_prefill_ms": m.get("last_prefill_ms", 0.0),
+                }
+
+            return {
+                "cumulative_prompt_tokens": self.cumulative_prompt_tokens,
+                "cumulative_completion_tokens": self.cumulative_completion_tokens,
+                "cumulative_total_tokens": self.cumulative_total_tokens,
+                "cumulative_requests": self.cumulative_requests,
+                "cumulative_images_generated": self.cumulative_images_generated,
+                "cumulative_videos_generated": self.cumulative_videos_generated,
+                "cumulative_audio_seconds": self.cumulative_audio_seconds,
+                "cumulative_music_seconds": self.cumulative_music_seconds,
+                "cumulative_embedding_tokens": self.cumulative_embedding_tokens,
+                "cumulative_rerank_requests": self.cumulative_rerank_requests,
+                "cumulative_rerank_documents": self.cumulative_rerank_documents,
+                "cumulative_cached_prompt_tokens": self.cumulative_cached_prompt_tokens,
+                "prefix_cache_hits": self.prefix_cache_hits,
+                "prefix_cache_misses": self.prefix_cache_misses,
+                "saved_prefill_ms": self.saved_prefill_ms,
+                "peak_decode_tps": self.peak_decode_tps,
+                "models": models_clean,
+            }
+
+    def load_persisted(self, data: dict[str, Any]) -> None:
+        with self._lock:
+            self.cumulative_prompt_tokens = int(data.get("cumulative_prompt_tokens", 0))
+            self.cumulative_completion_tokens = int(data.get("cumulative_completion_tokens", 0))
+            self.cumulative_total_tokens = int(data.get("cumulative_total_tokens", 0))
+            self.cumulative_requests = int(data.get("cumulative_requests", 0))
+            self.cumulative_images_generated = int(data.get("cumulative_images_generated", 0))
+            self.cumulative_videos_generated = int(data.get("cumulative_videos_generated", 0))
+            self.cumulative_audio_seconds = float(data.get("cumulative_audio_seconds", 0.0))
+            self.cumulative_music_seconds = float(data.get("cumulative_music_seconds", 0.0))
+            self.cumulative_embedding_tokens = int(data.get("cumulative_embedding_tokens", 0))
+            self.cumulative_rerank_requests = int(data.get("cumulative_rerank_requests", 0))
+            self.cumulative_rerank_documents = int(data.get("cumulative_rerank_documents", 0))
+            self.cumulative_cached_prompt_tokens = int(data.get("cumulative_cached_prompt_tokens", 0))
+            self.prefix_cache_hits = int(data.get("prefix_cache_hits", 0))
+            self.prefix_cache_misses = int(data.get("prefix_cache_misses", 0))
+            self.saved_prefill_ms = float(data.get("saved_prefill_ms", 0.0))
+            self.peak_decode_tps = float(data.get("peak_decode_tps", 0.0))
+
+            models = data.get("models", {})
+            for mid, m in models.items():
+                entry = self._get_or_create_model_entry(mid, modality=m.get("modality", "text"))
+                entry["cumulative_prompt_tokens"] = int(m.get("cumulative_prompt_tokens", 0))
+                entry["cumulative_completion_tokens"] = int(m.get("cumulative_completion_tokens", 0))
+                entry["cumulative_total_tokens"] = int(m.get("cumulative_total_tokens", 0))
+                entry["cumulative_requests"] = int(m.get("cumulative_requests", 0))
+                entry["ttft_samples"] = [float(x) for x in m.get("ttft_samples", [])]
+                entry["decode_tps_samples"] = [float(x) for x in m.get("decode_tps_samples", [])]
+                entry["durations_ms"] = [float(x) for x in m.get("durations_ms", [])]
+                entry["last_active"] = m.get("last_active")
+                entry["peak_decode_tps"] = float(m.get("peak_decode_tps", 0.0))
+                entry["last_decode_tps"] = float(m.get("last_decode_tps", 0.0))
+                entry["last_prefill_ms"] = float(m.get("last_prefill_ms", 0.0))
 
     def stats(self) -> dict[str, Any]:
         with self._lock:
@@ -612,6 +719,122 @@ class TokenMetricsTracker:
                     "saved_prefill_ms": round(self.saved_prefill_ms, 1),
                 },
             }
+
+
+class TelemetryPersistenceManager:
+    """Manages throttled, atomic persistence of telemetry data across daemon restarts.
+
+    Persists:
+    - All-time cumulative token metrics, multi-modal generation counts, and per-model latency stats
+    - Recent requests ring buffer
+    - Daemon recent activity log events
+    """
+
+    _instance: "TelemetryPersistenceManager | None" = None
+    _lock = threading.Lock()
+
+    def __init__(self, root_dir: str | Path | None = None) -> None:
+        self.root_dir = Path(root_dir) if root_dir else default_home()
+        self.state_file = self.root_dir / "telemetry_state.json"
+        self._last_save_time: float = 0.0
+        self._save_interval: float = 2.0  # throttle disk writes to at most once per 2 seconds
+        self._save_lock = threading.Lock()
+        self._activity_provider: Any = None
+        self._atexit_registered: bool = False
+
+    @classmethod
+    def get(cls, root_dir: str | Path | None = None) -> "TelemetryPersistenceManager":
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = cls(root_dir)
+            elif root_dir is not None:
+                resolved = Path(root_dir)
+                if resolved != cls._instance.root_dir:
+                    cls._instance.root_dir = resolved
+                    cls._instance.state_file = resolved / "telemetry_state.json"
+            return cls._instance
+
+    @classmethod
+    def reset_instance(cls) -> None:
+        with cls._lock:
+            cls._instance = None
+
+    def set_activity_provider(self, provider: Any) -> None:
+        self._activity_provider = provider
+
+    def ensure_atexit_hook(self) -> None:
+        if not self._atexit_registered:
+            import atexit
+
+            atexit.register(self._on_exit)
+            self._atexit_registered = True
+
+    def _on_exit(self) -> None:
+        try:
+            self.save(force=True)
+        except Exception:
+            pass
+
+    def save(self, activity_events: list[dict[str, Any]] | None = None, force: bool = False) -> bool:
+        now = time.time()
+        if not force and (now - self._last_save_time) < self._save_interval:
+            return False
+
+        with self._save_lock:
+            now = time.time()
+            if not force and (now - self._last_save_time) < self._save_interval:
+                return False
+
+            try:
+                self.root_dir.mkdir(parents=True, exist_ok=True)
+                events = activity_events
+                if events is None and self._activity_provider is not None:
+                    try:
+                        events = self._activity_provider()
+                    except Exception:
+                        events = None
+
+                data = {
+                    "version": 1,
+                    "updated_at": now,
+                    "token_metrics": TokenMetricsTracker.get().dump_persisted(),
+                    "requests": RequestLogTracker.get().dump_persisted(),
+                    "activity_events": list(events) if events else [],
+                }
+                tmp_file = self.state_file.with_suffix(".tmp")
+                with open(tmp_file, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2)
+                tmp_file.replace(self.state_file)
+                self._last_save_time = now
+                return True
+            except Exception as e:
+                logger.debug("Failed to persist telemetry state: %s", e)
+                return False
+
+    def load(self) -> list[dict[str, Any]]:
+        with self._save_lock:
+            if not self.state_file.exists():
+                return []
+            try:
+                with open(self.state_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+
+                if "token_metrics" in data and isinstance(data["token_metrics"], dict):
+                    TokenMetricsTracker.get().load_persisted(data["token_metrics"])
+                if "requests" in data and isinstance(data["requests"], list):
+                    RequestLogTracker.get().load_persisted(data["requests"])
+                return data.get("activity_events", [])
+            except Exception as e:
+                logger.warning("Failed to load persisted telemetry state: %s", e)
+                return []
+
+    def clear(self) -> None:
+        with self._save_lock:
+            try:
+                if self.state_file.exists():
+                    self.state_file.unlink()
+            except Exception as e:
+                logger.debug("Failed to delete telemetry state file: %s", e)
 
 
 class TelemetryCollector:
