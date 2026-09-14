@@ -284,24 +284,55 @@ class MLXVisionRuntime(VisionRuntime):
         max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
         temp = 0.0 if temperature is None else float(temperature)
 
-        def _run_gen() -> str:
+        formatted_prompt = user_prompt
+        try:
+            from mlx_vlm import apply_chat_template
+
+            cfg = getattr(model, "config", None) or {}
+            formatted_prompt = apply_chat_template(
+                processor,
+                cfg,
+                user_prompt,
+                num_images=len(pil_images),
+            )
+        except Exception as e:
+            logger.debug("mlx_vlm apply_chat_template notice: %s", e)
+
+        def _run_gen() -> Any:
+            gen_kwargs: dict[str, Any] = {
+                "max_tokens": max_toks,
+                "temp": temp,
+            }
+            if pil_images:
+                gen_kwargs["image"] = pil_images if len(pil_images) > 1 else pil_images[0]
             return generate(
                 model,
                 processor,
-                image=pil_images[0] if pil_images else None,
-                prompt=user_prompt,
-                max_tokens=max_toks,
-                temp=temp,
+                prompt=formatted_prompt,
+                **gen_kwargs,
             )
 
         res = await asyncio.to_thread(_run_gen)
-        cleaned = strip_stop_tokens(res, manifest)
+        if hasattr(res, "text"):
+            raw_text = res.text
+            prompt_toks = getattr(res, "prompt_tokens", None)
+            gen_toks = getattr(res, "generation_tokens", None)
+        elif isinstance(res, str):
+            raw_text = res
+            prompt_toks = None
+            gen_toks = None
+        else:
+            raw_text = str(res)
+            prompt_toks = None
+            gen_toks = None
+
+        cleaned = strip_stop_tokens(raw_text, manifest)
         if response_format:
             cleaned = StrictToolCallGuard.enforce_response_format(cleaned, response_format)
 
         if usage is not None:
-            usage["prompt_tokens"] = max(1, len(user_prompt.split()) + len(pil_images) * 64)
-            usage["completion_tokens"] = max(1, len(cleaned.split()))
+            usage["prompt_tokens"] = prompt_toks or max(1, len(user_prompt.split()) + len(pil_images) * 64)
+            usage["completion_tokens"] = gen_toks or max(1, len(cleaned.split()))
             usage["total_tokens"] = usage["prompt_tokens"] + usage["completion_tokens"]
         return cleaned
 
