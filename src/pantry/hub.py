@@ -334,6 +334,13 @@ STANDARD_INTENTS: list[dict[str, Any]] = [
         "modality": "stt",
         "default_package_id": "vdplabs.whisper-tiny.compact.v1",
     },
+    {
+        "alias": "vision",
+        "title": "Visual Understanding",
+        "description": "Multimodal image understanding, document OCR, and visual Q&A",
+        "modality": "vision",
+        "default_package_id": "vdplabs.qwen2-vl-2b.compact.v1",
+    },
 ]
 
 

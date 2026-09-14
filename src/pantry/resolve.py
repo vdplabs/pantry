@@ -398,6 +398,9 @@ def find_by_model_string(
         "video-compact": (QualityTier.compact, "video"),
         "video-standard": (QualityTier.standard, "video"),
         "video": (QualityTier.standard, "video"),
+        "vision-compact": (QualityTier.compact, "vision"),
+        "vision-standard": (QualityTier.compact, "vision"),
+        "vision": (QualityTier.compact, "vision"),
     }
     if key in soft:
         tier, modality_key = soft[key]

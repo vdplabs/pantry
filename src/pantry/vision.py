@@ -145,7 +145,11 @@ class EchoVisionRuntime(VisionRuntime):
                 f"[pantry vision · {manifest.id} · multimodal]\n"
                 f"Parsed {len(all_images)} image(s):\n{desc_block}\n"
                 f"Visual Analysis: The image contains clear visual elements corresponding to '{last_user_prompt or 'scene'}'. "
-                f"No visual artifacts or occlusions detected."
+                f"No visual artifacts or occlusions detected.\n\n"
+                f"ℹ️  Running with demo scaffold '{manifest.id}'. For real neural visual reasoning on Apple Silicon:\n"
+                f"   1. pip install mlx-vlm\n"
+                f"   2. pantry pull qwen2-vl\n"
+                f"   3. pantry vision <image_path> -m qwen2-vl"
             )
         else:
             cleaned = (
