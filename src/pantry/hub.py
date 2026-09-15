@@ -891,7 +891,57 @@ def get_intent_bindings(store: PackageStore) -> list[dict[str, Any]]:
             "default_package_id": intent.get("default_package_id"),
             "active_package": active_info,
             "candidates": candidates,
+            "is_custom": False,
         })
+
+    # Step 2: Discover any custom user-defined intent aliases across manifests
+    known_aliases = {intent["alias"].strip().lower() for intent in STANDARD_INTENTS}
+    for m in manifests:
+        for alias in m.aliases:
+            clean_alias = alias.strip()
+            if not clean_alias or clean_alias.lower() in known_aliases:
+                continue
+            known_aliases.add(clean_alias.lower())
+
+            mod = (m.role or (m.modalities[0] if m.modalities else "text")).lower()
+            is_ready = store.weights_ready(m)
+            disk_b = get_package_disk_size(store, m)
+
+            candidates: list[dict[str, Any]] = []
+            for cand in manifests:
+                cand_mods = [x.lower() for x in cand.modalities]
+                norm_target_mod = "text" if mod in {"text", "chat", "reasoning", "coder"} else mod
+                if norm_target_mod in cand_mods or (norm_target_mod == "text" and (cand.role or "").lower() in {"chat", "coder", "reasoning"}):
+                    candidates.append({
+                        "package_id": cand.id,
+                        "title": cand.title or cand.id,
+                        "family": cand.family,
+                        "quality_tier": cand.quality_tier.value,
+                        "weights_ready": store.weights_ready(cand),
+                        "bytes_on_disk": get_package_disk_size(store, cand),
+                        "hf_repo": cand.runtime.hf_repo,
+                    })
+
+            results.append({
+                "alias": clean_alias,
+                "title": m.title or clean_alias.replace("-", " ").title(),
+                "description": m.system_preamble or f"Custom {mod} intent pack bound to {m.id}",
+                "modality": mod,
+                "default_package_id": m.id,
+                "active_package": {
+                    "package_id": m.id,
+                    "title": m.title or m.id,
+                    "family": m.family,
+                    "quality_tier": m.quality_tier.value,
+                    "weights_ready": is_ready,
+                    "bytes_on_disk": disk_b,
+                    "hf_repo": m.runtime.hf_repo,
+                    "context_max": m.context_max,
+                    "aliases": list(m.aliases),
+                },
+                "candidates": candidates,
+                "is_custom": True,
+            })
 
     return results
 
