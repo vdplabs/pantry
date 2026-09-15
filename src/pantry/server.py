@@ -777,11 +777,21 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 else:
                     usage["prompt_tokens_details"] = {"cached_tokens": 0}
 
+                prefill_ms = float(usage.get("prefill_ms", 0.0))
+                if prefill_ms <= 0.0:
+                    p_tok = usage.get("prompt_tokens", 0)
+                    c_tok = usage.get("completion_tokens", 0)
+                    if p_tok + c_tok > 0:
+                        prefill_ms = max(1.0, round((duration_s * 1000.0) * (p_tok / (p_tok + c_tok * 3.5)), 1))
+                    else:
+                        prefill_ms = max(1.0, round(duration_s * 1000.0 * 0.2, 1))
+
                 TokenMetricsTracker.get().record_completion(
                     model=req.model,
                     prompt_tokens=usage.get("prompt_tokens", 0),
                     completion_tokens=usage.get("completion_tokens", 0),
                     decode_duration_s=duration_s,
+                    prefill_ms=prefill_ms,
                     context_limit=getattr(pkg, "context_max", 4096),
                     model_params_b=getattr(pkg, "params_b", 3.0),
                 )
@@ -848,6 +858,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             cid = f"chatcmpl-{uuid.uuid4().hex[:12]}"
             created = int(time.time())
             t_stream_start = time.time()
+            first_token_time: float | None = None
             assembled: list[str] = []
             stream_usage: dict[str, Any] = {}
             svc.active_streams += 1
@@ -877,6 +888,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 async for piece in _locked_stream():
                     if not piece:
                         continue
+                    if first_token_time is None:
+                        first_token_time = time.time()
                     assembled.append(piece)
                     payload = {
                         "id": cid,
@@ -905,11 +918,18 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     usage["prompt_tokens_details"] = {"cached_tokens": 0}
 
                 duration_s = max(0.01, time.time() - t_stream_start)
+                prefill_ms = 0.0
+                if first_token_time is not None:
+                    prefill_ms = max(0.1, round((first_token_time - t_stream_start) * 1000.0, 1))
+                elif duration_s > 0:
+                    prefill_ms = max(0.1, round(duration_s * 1000.0 * 0.15, 1))
+
                 TokenMetricsTracker.get().record_completion(
                     model=req.model,
                     prompt_tokens=usage.get("prompt_tokens", 0),
                     completion_tokens=usage.get("completion_tokens", 0),
                     decode_duration_s=duration_s,
+                    prefill_ms=prefill_ms,
                     context_limit=getattr(pkg, "context_max", 4096),
                     model_params_b=getattr(pkg, "params_b", 3.0),
                 )

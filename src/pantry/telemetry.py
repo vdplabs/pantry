@@ -124,6 +124,113 @@ class RequestLogTracker:
             self._requests.clear()
 
 
+class AdmissionGateTracker:
+    """Thread-safe tracker for admission gate reliability, trip events, and recovery time."""
+
+    _instance: AdmissionGateTracker | None = None
+    _lock = threading.Lock()
+
+    def __init__(self) -> None:
+        self.trip_count: int = 0
+        self.rejected_requests: int = 0
+        self.is_tripped: bool = False
+        self.last_trip_time: float | None = None
+        self.last_trip_reason: str | None = None
+        self.last_recovery_time: float | None = None
+        self.last_recovery_duration_ms: float | None = None
+        self.recovery_durations_ms: list[float] = []
+        self._trip_history: list[dict[str, Any]] = []
+
+    @classmethod
+    def get(cls) -> AdmissionGateTracker:
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = AdmissionGateTracker()
+            return cls._instance
+
+    @classmethod
+    def reset(cls) -> None:
+        with cls._lock:
+            cls._instance = None
+
+    def record_trip(self, reason: str, *, queue_size: int = 0, dram_free_gb: float = 0.0) -> None:
+        with self._lock:
+            now = time.time()
+            if not self.is_tripped:
+                self.trip_count += 1
+                self.is_tripped = True
+                self.last_trip_time = now
+                self.last_trip_reason = reason
+                self._trip_history.append({
+                    "timestamp": now,
+                    "time": time.strftime("%H:%M:%S"),
+                    "reason": reason,
+                    "queue_size": queue_size,
+                    "dram_free_gb": round(dram_free_gb, 2),
+                })
+                if len(self._trip_history) > 20:
+                    self._trip_history.pop(0)
+
+    def record_recovery(self) -> None:
+        with self._lock:
+            now = time.time()
+            if self.is_tripped:
+                self.is_tripped = False
+                self.last_recovery_time = now
+                if self.last_trip_time:
+                    duration_ms = round((now - self.last_trip_time) * 1000.0, 1)
+                    self.last_recovery_duration_ms = duration_ms
+                    self.recovery_durations_ms.append(duration_ms)
+                    if len(self.recovery_durations_ms) > 100:
+                        self.recovery_durations_ms.pop(0)
+
+    def record_rejection(self, reason: str = "") -> None:
+        with self._lock:
+            self.rejected_requests += 1
+
+    def stats(self) -> dict[str, Any]:
+        with self._lock:
+            avg_rec = (
+                round(sum(self.recovery_durations_ms) / len(self.recovery_durations_ms), 1)
+                if self.recovery_durations_ms
+                else None
+            )
+            return {
+                "status": "tripped" if self.is_tripped else "healthy",
+                "is_tripped": self.is_tripped,
+                "trip_count": self.trip_count,
+                "last_trip_time": self.last_trip_time,
+                "last_trip_reason": self.last_trip_reason,
+                "last_recovery_time": self.last_recovery_time,
+                "last_recovery_duration_ms": self.last_recovery_duration_ms,
+                "average_recovery_ms": avg_rec,
+                "rejected_requests": self.rejected_requests,
+                "recent_trips": list(self._trip_history),
+            }
+
+    def load_persisted(self, d: dict[str, Any]) -> None:
+        with self._lock:
+            self.trip_count = int(d.get("trip_count", 0))
+            self.rejected_requests = int(d.get("rejected_requests", 0))
+            self.last_trip_time = d.get("last_trip_time")
+            self.last_trip_reason = d.get("last_trip_reason")
+            self.last_recovery_time = d.get("last_recovery_time")
+            self.last_recovery_duration_ms = d.get("last_recovery_duration_ms")
+            self.recovery_durations_ms = [float(x) for x in d.get("recovery_durations_ms", [])]
+
+    def dump_persisted(self) -> dict[str, Any]:
+        with self._lock:
+            return {
+                "trip_count": self.trip_count,
+                "rejected_requests": self.rejected_requests,
+                "last_trip_time": self.last_trip_time,
+                "last_trip_reason": self.last_trip_reason,
+                "last_recovery_time": self.last_recovery_time,
+                "last_recovery_duration_ms": self.last_recovery_duration_ms,
+                "recovery_durations_ms": list(self.recovery_durations_ms[-50:]),
+            }
+
+
 class TokenMetricsTracker:
     """Thread-safe tracker for session & cumulative token generation telemetry."""
 
@@ -183,6 +290,11 @@ class TokenMetricsTracker:
         self.session_decode_tps_samples: list[float] = []
         self.session_ttft_ms_samples: list[float] = []
 
+        # Latency breakdown samples (queue wait, execution time, total end-to-end latency)
+        self.session_queue_wait_samples: list[float] = []
+        self.session_execution_samples: list[float] = []
+        self.session_total_latency_samples: list[float] = []
+
         # Per-model metrics dictionary
         self._model_stats: dict[str, dict[str, Any]] = {}
 
@@ -210,6 +322,9 @@ class TokenMetricsTracker:
                 "ttft_samples": [],
                 "decode_tps_samples": [],
                 "durations_ms": [],
+                "queue_wait_samples": [],
+                "execution_samples": [],
+                "total_latency_samples": [],
                 "last_active": time.time(),
                 "last_decode_tps": 0.0,
                 "peak_decode_tps": 0.0,
@@ -222,6 +337,40 @@ class TokenMetricsTracker:
             TelemetryPersistenceManager.get().save()
         except Exception:
             pass
+
+    def record_latency(
+        self,
+        *,
+        queue_wait_ms: float,
+        execution_ms: float,
+        total_ms: float,
+        model: str = "",
+    ) -> None:
+        with self._lock:
+            self.session_queue_wait_samples.append(queue_wait_ms)
+            if len(self.session_queue_wait_samples) > 500:
+                self.session_queue_wait_samples.pop(0)
+
+            self.session_execution_samples.append(execution_ms)
+            if len(self.session_execution_samples) > 500:
+                self.session_execution_samples.pop(0)
+
+            self.session_total_latency_samples.append(total_ms)
+            if len(self.session_total_latency_samples) > 500:
+                self.session_total_latency_samples.pop(0)
+
+            if model:
+                m_entry = self._get_or_create_model_entry(model)
+                m_entry["queue_wait_samples"].append(queue_wait_ms)
+                if len(m_entry["queue_wait_samples"]) > 200:
+                    m_entry["queue_wait_samples"].pop(0)
+                m_entry["execution_samples"].append(execution_ms)
+                if len(m_entry["execution_samples"]) > 200:
+                    m_entry["execution_samples"].pop(0)
+                m_entry["total_latency_samples"].append(total_ms)
+                if len(m_entry["total_latency_samples"]) > 200:
+                    m_entry["total_latency_samples"].pop(0)
+        self._trigger_save()
 
     def record_completion(
         self,
@@ -450,6 +599,9 @@ class TokenMetricsTracker:
             self.est_kv_cache_bytes = 0
             self.session_decode_tps_samples.clear()
             self.session_ttft_ms_samples.clear()
+            self.session_queue_wait_samples.clear()
+            self.session_execution_samples.clear()
+            self.session_total_latency_samples.clear()
             for m in self._model_stats.values():
                 m["session_prompt_tokens"] = 0
                 m["session_completion_tokens"] = 0
@@ -458,6 +610,9 @@ class TokenMetricsTracker:
                 m["ttft_samples"].clear()
                 m["decode_tps_samples"].clear()
                 m["durations_ms"].clear()
+                m["queue_wait_samples"].clear()
+                m["execution_samples"].clear()
+                m["total_latency_samples"].clear()
 
     def reset_cumulative(self) -> None:
         with self._lock:
@@ -500,6 +655,9 @@ class TokenMetricsTracker:
                     "ttft_samples": list(m.get("ttft_samples", []))[-200:],
                     "decode_tps_samples": list(m.get("decode_tps_samples", []))[-200:],
                     "durations_ms": list(m.get("durations_ms", []))[-200:],
+                    "queue_wait_samples": list(m.get("queue_wait_samples", []))[-200:],
+                    "execution_samples": list(m.get("execution_samples", []))[-200:],
+                    "total_latency_samples": list(m.get("total_latency_samples", []))[-200:],
                     "last_active": m.get("last_active"),
                     "peak_decode_tps": m.get("peak_decode_tps", 0.0),
                     "last_decode_tps": m.get("last_decode_tps", 0.0),
@@ -519,6 +677,9 @@ class TokenMetricsTracker:
                 "cumulative_rerank_requests": self.cumulative_rerank_requests,
                 "cumulative_rerank_documents": self.cumulative_rerank_documents,
                 "cumulative_cached_prompt_tokens": self.cumulative_cached_prompt_tokens,
+                "session_queue_wait_samples": list(self.session_queue_wait_samples[-200:]),
+                "session_execution_samples": list(self.session_execution_samples[-200:]),
+                "session_total_latency_samples": list(self.session_total_latency_samples[-200:]),
                 "prefix_cache_hits": self.prefix_cache_hits,
                 "prefix_cache_misses": self.prefix_cache_misses,
                 "saved_prefill_ms": self.saved_prefill_ms,
@@ -544,6 +705,9 @@ class TokenMetricsTracker:
             self.prefix_cache_misses = int(data.get("prefix_cache_misses", 0))
             self.saved_prefill_ms = float(data.get("saved_prefill_ms", 0.0))
             self.peak_decode_tps = float(data.get("peak_decode_tps", 0.0))
+            self.session_queue_wait_samples = [float(x) for x in data.get("session_queue_wait_samples", [])]
+            self.session_execution_samples = [float(x) for x in data.get("session_execution_samples", [])]
+            self.session_total_latency_samples = [float(x) for x in data.get("session_total_latency_samples", [])]
 
             models = data.get("models", {})
             for mid, m in models.items():
@@ -555,6 +719,9 @@ class TokenMetricsTracker:
                 entry["ttft_samples"] = [float(x) for x in m.get("ttft_samples", [])]
                 entry["decode_tps_samples"] = [float(x) for x in m.get("decode_tps_samples", [])]
                 entry["durations_ms"] = [float(x) for x in m.get("durations_ms", [])]
+                entry["queue_wait_samples"] = [float(x) for x in m.get("queue_wait_samples", [])]
+                entry["execution_samples"] = [float(x) for x in m.get("execution_samples", [])]
+                entry["total_latency_samples"] = [float(x) for x in m.get("total_latency_samples", [])]
                 entry["last_active"] = m.get("last_active")
                 entry["peak_decode_tps"] = float(m.get("peak_decode_tps", 0.0))
                 entry["last_decode_tps"] = float(m.get("last_decode_tps", 0.0))
@@ -640,6 +807,12 @@ class TokenMetricsTracker:
                     "ttft_ms_p50": _pct(m["ttft_samples"], 50.0),
                     "ttft_ms_p95": _pct(m["ttft_samples"], 95.0),
                     "ttft_ms_p99": _pct(m["ttft_samples"], 99.0),
+                    "queue_wait_ms_p50": _pct(m.get("queue_wait_samples", []), 50.0),
+                    "queue_wait_ms_p95": _pct(m.get("queue_wait_samples", []), 95.0),
+                    "execution_ms_p50": _pct(m.get("execution_samples", []), 50.0),
+                    "execution_ms_p95": _pct(m.get("execution_samples", []), 95.0),
+                    "total_latency_ms_p50": _pct(m.get("total_latency_samples", []), 50.0),
+                    "total_latency_ms_p95": _pct(m.get("total_latency_samples", []), 95.0),
                     "avg_duration_ms": dur_avg,
                     "last_active": m.get("last_active"),
                     "cost_saved_usd": round(m_saved, 4),
@@ -658,6 +831,25 @@ class TokenMetricsTracker:
                 else 0.0
             )
 
+            ttft_p50 = _pct(self.session_ttft_ms_samples, 50.0)
+            ttft_p95 = _pct(self.session_ttft_ms_samples, 95.0)
+            ttft_p99 = _pct(self.session_ttft_ms_samples, 99.0)
+
+            tps_p50 = _pct(self.session_decode_tps_samples, 50.0)
+            tps_p95 = _pct(self.session_decode_tps_samples, 95.0)
+
+            queue_p50 = _pct(self.session_queue_wait_samples, 50.0)
+            queue_p95 = _pct(self.session_queue_wait_samples, 95.0)
+            queue_p99 = _pct(self.session_queue_wait_samples, 99.0)
+
+            exec_p50 = _pct(self.session_execution_samples, 50.0)
+            exec_p95 = _pct(self.session_execution_samples, 95.0)
+            exec_p99 = _pct(self.session_execution_samples, 99.0)
+
+            total_lat_p50 = _pct(self.session_total_latency_samples, 50.0)
+            total_lat_p95 = _pct(self.session_total_latency_samples, 95.0)
+            total_lat_p99 = _pct(self.session_total_latency_samples, 99.0)
+
             return {
                 "session": {
                     "prompt_tokens": self.session_prompt_tokens,
@@ -675,11 +867,51 @@ class TokenMetricsTracker:
                 "prefill_tps": self.last_prefill_tps,
                 "decode_tps": self.last_decode_tps,
                 "peak_decode_tps": self.peak_decode_tps,
-                "latency_percentiles": {
-                    "decode_tps_p50": _pct(self.session_decode_tps_samples, 50.0),
-                    "decode_tps_p95": _pct(self.session_decode_tps_samples, 95.0),
-                    "ttft_ms_p99": _pct(self.session_ttft_ms_samples, 99.0),
+                "throughput": {
+                    "tps_p50": tps_p50,
+                    "tps_p95": tps_p95,
+                    "peak_tps": self.peak_decode_tps,
+                    "current_tps": self.last_decode_tps,
                 },
+                "latency": {
+                    "ttft_ms": {
+                        "p50": ttft_p50,
+                        "p95": ttft_p95,
+                        "p99": ttft_p99,
+                    },
+                    "queue_wait_ms": {
+                        "p50": queue_p50,
+                        "p95": queue_p95,
+                        "p99": queue_p99,
+                    },
+                    "execution_ms": {
+                        "p50": exec_p50,
+                        "p95": exec_p95,
+                        "p99": exec_p99,
+                    },
+                    "total_latency_ms": {
+                        "p50": total_lat_p50,
+                        "p95": total_lat_p95,
+                        "p99": total_lat_p99,
+                    },
+                },
+                "latency_percentiles": {
+                    "decode_tps_p50": tps_p50,
+                    "decode_tps_p95": tps_p95,
+                    "ttft_ms_p50": ttft_p50,
+                    "ttft_ms_p95": ttft_p95,
+                    "ttft_ms_p99": ttft_p99,
+                    "queue_wait_ms_p50": queue_p50,
+                    "queue_wait_ms_p95": queue_p95,
+                    "queue_wait_ms_p99": queue_p99,
+                    "execution_ms_p50": exec_p50,
+                    "execution_ms_p95": exec_p95,
+                    "execution_ms_p99": exec_p99,
+                    "total_ms_p50": total_lat_p50,
+                    "total_ms_p95": total_lat_p95,
+                    "total_ms_p99": total_lat_p99,
+                },
+                "admission_gate": AdmissionGateTracker.get().stats(),
                 "context_fill": {
                     "active_tokens": self.active_context_tokens,
                     "max_tokens": self.max_context_tokens,
@@ -800,6 +1032,8 @@ class TelemetryPersistenceManager:
                     "token_metrics": TokenMetricsTracker.get().dump_persisted(),
                     "requests": RequestLogTracker.get().dump_persisted(),
                     "activity_events": list(events) if events else [],
+                    "admission_gate": AdmissionGateTracker.get().dump_persisted(),
+                    "accelerator": TelemetryCollector.dump_accelerator_persisted(),
                 }
                 tmp_file = self.state_file.with_suffix(".tmp")
                 with open(tmp_file, "w", encoding="utf-8") as f:
@@ -823,6 +1057,10 @@ class TelemetryPersistenceManager:
                     TokenMetricsTracker.get().load_persisted(data["token_metrics"])
                 if "requests" in data and isinstance(data["requests"], list):
                     RequestLogTracker.get().load_persisted(data["requests"])
+                if "admission_gate" in data and isinstance(data["admission_gate"], dict):
+                    AdmissionGateTracker.get().load_persisted(data["admission_gate"])
+                if "accelerator" in data and isinstance(data["accelerator"], dict):
+                    TelemetryCollector.load_accelerator_persisted(data["accelerator"])
                 return data.get("activity_events", [])
             except Exception as e:
                 logger.warning("Failed to load persisted telemetry state: %s", e)
@@ -845,7 +1083,24 @@ class TelemetryCollector:
     _cpu_history: list[float] = [0.0] * 20
     _gpu_history: list[float] = [0.0] * 20
     _last_sample: tuple[float, dict[str, Any]] | None = None
-    _lock = threading.Lock()
+    _gpu_active_seconds: float = 0.0
+    _gpu_idle_seconds: float = 0.0
+    _last_duty_sample_time: float | None = None
+    _lock = threading.RLock()
+
+    @classmethod
+    def dump_accelerator_persisted(cls) -> dict[str, Any]:
+        with cls._lock:
+            return {
+                "active_seconds": round(cls._gpu_active_seconds, 1),
+                "idle_seconds": round(cls._gpu_idle_seconds, 1),
+            }
+
+    @classmethod
+    def load_accelerator_persisted(cls, data: dict[str, Any]) -> None:
+        with cls._lock:
+            cls._gpu_active_seconds = float(data.get("active_seconds", 0.0))
+            cls._gpu_idle_seconds = float(data.get("idle_seconds", 0.0))
 
     def __init__(self, store: PackageStore, svc: Any = None) -> None:
         self.store = store
@@ -906,6 +1161,15 @@ class TelemetryCollector:
                 fresh["inference"] = inf
             except Exception:
                 pass
+
+            fresh["admission_gate"] = AdmissionGateTracker.get().stats()
+            total_acc = TelemetryCollector._gpu_active_seconds + TelemetryCollector._gpu_idle_seconds
+            duty_pct = round((TelemetryCollector._gpu_active_seconds / max(0.1, total_acc)) * 100.0, 1)
+            fresh["accelerator"] = {
+                "active_seconds": round(TelemetryCollector._gpu_active_seconds, 1),
+                "idle_seconds": round(TelemetryCollector._gpu_idle_seconds, 1),
+                "duty_cycle_percent": duty_pct,
+            }
 
             fresh["server"] = {
                 "version": __version__,
@@ -1134,6 +1398,15 @@ class TelemetryCollector:
                 "inference": token_stats,
                 "errors": error_stats,
                 "requests": requests_list,
+                "admission_gate": AdmissionGateTracker.get().stats(),
+                "accelerator": {
+                    "active_seconds": round(TelemetryCollector._gpu_active_seconds, 1),
+                    "idle_seconds": round(TelemetryCollector._gpu_idle_seconds, 1),
+                    "duty_cycle_percent": round(
+                        (TelemetryCollector._gpu_active_seconds / max(0.1, TelemetryCollector._gpu_active_seconds + TelemetryCollector._gpu_idle_seconds)) * 100.0,
+                        1,
+                    ),
+                },
             }
             self._last_sample = (now, payload)
             return payload
@@ -1301,8 +1574,28 @@ class TelemetryCollector:
         if not devices:
             devices = [self._sample_generic_gpu(hw, snap, cpu_stats)]
 
-        # Update per-device history ring-buffer
+        now = time.time()
+        last_t = TelemetryCollector._last_duty_sample_time or (now - 0.4)
+        dt = max(0.0, min(5.0, now - last_t))
+        TelemetryCollector._last_duty_sample_time = now
+
+        gpu_active = is_busy
+        if not gpu_active and devices:
+            gpu_active = any(d.get("utilization_percent", 0.0) > 5.0 for d in devices)
+
+        with TelemetryCollector._lock:
+            if gpu_active:
+                TelemetryCollector._gpu_active_seconds += dt
+            else:
+                TelemetryCollector._gpu_idle_seconds += dt
+            tot_s = TelemetryCollector._gpu_active_seconds + TelemetryCollector._gpu_idle_seconds
+            duty_pct = round((TelemetryCollector._gpu_active_seconds / max(0.1, tot_s)) * 100.0, 1)
+
+        # Update per-device history ring-buffer and accelerator stats
         for d in devices:
+            d["active_seconds"] = round(TelemetryCollector._gpu_active_seconds, 1)
+            d["idle_seconds"] = round(TelemetryCollector._gpu_idle_seconds, 1)
+            d["duty_cycle_percent"] = duty_pct
             dev_id = d.get("id", 0)
             if dev_id not in self._gpu_histories:
                 self._gpu_histories[dev_id] = [0.0] * 15

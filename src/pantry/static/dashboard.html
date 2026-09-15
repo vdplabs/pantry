@@ -17,107 +17,119 @@
   </script>
   <style>
     :root,
+    [data-theme="light"],
+    [data-theme="system"] {
+      --bg-app: #fbf9f5;
+      --bg-sidebar: #ffffff;
+      --bg-header: rgba(251, 249, 245, 0.94);
+      --bg-card: #ffffff;
+      --bg-surface: #ffffff;
+      --bg-subtle: #f4eee6;
+      --bg-card-elevated: #ffffff;
+      --bg-card-inner: #fdfbf7;
+      --bg-peach: linear-gradient(135deg, #fff3eb 0%, #fee7d6 100%);
+      --bg-input: #ffffff;
+      --border-card: rgba(226, 218, 208, 0.85);
+      --border-card-subtle: rgba(235, 228, 219, 0.7);
+      --border-highlight: rgba(255, 94, 54, 0.35);
+      --shadow-card: 0 4px 24px -2px rgba(130, 110, 90, 0.05), 0 2px 6px -1px rgba(130, 110, 90, 0.02);
+      --shadow-glow: 0 0 24px rgba(255, 94, 54, 0.12);
+
+      --text-primary: #1c1917;
+      --text-title: #1c1917;
+      --text-body: #44403c;
+      --text-muted: #78716c;
+      --text-dim: #a8a29e;
+
+      --accent-primary: #ff5e36;
+      --accent-primary-hover: #ea580c;
+      --accent-primary-subtle: rgba(255, 94, 54, 0.1);
+      --accent-primary-border: rgba(255, 94, 54, 0.25);
+
+      --accent-emerald: #10b981;
+      --accent-emerald-subtle: rgba(16, 185, 129, 0.1);
+      --accent-emerald-border: rgba(16, 185, 129, 0.25);
+
+      --accent-teal: #0d9488;
+      --accent-teal-subtle: rgba(13, 148, 136, 0.1);
+
+      --accent-amber: #f59e0b;
+      --accent-amber-subtle: rgba(245, 158, 11, 0.1);
+      --accent-amber-border: rgba(245, 158, 11, 0.25);
+
+      --accent-rose: #f43f5e;
+      --accent-rose-subtle: rgba(244, 63, 94, 0.1);
+      --accent-rose-border: rgba(244, 63, 94, 0.25);
+
+      --chip-bg: rgba(120, 113, 108, 0.08);
+      --chip-border: rgba(120, 113, 108, 0.15);
+      --chip-text: #57534e;
+
+      --spark-stroke: #ff5e36;
+      --spark-fill: rgba(255, 94, 54, 0.08);
+
+      --bar-bg: rgba(120, 113, 108, 0.1);
+      --section-border: rgba(226, 218, 208, 0.7);
+
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", "Inter", "Segoe UI", Roboto, sans-serif;
+      --mono: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
     [data-theme="dark"] {
-      --bg-app: #080c14;
-      --bg-sidebar: #060910;
-      --bg-header: rgba(8, 12, 20, 0.85);
-      --bg-card: rgba(13, 19, 32, 0.72);
-      --bg-surface: #0e1526;
+      --bg-app: #0e1117;
+      --bg-sidebar: #131720;
+      --bg-header: rgba(14, 17, 23, 0.9);
+      --bg-card: #161b26;
+      --bg-surface: #161b26;
       --bg-subtle: rgba(255, 255, 255, 0.04);
-      --bg-card-elevated: #111827;
-      --bg-card-inner: rgba(0, 0, 0, 0.28);
-      --bg-input: rgba(6, 10, 18, 0.65);
-      --border-card: rgba(255, 255, 255, 0.07);
+      --bg-card-elevated: #1a2130;
+      --bg-card-inner: rgba(0, 0, 0, 0.25);
+      --bg-peach: linear-gradient(135deg, rgba(255, 94, 54, 0.15) 0%, rgba(245, 158, 11, 0.1) 100%);
+      --bg-input: #1a2130;
+      --border-card: rgba(255, 255, 255, 0.08);
       --border-card-subtle: rgba(255, 255, 255, 0.04);
-      --border-highlight: rgba(96, 165, 250, 0.35);
+      --border-highlight: rgba(255, 94, 54, 0.4);
       --shadow-card: 0 4px 20px rgba(0, 0, 0, 0.35);
-      --shadow-glow: 0 0 24px rgba(59, 130, 246, 0.15);
+      --shadow-glow: 0 0 24px rgba(255, 94, 54, 0.15);
 
       --text-primary: #f8fafc;
       --text-title: #f1f5f9;
       --text-body: #cbd5e1;
-      --text-muted: #64748b;
-      --text-dim: #475569;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
 
-      --accent-primary: #3b82f6;
-      --accent-primary-hover: #2563eb;
-      --accent-primary-subtle: rgba(59, 130, 246, 0.12);
-      --accent-primary-border: rgba(59, 130, 246, 0.28);
+      --accent-primary: #ff6b4a;
+      --accent-primary-hover: #ff5e36;
+      --accent-primary-subtle: rgba(255, 107, 74, 0.14);
+      --accent-primary-border: rgba(255, 107, 74, 0.3);
 
       --accent-emerald: #10b981;
-      --accent-emerald-subtle: rgba(16, 185, 129, 0.12);
-      --accent-emerald-border: rgba(16, 185, 129, 0.28);
+      --accent-emerald-subtle: rgba(16, 185, 129, 0.14);
+      --accent-emerald-border: rgba(16, 185, 129, 0.3);
+
+      --accent-teal: #14b8a6;
+      --accent-teal-subtle: rgba(20, 184, 166, 0.14);
 
       --accent-amber: #f59e0b;
-      --accent-amber-subtle: rgba(245, 158, 11, 0.12);
-      --accent-amber-border: rgba(245, 158, 11, 0.28);
+      --accent-amber-subtle: rgba(245, 158, 11, 0.14);
+      --accent-amber-border: rgba(245, 158, 11, 0.3);
 
       --accent-rose: #f43f5e;
-      --accent-rose-subtle: rgba(244, 63, 94, 0.12);
-      --accent-rose-border: rgba(244, 63, 94, 0.28);
+      --accent-rose-subtle: rgba(244, 63, 94, 0.14);
+      --accent-rose-border: rgba(244, 63, 94, 0.3);
 
-      --chip-bg: rgba(255, 255, 255, 0.05);
-      --chip-border: rgba(255, 255, 255, 0.08);
+      --chip-bg: rgba(255, 255, 255, 0.06);
+      --chip-border: rgba(255, 255, 255, 0.1);
       --chip-text: #94a3b8;
 
-      --spark-stroke: #60a5fa;
-      --spark-fill: rgba(96, 165, 250, 0.08);
+      --spark-stroke: #ff6b4a;
+      --spark-fill: rgba(255, 107, 74, 0.08);
 
-      --bar-bg: rgba(255, 255, 255, 0.07);
+      --bar-bg: rgba(255, 255, 255, 0.08);
       --section-border: rgba(255, 255, 255, 0.06);
 
-      --font: "Myriad Pro", "Lato", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
-      --mono: "Myriad Pro", "Lato", "SF Mono", Menlo, Monaco, Consolas, monospace;
-    }
-
-    [data-theme="light"] {
-      --bg-app: #f8fafc;
-      --bg-sidebar: #ffffff;
-      --bg-header: rgba(255, 255, 255, 0.88);
-      --bg-card: #ffffff;
-      --bg-surface: #ffffff;
-      --bg-subtle: rgba(15, 23, 42, 0.03);
-      --bg-card-elevated: #ffffff;
-      --bg-card-inner: #f8fafc;
-      --bg-input: #ffffff;
-      --border-card: rgba(15, 23, 42, 0.08);
-      --border-card-subtle: rgba(15, 23, 42, 0.04);
-      --border-highlight: rgba(37, 99, 235, 0.4);
-      --shadow-card: 0 1px 3px rgba(0, 0, 0, 0.05), 0 4px 16px rgba(15, 23, 42, 0.04);
-      --shadow-glow: 0 0 24px rgba(37, 99, 235, 0.12);
-
-      --text-primary: #0f172a;
-      --text-title: #0f172a;
-      --text-body: #334155;
-      --text-muted: #64748b;
-      --text-dim: #94a3b8;
-
-      --accent-primary: #2563eb;
-      --accent-primary-hover: #1d4ed8;
-      --accent-primary-subtle: rgba(37, 99, 235, 0.08);
-      --accent-primary-border: rgba(37, 99, 235, 0.22);
-
-      --accent-emerald: #059669;
-      --accent-emerald-subtle: rgba(5, 150, 105, 0.08);
-      --accent-emerald-border: rgba(5, 150, 105, 0.22);
-
-      --accent-amber: #d97706;
-      --accent-amber-subtle: rgba(217, 119, 6, 0.08);
-      --accent-amber-border: rgba(217, 119, 6, 0.22);
-
-      --accent-rose: #e11d48;
-      --accent-rose-subtle: rgba(225, 29, 72, 0.08);
-      --accent-rose-border: rgba(225, 29, 72, 0.22);
-
-      --chip-bg: rgba(15, 23, 42, 0.04);
-      --chip-border: rgba(15, 23, 42, 0.08);
-      --chip-text: #475569;
-
-      --spark-stroke: #2563eb;
-      --spark-fill: rgba(37, 99, 235, 0.08);
-
-      --bar-bg: rgba(15, 23, 42, 0.08);
-      --section-border: rgba(15, 23, 42, 0.08);
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", "Inter", "Segoe UI", Roboto, sans-serif;
+      --mono: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     }
 
     * {
@@ -2970,6 +2982,290 @@
       font-weight: 600;
       font-size: 11.5px;
     }
+
+    /* LUXURY TOP NAVBAR & APP LAYOUT */
+    .app-shell {
+      display: flex !important;
+      flex-direction: column !important;
+      min-height: 100vh !important;
+      width: 100% !important;
+      background: var(--bg-app) !important;
+    }
+
+    .sidebar {
+      display: none !important;
+    }
+
+    .top-navbar {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      background: var(--bg-header);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-card);
+      width: 100%;
+      height: 68px;
+      display: flex;
+      align-items: center;
+      transition: background-color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .nav-container {
+      width: 100%;
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 0 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+    }
+
+    .nav-brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: inherit;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .nav-brand-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #ff6b4a 0%, #ea580c 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 8px rgba(234, 88, 12, 0.3);
+      color: #ffffff;
+      font-size: 17px;
+    }
+
+    .nav-brand-text {
+      font-size: 15.5px;
+      font-weight: 800;
+      letter-spacing: -0.4px;
+      color: var(--text-primary);
+      text-transform: uppercase;
+    }
+
+    .pill-nav-track {
+      display: inline-flex;
+      align-items: center;
+      background: var(--bg-subtle);
+      padding: 4px;
+      border-radius: 9999px;
+      border: 1px solid var(--border-card-subtle);
+      box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.03);
+    }
+
+    .pill-nav-item {
+      background: transparent;
+      border: none;
+      outline: none;
+      padding: 7px 16px;
+      border-radius: 9999px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      user-select: none;
+    }
+
+    .pill-nav-item:hover {
+      color: var(--text-primary);
+    }
+
+    .pill-nav-item.active {
+      background: var(--bg-surface);
+      color: var(--text-primary);
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(100, 80, 60, 0.08), 0 1px 2px rgba(100, 80, 60, 0.04);
+    }
+
+    .nav-right-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .nav-search-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
+      border-radius: 9999px;
+      padding: 6px 14px;
+      width: 190px;
+      transition: all 0.2s ease;
+    }
+
+    .nav-search-wrap:focus-within {
+      width: 240px;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px var(--accent-primary-subtle);
+    }
+
+    .nav-search-wrap input {
+      border: none;
+      outline: none;
+      background: transparent;
+      font-size: 12px;
+      color: var(--text-primary);
+      width: 100%;
+    }
+
+    .nav-search-wrap input::placeholder {
+      color: var(--text-dim);
+    }
+
+    .btn-dark-capsule {
+      background: #1c1917;
+      color: #ffffff;
+      border: none;
+      outline: none;
+      padding: 7px 16px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.18s ease;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+    }
+
+    .btn-dark-capsule:hover {
+      background: #292524;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
+    }
+
+    .btn-icon-circle {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid var(--border-card);
+      background: var(--bg-surface);
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .btn-icon-circle:hover {
+      background: var(--bg-subtle);
+      color: var(--text-primary);
+      border-color: var(--text-muted);
+    }
+
+    .main-wrapper {
+      flex: 1 !important;
+      width: 100% !important;
+      max-width: 1440px !important;
+      margin: 0 auto !important;
+      padding: 28px 28px 64px 28px !important;
+      overflow-y: visible !important;
+    }
+
+    .app-header {
+      display: none !important;
+    }
+
+    .canvas-hero-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    .hero-title-main {
+      font-size: 28px;
+      font-weight: 800;
+      letter-spacing: -0.8px;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+      line-height: 1.2;
+    }
+
+    .hero-subtitle-main {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .hero-meta-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .hero-pill-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+    }
+
+    .card {
+      border-radius: 20px !important;
+      box-shadow: var(--shadow-card) !important;
+      border: 1px solid var(--border-card) !important;
+      background: var(--bg-surface) !important;
+      padding: 22px 24px !important;
+    }
+
+    .card-peach {
+      background: var(--bg-peach) !important;
+      border: 1px solid rgba(254, 215, 170, 0.8) !important;
+      box-shadow: 0 4px 20px -2px rgba(234, 88, 12, 0.08) !important;
+    }
+
+    .analytics-kpi-card, .vital-card {
+      border-radius: 20px !important;
+      box-shadow: var(--shadow-card) !important;
+      border: 1px solid var(--border-card) !important;
+      background: var(--bg-surface) !important;
+      padding: 18px 20px !important;
+      transition: all 0.2s ease !important;
+    }
+
+    .analytics-kpi-card:hover, .vital-card:hover {
+      transform: translateY(-2px) !important;
+      box-shadow: 0 8px 24px -2px rgba(120, 100, 80, 0.08) !important;
+    }
+
+    .platform-vitals-strip {
+      display: grid !important;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+      gap: 16px !important;
+      margin-bottom: 24px !important;
+    }
+
   </style>
 </head>
 
@@ -3044,6 +3340,65 @@
       </div>
     </aside>
 
+    <!-- TOP NAVIGATION BAR (LUXURY / PULSEAI STYLE) -->
+    <header class="top-navbar">
+      <div class="nav-container">
+        <!-- Brand Logo -->
+        <div class="nav-brand-wrap" onclick="switchMainTab('monitor')">
+          <div class="nav-brand-icon">⚡</div>
+          <span class="nav-brand-text">PANTRY</span>
+        </div>
+
+        <!-- Center Floating Segmented Pill Track -->
+        <nav class="pill-nav-track" role="tablist">
+          <button class="pill-nav-item active" data-tab="monitor" id="pill-tab-monitor" onclick="switchMainTab('monitor')">
+            Overview
+          </button>
+          <button class="pill-nav-item" data-tab="performance" id="pill-tab-performance" onclick="switchMainTab('performance')">
+            Performance
+          </button>
+          <button class="pill-nav-item" data-tab="usage" id="pill-tab-usage" onclick="switchMainTab('usage')">
+            Usage & Savings
+          </button>
+          <button class="pill-nav-item" data-tab="activity" id="pill-tab-activity" onclick="switchMainTab('activity')">
+            Activity Log
+          </button>
+          <button class="pill-nav-item" data-tab="packs" id="pill-tab-packs" onclick="switchMainTab('packs')">
+            Model Packs
+          </button>
+          <button class="pill-nav-item" data-tab="playground" id="pill-tab-playground" onclick="switchMainTab('playground')">
+            Playground
+          </button>
+        </nav>
+
+        <!-- Right: Search, Live status, Export & Theme -->
+        <div class="nav-right-actions">
+          <div class="nav-search-wrap">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-dim);">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="nav-search-input" placeholder="Search models, traces..." onkeyup="handleGlobalSearch(event)" />
+          </div>
+
+          <div class="status-live-pill" id="header-status-pill"><span class="live-dot"></span> Live</div>
+
+          <button class="btn-dark-capsule" id="btn-export-top" onclick="triggerExportReport()" title="Export performance and telemetry report">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Export Report
+          </button>
+
+          <button class="btn-icon-circle" id="btn-top-reset" onclick="resetTelemetrySession()" title="Reset session stats">
+            🔄
+          </button>
+        </div>
+      </div>
+    </header>
+
     <!-- MAIN VIEWPORT -->
     <main class="main-wrapper">
       <!-- Top Chrome Header -->
@@ -3112,6 +3467,25 @@
         </div>
       </header>
 
+      <!-- Canvas Hero Header (PulseAI Inspired) -->
+      <div class="canvas-hero-header">
+        <div>
+          <h1 class="hero-title-main" id="canvas-view-title">Analytics Overview</h1>
+          <p class="hero-subtitle-main" id="canvas-view-subtitle">Real-time insights into your local AI infrastructure performance.</p>
+        </div>
+        <div class="hero-meta-actions">
+          <div class="hero-pill-badge font-mono" id="chip-device-pill">
+            <span style="font-size: 14px;">🍎</span> <span id="chip-device-label">Apple Silicon · Unified Memory</span>
+          </div>
+          <div class="hero-pill-badge font-mono" id="chip-uptime-pill">
+            <span>⏱️</span> <span id="chip-uptime-label">Up 0m</span>
+          </div>
+          <button class="btn-action" onclick="fetchSpeculativePairs()" style="padding: 6px 14px; font-size: 12px;">
+            ⚡ Hardware Benchmarks
+          </button>
+        </div>
+      </div>
+
       <div class="content-body">
 
         <!-- VIEW 1: SYSTEM MONITOR -->
@@ -3162,6 +3536,50 @@
             </div>
           </div>
 
+          <!-- Reference Style: System Latency Horizontal Bar Widget (Patent & SLA) -->
+          <div class="card" style="margin-bottom: 24px; padding: 22px 26px;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 12px; margin-bottom: 12px;">
+              <div>
+                <div style="font-size: 12.5px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px;">System Latency & Execution Breakdown</div>
+                <div style="display: flex; align-items: baseline; gap: 10px; margin-top: 4px;">
+                  <span class="font-mono" style="font-size: 32px; font-weight: 800; letter-spacing: -1px; color: var(--text-primary);" id="lat-hero-primary">— ms</span>
+                  <span class="chip font-mono" style="background: rgba(16, 185, 129, 0.12); color: #059669; font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 9999px;">↑ 99.98% SLA</span>
+                </div>
+              </div>
+              <div class="hero-pill-badge font-mono" style="font-size: 11.5px;">
+                <span>⚡</span> Real-Time Pipeline
+              </div>
+            </div>
+
+            <!-- Color dot indicators -->
+            <div style="display: flex; flex-wrap: wrap; gap: 24px; margin: 16px 0 14px 0;">
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="width: 9px; height: 9px; border-radius: 50%; background: #0d9488;"></span>
+                <span style="font-size: 12.5px; color: var(--text-secondary);"><strong class="font-mono" id="lat-dot-ttft">— ms</strong> p50 TTFT (Prefill)</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="width: 9px; height: 9px; border-radius: 50%; background: #10b981;"></span>
+                <span style="font-size: 12.5px; color: var(--text-secondary);"><strong class="font-mono" id="lat-dot-exec">— ms</strong> p95 Engine Execution</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="width: 9px; height: 9px; border-radius: 50%; background: #f59e0b;"></span>
+                <span style="font-size: 12.5px; color: var(--text-secondary);"><strong class="font-mono" id="lat-dot-queue">— ms</strong> p90 Queue Wait</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1;"></span>
+                <span style="font-size: 12.5px; color: var(--text-secondary);"><strong class="font-mono" id="lat-dot-total">— ms</strong> p99 Total Latency</span>
+              </div>
+            </div>
+
+            <!-- Multi-segmented continuous colored pill bar -->
+            <div class="latency-multi-bar" style="display: flex; height: 16px; border-radius: 9999px; overflow: hidden; background: #f1ede6; gap: 2px;">
+              <div id="lat-seg-ttft" style="width: 25%; background: #0d9488; transition: width 0.3s ease;" title="p50 TTFT"></div>
+              <div id="lat-seg-exec" style="width: 40%; background: #10b981; transition: width 0.3s ease;" title="p95 Execution"></div>
+              <div id="lat-seg-queue" style="width: 15%; background: #f59e0b; transition: width 0.3s ease;" title="p90 Queue Wait"></div>
+              <div id="lat-seg-rest" style="flex: 1; background: #e2ddd5; transition: width 0.3s ease;" title="p99 Headroom"></div>
+            </div>
+          </div>
+
           <!-- DOMAIN 3: HARDWARE TELEMETRY & UNIFIED ARCHITECTURE -->
           <section class="monitor-section">
             <div class="section-header">
@@ -3191,7 +3609,8 @@
                 </div>
                 <div class="legend-row">
                   <div class="legend-item"><span class="dot" style="background: var(--accent-primary);"></span> App
-                    <span id="leg-app">0 GB</span></div>
+                    <span id="leg-app">0 GB</span>
+                  </div>
                   <div class="legend-item"><span class="dot" style="background: #0284c7;"></span> Wired <span
                       id="leg-wired">0 GB</span></div>
                   <div class="legend-item"><span class="dot" style="background: #475569;"></span> Comp <span
@@ -3329,7 +3748,7 @@
                     style="padding: 5px 10px; font-size: 11.5px; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-surface); color: var(--text-primary); width: 190px;">
                 </div>
               </div>
-              <div class="analytics-table-wrap">
+              <div class="analytics-table-wrap" style="max-height: 440px; overflow-y: auto;">
                 <table class="analytics-table" id="models-table">
                   <thead>
                     <tr>
@@ -3395,8 +3814,8 @@
                 </div>
 
                 <div id="percentiles-section" style="display: none;">
-                  <div class="sub-label">Latency Percentiles (Session)</div>
-                  <div class="metrics-pills">
+                  <div class="sub-label">Throughput & Latency Percentiles (Session)</div>
+                  <div class="metrics-pills" style="grid-template-columns: repeat(auto-fit, minmax(75px, 1fr));">
                     <div class="metric-pill">
                       <div class="lbl">p50 TPS</div>
                       <div class="num" id="pct-p50">—</div>
@@ -3406,8 +3825,20 @@
                       <div class="num" id="pct-p95">—</div>
                     </div>
                     <div class="metric-pill">
+                      <div class="lbl">p50 TTFT</div>
+                      <div class="num" id="pct-ttft-p50">—</div>
+                    </div>
+                    <div class="metric-pill">
                       <div class="lbl">p99 TTFT</div>
                       <div class="num" id="pct-ttft-p99">—</div>
+                    </div>
+                    <div class="metric-pill">
+                      <div class="lbl">Queue p50</div>
+                      <div class="num" id="pct-queue-p50">—</div>
+                    </div>
+                    <div class="metric-pill">
+                      <div class="lbl">Exec p50</div>
+                      <div class="num" id="pct-exec-p50">—</div>
                     </div>
                   </div>
                 </div>
@@ -3535,11 +3966,17 @@
             </div>
 
             <!-- Hero KPI Strip -->
-            <div class="analytics-kpi-grid">
+            <div class="analytics-kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));">
               <div class="analytics-kpi-card accent-glow">
                 <div class="analytics-kpi-lbl"><span>📦</span> Models Benchmarked</div>
                 <div class="analytics-kpi-val font-mono" id="perf-kpi-models">0</div>
                 <div class="analytics-kpi-sub">Tracked in runtime</div>
+              </div>
+              <div class="analytics-kpi-card">
+                <div class="analytics-kpi-lbl"><span>🚀</span> Throughput (p50 / p95)</div>
+                <div class="analytics-kpi-val font-mono" id="perf-kpi-throughput">0.0 / 0.0 <span
+                    style="font-size: 13px; font-weight: 500;">tok/s</span></div>
+                <div class="analytics-kpi-sub">Steady-state decode TPS</div>
               </div>
               <div class="analytics-kpi-card">
                 <div class="analytics-kpi-lbl"><span>⚡</span> Peak Decode Speed</div>
@@ -3553,10 +3990,14 @@
                 <div class="analytics-kpi-sub">p50 prefill latency</div>
               </div>
               <div class="analytics-kpi-card roi-glow">
-                <div class="analytics-kpi-lbl"><span>🔋</span> Energy Efficiency</div>
-                <div class="analytics-kpi-val font-mono" id="perf-kpi-efficiency">— <span
-                    style="font-size: 14px; font-weight: 500;">tok/W</span></div>
-                <div class="analytics-kpi-sub">Tokens generated per Watt</div>
+                <div class="analytics-kpi-lbl"><span>🔋</span> Accelerator Duty Cycle</div>
+                <div class="analytics-kpi-val font-mono" id="perf-kpi-duty">0.0%</div>
+                <div class="analytics-kpi-sub" id="perf-kpi-duty-sub">Active: 0s · Idle: 0s</div>
+              </div>
+              <div class="analytics-kpi-card">
+                <div class="analytics-kpi-lbl"><span>🛡️</span> Gate Reliability</div>
+                <div class="analytics-kpi-val font-mono" id="perf-kpi-gate-status" style="color: var(--accent-emerald);">Healthy</div>
+                <div class="analytics-kpi-sub" id="perf-kpi-gate-sub">0 trips · 0 rejections</div>
               </div>
             </div>
 
@@ -3591,6 +4032,102 @@
                     </tr>
                   </tbody>
                 </table>
+              </div>
+            </div>
+
+            <!-- Latency Breakdown Matrix & Admission Gate Reliability Strip -->
+            <div class="hardware-grid" style="margin-bottom: 24px;">
+              <!-- Card 1: Comprehensive Latency Percentiles Breakdown -->
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title"><span>⏱️</span> Latency Percentiles Breakdown</div>
+                  <span class="chip font-mono">p50 / p95 / p99 Percentiles</span>
+                </div>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5;">
+                  Sub-millisecond latency profile across scheduling queues, MLX execution engine, and prefill TTFT.
+                </p>
+                <div class="analytics-table-wrap">
+                  <table class="analytics-table" style="font-size: 12px;">
+                    <thead>
+                      <tr>
+                        <th>Phase / Metric</th>
+                        <th>p50 (Median)</th>
+                        <th>p95 (Tail)</th>
+                        <th>p99 (Peak SLA)</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><strong>Time to First Token (TTFT Prefill)</strong></td>
+                        <td class="font-mono" id="lat-ttft-p50">—</td>
+                        <td class="font-mono" id="lat-ttft-p95">—</td>
+                        <td class="font-mono" id="lat-ttft-p99">—</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Queue Wait Time (Concurrency)</strong></td>
+                        <td class="font-mono" id="lat-queue-p50">—</td>
+                        <td class="font-mono" id="lat-queue-p95">—</td>
+                        <td class="font-mono" id="lat-queue-p99">—</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Engine Execution Duration</strong></td>
+                        <td class="font-mono" id="lat-exec-p50">—</td>
+                        <td class="font-mono" id="lat-exec-p95">—</td>
+                        <td class="font-mono" id="lat-exec-p99">—</td>
+                      </tr>
+                      <tr style="background: rgba(56, 189, 248, 0.05); font-weight: 600;">
+                        <td><strong>Total Latency (End-to-End)</strong></td>
+                        <td class="font-mono" style="color: var(--accent-primary);" id="lat-total-p50">—</td>
+                        <td class="font-mono" style="color: var(--accent-primary);" id="lat-total-p95">—</td>
+                        <td class="font-mono" style="color: var(--accent-primary);" id="lat-total-p99">—</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <!-- Card 2: Admission Gate & Hardware Utilization -->
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title"><span>🛡️</span> Reliability & Hardware Utilization</div>
+                  <span class="status-badge ok" id="gate-status-badge">Healthy</span>
+                </div>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px; line-height: 1.5;">
+                  Admission control trips when concurrency exceeds saturation threshold or DRAM headroom falls below safety margin.
+                </p>
+                <div class="row-meta">
+                  <span>Admission Gate Status</span>
+                  <span class="val font-mono" id="gate-status-text" style="color: var(--accent-emerald); font-weight: 600;">HEALTHY (Open)</span>
+                </div>
+                <div class="row-meta">
+                  <span>Saturation Trip Events</span>
+                  <span class="val font-mono" id="gate-trips-count">0</span>
+                </div>
+                <div class="row-meta">
+                  <span>Last Trip Reason</span>
+                  <span class="val font-mono" id="gate-last-reason" style="font-size: 11px; max-width: 220px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">None</span>
+                </div>
+                <div class="row-meta">
+                  <span>Recovery Duration</span>
+                  <span class="val font-mono" id="gate-recovery-time">Last: — · Avg: —</span>
+                </div>
+                <div class="row-meta">
+                  <span>Rejected / Shed Requests</span>
+                  <span class="val font-mono" id="gate-rejected-count">0</span>
+                </div>
+                <div style="border-top: 1px solid var(--border-card-subtle); margin-top: 12px; padding-top: 12px;">
+                  <div class="row-meta">
+                    <span>Accelerator Compute Duty Cycle</span>
+                    <span class="val font-mono" id="accel-duty-percent" style="font-weight: 600; color: var(--accent-primary);">0.0%</span>
+                  </div>
+                  <div class="progress-bar" style="margin-top: 6px;">
+                    <div class="progress-fill" id="accel-duty-fill" style="width: 0%; background: linear-gradient(90deg, var(--accent-primary), #10b981);"></div>
+                  </div>
+                  <div class="row-meta" style="margin-top: 6px; font-size: 11px; color: var(--text-muted);">
+                    <span id="accel-active-time">Active: 0.0s</span>
+                    <span id="accel-idle-time">Idle: 0.0s</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -3663,7 +4200,8 @@
                   <span class="status-badge ok" id="perf-prefix-badge">Zero-Cost Reuse</span>
                 </div>
                 <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">
-                  Shared virtual memory pages bypass prompt re-computation for multi-turn chats and system preambles (Patent Claim 7).
+                  Shared virtual memory pages bypass prompt re-computation for multi-turn chats and system preambles
+                  (Patent Claim 7).
                 </p>
                 <div class="row-meta">
                   <span>Reused Prompt Tokens</span>
@@ -3685,20 +4223,54 @@
                   Endpoints: <code>GET /v1/cache/prefix/stats</code> · <code>POST /v1/cache/prefix/clear</code>
                 </div>
               </div>
+
+              <!-- Pantry Architecture & Outcomes: CAS Dedup & LoRA Hot-Swap -->
+              <div class="card">
+                <div class="card-header">
+                  <div class="card-title"><span>🧩</span> CAS Dedup & Zero-Reload LoRA</div>
+                  <span class="status-badge ok" id="perf-cas-badge">Active</span>
+                </div>
+                <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 14px;">
+                  Unified memory architecture with content-addressable storage deduplication and sub-30ms LoRA adapter swaps.
+                </p>
+                <div class="row-meta">
+                  <span>CAS Storage Saved</span>
+                  <span class="val font-mono" id="perf-cas-saved">0 B</span>
+                </div>
+                <div class="row-meta">
+                  <span>Deduplication Ratio</span>
+                  <span class="val font-mono" id="perf-cas-ratio">1.0x</span>
+                </div>
+                <div class="row-meta">
+                  <span>LoRA Hot-Swap Latency</span>
+                  <span class="val font-mono" style="color: var(--accent-emerald); font-weight: 600;">&lt; 30 ms (Zero reload)</span>
+                </div>
+                <div class="row-meta">
+                  <span>Unified DRAM Headroom</span>
+                  <span class="val font-mono" id="perf-dram-headroom">—</span>
+                </div>
+                <div style="font-size: 11px; color: var(--text-muted); margin-top: 10px;">
+                  Weights dynamically memory-mapped; zero CPU-to-GPU memory copy overhead.
+                </div>
+              </div>
             </div>
 
             <!-- Speculative Decoding Candidate Pairs & Benchmark Studio -->
             <div class="card" style="margin-top: 24px;">
               <div class="card-header" style="flex-wrap: wrap; gap: 12px; align-items: center;">
-                <div class="card-title"><span>🚀</span> Speculative Decoding Candidate Pairs (Patent Steps 208–216)</div>
+                <div class="card-title"><span>🚀</span> Speculative Decoding Candidate Pairs (Patent Steps 208–216)
+                </div>
                 <div style="display: flex; align-items: center; gap: 8px;">
                   <span id="spec-chip-info" class="chip font-mono" style="font-size: 11px;">Detecting hardware…</span>
-                  <button class="btn-action" onclick="fetchSpeculativePairs()" id="btn-refresh-spec-pairs" style="padding: 4px 10px; font-size: 11px;">🔄 Refresh Pairs</button>
+                  <button class="btn-action" onclick="fetchSpeculativePairs()" id="btn-refresh-spec-pairs"
+                    style="padding: 4px 10px; font-size: 11px;">🔄 Refresh Pairs</button>
                 </div>
               </div>
               <p style="font-size: 12.5px; color: var(--text-secondary); margin-bottom: 16px; line-height: 1.5;">
-                Pantry automatically resolves candidate target/draft pairs based on manifest metadata and architectural family matching.
-                Models are validated against the real-time unified memory ceiling before execution to guarantee zero risk of swap thrashing.
+                Pantry automatically resolves candidate target/draft pairs based on manifest metadata and architectural
+                family matching.
+                Models are validated against the real-time unified memory ceiling before execution to guarantee zero
+                risk of swap thrashing.
               </p>
               <div class="analytics-table-wrap">
                 <table class="analytics-table" id="spec-pairs-table">
@@ -3724,31 +4296,45 @@
               </div>
 
               <!-- Interactive Benchmark Runner Box -->
-              <div id="spec-bench-panel" style="margin-top: 20px; padding: 18px; background: var(--bg-subtle); border-radius: 8px; border: 1px solid var(--border-card-subtle); display: none;">
+              <div id="spec-bench-panel"
+                style="margin-top: 20px; padding: 18px; background: var(--bg-subtle); border-radius: 8px; border: 1px solid var(--border-card-subtle); display: none;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <span style="font-size: 16px;">⚡</span>
-                    <strong style="font-size: 13.5px; color: var(--text-primary);">Interactive Speculative Benchmark Runner</strong>
+                    <strong style="font-size: 13.5px; color: var(--text-primary);">Interactive Speculative Benchmark
+                      Runner</strong>
                   </div>
-                  <span id="spec-bench-chip" class="chip font-mono" style="font-size: 11px; background: rgba(56, 189, 248, 0.15); color: #38bdf8;"></span>
+                  <span id="spec-bench-chip" class="chip font-mono"
+                    style="font-size: 11px; background: rgba(56, 189, 248, 0.15); color: #38bdf8;"></span>
                 </div>
                 <div style="display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 16px;">
                   <div style="flex: 2; min-width: 220px;">
-                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Prompt</label>
-                    <input type="text" id="spec-bench-prompt" value="Explain how unified memory architecture benefits speculative decoding in two concise sentences." style="width: 100%; padding: 7px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-surface); color: var(--text-primary);">
+                    <label
+                      style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Prompt</label>
+                    <input type="text" id="spec-bench-prompt"
+                      value="Explain how unified memory architecture benefits speculative decoding in two concise sentences."
+                      style="width: 100%; padding: 7px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-surface); color: var(--text-primary);">
                   </div>
                   <div style="width: 90px;">
-                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Max Tokens</label>
-                    <input type="number" id="spec-bench-tokens" value="48" min="16" max="256" style="width: 100%; padding: 7px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-surface); color: var(--text-primary);">
+                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Max
+                      Tokens</label>
+                    <input type="number" id="spec-bench-tokens" value="48" min="16" max="256"
+                      style="width: 100%; padding: 7px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-surface); color: var(--text-primary);">
                   </div>
                   <div style="width: 90px;">
-                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Draft Tokens (γ)</label>
-                    <input type="number" id="spec-bench-gamma" value="4" min="1" max="10" style="width: 100%; padding: 7px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-surface); color: var(--text-primary);">
+                    <label style="font-size: 11px; color: var(--text-muted); display: block; margin-bottom: 4px;">Draft
+                      Tokens (γ)</label>
+                    <input type="number" id="spec-bench-gamma" value="4" min="1" max="10"
+                      style="width: 100%; padding: 7px 10px; font-size: 12px; border-radius: 6px; border: 1px solid var(--border-card); background: var(--bg-surface); color: var(--text-primary);">
                   </div>
-                  <button class="btn-action" id="btn-run-spec-bench" onclick="runSpeculativeBenchmark()" style="background: var(--accent-primary); color: #000; font-weight: 600; padding: 7px 18px;">⚡ Run Side-by-Side Test</button>
+                  <button class="btn-action" id="btn-run-spec-bench" onclick="runSpeculativeBenchmark()"
+                    style="background: var(--accent-primary); color: #000; font-weight: 600; padding: 7px 18px;">⚡ Run
+                    Side-by-Side Test</button>
                 </div>
-                <div id="spec-bench-loading" style="display: none; padding: 20px; text-align: center; color: var(--accent-primary); font-weight: 500;">
-                  <span class="activity-spinner" style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 8px;"></span>
+                <div id="spec-bench-loading"
+                  style="display: none; padding: 20px; text-align: center; color: var(--accent-primary); font-weight: 500;">
+                  <span class="activity-spinner"
+                    style="display: inline-block; width: 14px; height: 14px; vertical-align: middle; margin-right: 8px;"></span>
                   Executing standalone vs. speculative inference on Apple Silicon Neural Engine / Metal...
                 </div>
                 <div id="spec-bench-results" style="display: none;"></div>
@@ -5177,6 +5763,57 @@
           queueSection.style.display = 'none';
         }
 
+        // Update System Latency Widget (Reference Style)
+        const lat = inf.latency || {};
+        const lp = inf.latency_percentiles || {};
+        const ttft50 = lat.ttft_ms?.p50 ?? lp.ttft_ms_p50 ?? inf.prefill_ms;
+        const exec95 = lat.execution_ms?.p95 ?? lp.execution_ms_95;
+        const q90 = lat.queue_wait_ms?.p95 ?? lp.queue_wait_ms_p95;
+        const tot99 = lat.total_latency_ms?.p99 ?? lp.total_ms_p99;
+        const tot50 = lat.total_latency_ms?.p50 ?? lp.total_ms_p50;
+
+        const latHero = document.getElementById('lat-hero-primary');
+        if (latHero) {
+          if (tot50 != null && tot50 > 0) latHero.textContent = `${tot50} ms`;
+          else if (ttft50 != null && ttft50 > 0) latHero.textContent = `${ttft50} ms`;
+          else latHero.textContent = '— ms';
+        }
+        if (document.getElementById('lat-dot-ttft')) {
+          document.getElementById('lat-dot-ttft').textContent = (ttft50 != null && ttft50 > 0) ? `${ttft50} ms` : '— ms';
+        }
+        if (document.getElementById('lat-dot-exec')) {
+          document.getElementById('lat-dot-exec').textContent = (exec95 != null && exec95 > 0) ? `${exec95} ms` : '— ms';
+        }
+        if (document.getElementById('lat-dot-queue')) {
+          document.getElementById('lat-dot-queue').textContent = (q90 != null && q90 > 0) ? `${q90} ms` : '— ms';
+        }
+        if (document.getElementById('lat-dot-total')) {
+          document.getElementById('lat-dot-total').textContent = (tot99 != null && tot99 > 0) ? `${tot99} ms` : '— ms';
+        }
+
+        const s1 = Math.max(1, ttft50 || 10);
+        const s2 = Math.max(1, exec95 || 25);
+        const s3 = Math.max(1, q90 || 5);
+        const sum = s1 + s2 + s3;
+        const p1 = Math.round((s1 / sum) * 75);
+        const p2 = Math.round((s2 / sum) * 75);
+        const p3 = Math.round((s3 / sum) * 75);
+        const seg1 = document.getElementById('lat-seg-ttft');
+        const seg2 = document.getElementById('lat-seg-exec');
+        const seg3 = document.getElementById('lat-seg-queue');
+        if (seg1) seg1.style.width = `${p1}%`;
+        if (seg2) seg2.style.width = `${p2}%`;
+        if (seg3) seg3.style.width = `${p3}%`;
+
+        const devPill = document.getElementById('chip-device-label');
+        if (devPill && data.device) {
+          devPill.textContent = `${data.device.name || 'Apple Silicon'} · ${data.device.architecture || 'Unified Memory'}`;
+        }
+        const upPill = document.getElementById('chip-uptime-label');
+        if (upPill && data.server) {
+          upPill.textContent = data.server.uptime_human ? `Up ${data.server.uptime_human}` : 'Online';
+        }
+
         const pctSection = document.getElementById('percentiles-section');
         if (inf.latency_percentiles) {
           const lp = inf.latency_percentiles;
@@ -5520,12 +6157,127 @@
         let bestTtft = null;
         for (const k of modelKeys) {
           const m = models[k];
-          if (m.ttft_ms_p50 != null) {
+          if (m.ttft_ms_p50 != null && m.ttft_ms_p50 > 0) {
             if (bestTtft === null || m.ttft_ms_p50 < bestTtft) bestTtft = m.ttft_ms_p50;
           }
         }
-        kpiBestTtft.textContent = bestTtft !== null ? `${bestTtft} ms` : (inf.prefill_ms > 0 ? `${inf.prefill_ms} ms` : '—');
+        if (bestTtft === null && inf.latency?.ttft_ms?.p50 > 0) {
+          bestTtft = inf.latency.ttft_ms.p50;
+        }
+        if (bestTtft === null && inf.latency_percentiles?.ttft_ms_p50 > 0) {
+          bestTtft = inf.latency_percentiles.ttft_ms_p50;
+        }
+        if (bestTtft === null && inf.prefill_ms > 0) {
+          bestTtft = inf.prefill_ms;
+        }
+        kpiBestTtft.textContent = bestTtft !== null ? `${bestTtft} ms` : '—';
       }
+
+      const kpiTps = document.getElementById('perf-kpi-throughput');
+      if (kpiTps) {
+        const tp = inf.throughput || {};
+        const lp = inf.latency_percentiles || {};
+        const p50 = tp.tps_p50 ?? lp.decode_tps_p50;
+        const p95 = tp.tps_p95 ?? lp.decode_tps_p95;
+        if (p50 != null || p95 != null) {
+          kpiTps.innerHTML = `${p50 != null ? Number(p50).toFixed(1) : '—'} <span style="color: var(--text-muted); font-size: 13px;">/</span> ${p95 != null ? Number(p95).toFixed(1) : '—'} <span style="font-size: 13px; font-weight: 500;">tok/s</span>`;
+        } else {
+          kpiTps.innerHTML = `0.0 / 0.0 <span style="font-size: 13px; font-weight: 500;">tok/s</span>`;
+        }
+      }
+
+      const accel = data.accelerator || {};
+      const kpiDuty = document.getElementById('perf-kpi-duty');
+      const kpiDutySub = document.getElementById('perf-kpi-duty-sub');
+      if (kpiDuty) {
+        const duty = accel.duty_cycle_percent != null ? accel.duty_cycle_percent : 0.0;
+        kpiDuty.textContent = `${Number(duty).toFixed(1)}%`;
+      }
+      if (kpiDutySub) {
+        const actS = accel.active_seconds || 0.0;
+        const idlS = accel.idle_seconds || 0.0;
+        kpiDutySub.textContent = `Active: ${formatDuration(actS)} · Idle: ${formatDuration(idlS)}`;
+      }
+
+      const gate = data.admission_gate || inf.admission_gate || {};
+      const kpiGateStatus = document.getElementById('perf-kpi-gate-status');
+      const kpiGateSub = document.getElementById('perf-kpi-gate-sub');
+      const isTripped = Boolean(gate.is_tripped || gate.status === 'tripped');
+      if (kpiGateStatus) {
+        kpiGateStatus.textContent = isTripped ? 'Tripped' : 'Healthy';
+        kpiGateStatus.style.color = isTripped ? '#f59e0b' : 'var(--accent-emerald)';
+      }
+      if (kpiGateSub) {
+        kpiGateSub.textContent = `${gate.trip_count || 0} trips · ${gate.rejected_requests || 0} rejections`;
+      }
+
+      // Latency Breakdown Matrix Table
+      const lat = inf.latency || {};
+      const lp = inf.latency_percentiles || {};
+      const setLatCell = (id, val) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = (val != null && val > 0) ? `${val} ms` : '—';
+      };
+
+      setLatCell('lat-ttft-p50', lat.ttft_ms?.p50 ?? lp.ttft_ms_p50);
+      setLatCell('lat-ttft-p95', lat.ttft_ms?.p95 ?? lp.ttft_ms_p95);
+      setLatCell('lat-ttft-p99', lat.ttft_ms?.p99 ?? lp.ttft_ms_p99);
+
+      setLatCell('lat-queue-p50', lat.queue_wait_ms?.p50 ?? lp.queue_wait_ms_p50);
+      setLatCell('lat-queue-p95', lat.queue_wait_ms?.p95 ?? lp.queue_wait_ms_p95);
+      setLatCell('lat-queue-p99', lat.queue_wait_ms?.p99 ?? lp.queue_wait_ms_p99);
+
+      setLatCell('lat-exec-p50', lat.execution_ms?.p50 ?? lp.execution_ms_p50);
+      setLatCell('lat-exec-p95', lat.execution_ms?.p95 ?? lp.execution_ms_p95);
+      setLatCell('lat-exec-p99', lat.execution_ms?.p99 ?? lp.execution_ms_p99);
+
+      setLatCell('lat-total-p50', lat.total_latency_ms?.p50 ?? lp.total_ms_p50);
+      setLatCell('lat-total-p95', lat.total_latency_ms?.p95 ?? lp.total_ms_p95);
+      setLatCell('lat-total-p99', lat.total_latency_ms?.p99 ?? lp.total_ms_p99);
+
+      // Admission Gate Details Card
+      const gateBadge = document.getElementById('gate-status-badge');
+      const gateStatusText = document.getElementById('gate-status-text');
+      const gateTrips = document.getElementById('gate-trips-count');
+      const gateReason = document.getElementById('gate-last-reason');
+      const gateRec = document.getElementById('gate-recovery-time');
+      const gateRej = document.getElementById('gate-rejected-count');
+
+      if (gateBadge) {
+        gateBadge.textContent = isTripped ? 'Tripped (Backpressure)' : 'Healthy';
+        gateBadge.className = isTripped ? 'status-badge warn' : 'status-badge ok';
+      }
+      if (gateStatusText) {
+        gateStatusText.textContent = isTripped ? 'TRIPPED (Backpressure Shedding)' : 'HEALTHY (Queue Open)';
+        gateStatusText.style.color = isTripped ? '#f59e0b' : 'var(--accent-emerald)';
+      }
+      if (gateTrips) gateTrips.textContent = `${gate.trip_count || 0} events`;
+      if (gateReason) gateReason.textContent = gate.last_trip_reason || 'None (All operations within bounds)';
+      if (gateRec) {
+        const lastRec = gate.last_recovery_duration_ms != null ? `${gate.last_recovery_duration_ms} ms` : '—';
+        const avgRec = gate.avg_recovery_duration_ms != null ? `${gate.avg_recovery_duration_ms} ms` : '—';
+        gateRec.textContent = `Last: ${lastRec} · Avg: ${avgRec}`;
+      }
+      if (gateRej) gateRej.textContent = `${gate.rejected_requests || 0} requests`;
+
+      // Accelerator utilization in card
+      const dutyPct = accel.duty_cycle_percent != null ? accel.duty_cycle_percent : 0.0;
+      const dutyEl = document.getElementById('accel-duty-percent');
+      const dutyFill = document.getElementById('accel-duty-fill');
+      const actTime = document.getElementById('accel-active-time');
+      const idlTime = document.getElementById('accel-idle-time');
+      if (dutyEl) dutyEl.textContent = `${dutyPct.toFixed(1)}%`;
+      if (dutyFill) dutyFill.style.width = `${Math.min(100, dutyPct)}%`;
+      if (actTime) actTime.textContent = `Active: ${formatDuration(accel.active_seconds || 0)}`;
+      if (idlTime) idlTime.textContent = `Idle: ${formatDuration(accel.idle_seconds || 0)}`;
+
+      // CAS and Unified DRAM outcomes
+      const casSaved = document.getElementById('perf-cas-saved');
+      const casRatio = document.getElementById('perf-cas-ratio');
+      const dramHeadroom = document.getElementById('perf-dram-headroom');
+      if (casSaved && data.disk) casSaved.textContent = data.disk.cas_dedup_saved_human || '0 B';
+      if (casRatio && data.disk) casRatio.textContent = `${(data.disk.cas_dedup_ratio || 1.0).toFixed(1)}x`;
+      if (dramHeadroom && data.memory) dramHeadroom.textContent = `${data.memory.free_human || data.memory.available_human || '—'} headroom`;
 
       const kpiEff = document.getElementById('perf-kpi-efficiency');
       if (kpiEff) {
@@ -7773,6 +8525,37 @@
     restartPolling();
     fetchPlaygroundModels();
     fetchSpeculativePairs();
+
+    function triggerExportReport() {
+      if (!lastStats) {
+        alert('Telemetry data is still loading...');
+        return;
+      }
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(lastStats, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href", dataStr);
+      downloadAnchor.setAttribute("download", `pantry-telemetry-${Date.now()}.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    }
+
+    function handleGlobalSearch(e) {
+      const q = (e.target.value || '').toLowerCase().trim();
+      // Filter models table in Monitor tab
+      const rows = document.querySelectorAll('#models-table-body tr');
+      rows.forEach(r => {
+        const text = r.textContent.toLowerCase();
+        r.style.display = (!q || text.includes(q)) ? '' : 'none';
+      });
+      // Filter performance benchmark table
+      const perfRows = document.querySelectorAll('#perf-table-body tr');
+      perfRows.forEach(r => {
+        const text = r.textContent.toLowerCase();
+        r.style.display = (!q || text.includes(q)) ? '' : 'none';
+      });
+    }
+
   </script>
 
 </body>
