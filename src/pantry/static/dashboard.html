@@ -24,7 +24,7 @@
     :root,
     [data-theme="light"],
     [data-theme="system"] {
-      --bg-app: #fbf9f5;
+      --bg-app: #e4e0d8;
       --bg-sidebar: #ffffff;
       --bg-header: rgba(251, 249, 245, 0.94);
       --bg-card: #ffffff;
@@ -761,7 +761,7 @@
 
     .dashboard-row-1 {
       display: grid;
-      grid-template-columns: 2fr 1fr;
+      grid-template-columns: 1fr 2fr;
       gap: 20px;
       margin-bottom: 24px;
       align-items: start;
@@ -1006,7 +1006,7 @@
     .tab-stat.accent::before { background: var(--accent-primary); }
     .tab-stat.positive::before { background: var(--accent-emerald); }
     .tab-stat-label { color: var(--text-muted); font-size: 10px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
-    .tab-stat-value { color: var(--text-title); font-family: var(--mono); font-size: 22px; font-weight: 500; line-height: 1.15; margin-top: 7px; white-space: nowrap; }
+    .tab-stat-value { color: var(--text-title); font-family: var(--mono); font-size: 28px; font-weight: 500; line-height: 1.15; margin-top: 3px; white-space: nowrap; }
     .tab-stat-value small { color: var(--text-muted); font-family: var(--font); font-size: 10px; font-weight: 500; }
     .tab-stat-sub { color: var(--text-muted); font-size: 10.5px; margin-top: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .tab-stat.positive .tab-stat-value { color: var(--accent-emerald); }
@@ -2146,6 +2146,58 @@
       border: 1px solid var(--accent-primary-border);
     }
 
+    .playground-studio-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin: -4px 0 18px;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border-card);
+      border-bottom: 1px solid var(--border-card);
+    }
+
+    .playground-studio-copy { color: var(--text-muted); font-size: 11.5px; }
+    .playground-studio-copy strong { color: var(--text-title); font-size: 12px; margin-right: 6px; }
+    .playground-studio-meta { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    .playground-live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent-emerald); box-shadow: 0 0 0 4px var(--accent-emerald-subtle); }
+
+    .pg-container .pg-subnav {
+      gap: 0;
+      padding: 0;
+      margin-bottom: 18px;
+      border-bottom: 1px solid var(--border-card);
+    }
+
+    .pg-container .pg-subnav-btn {
+      border-radius: 0;
+      border: 0;
+      border-bottom: 2px solid transparent;
+      padding: 11px 16px 10px;
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .pg-container .pg-subnav-btn:hover { background: transparent; color: var(--text-title); }
+    .pg-container .pg-subnav-btn.active { color: var(--accent-primary); background: transparent; border: 0; border-bottom: 2px solid var(--accent-primary); }
+    .pg-container .pg-split { grid-template-columns: minmax(310px, 0.75fr) minmax(0, 1.25fr); gap: 18px; align-items: stretch; }
+    .pg-container .pg-split > .card { border-radius: 10px; background: var(--bg-surface); box-shadow: none; border-color: var(--border-card); }
+    .pg-container .pg-split > .card:first-child { background: linear-gradient(135deg, var(--bg-surface), var(--bg-card-inner)); }
+    .pg-container .card-header { padding-bottom: 12px; border-bottom: 1px solid var(--border-card-subtle); }
+    .pg-container .card-title { font-size: 15px; }
+    .pg-container .form-label { color: var(--text-muted); font-size: 10px; }
+    .pg-container .form-textarea { min-height: 104px; background: var(--bg-input); }
+    .pg-container .pg-output-box, .pg-container .pg-media-box { min-height: 360px; border-radius: 8px; background: var(--bg-card-inner); }
+    .pg-container .pg-empty-state { max-width: 250px; margin: auto; }
+    .pg-container .btn-run-primary { margin-top: 4px; min-height: 42px; border-radius: 7px; }
+    .pg-container .btn-preset { padding: 4px 8px; font-size: 10px; }
+
+    @media (max-width: 760px) {
+      .playground-studio-strip { align-items: flex-start; flex-direction: column; }
+      .playground-studio-meta { align-self: flex-start; }
+      .pg-container .pg-subnav-btn { padding-left: 10px; padding-right: 10px; }
+    }
+
     .pg-split {
       display: grid;
       grid-template-columns: 360px 1fr;
@@ -2901,7 +2953,7 @@
 
             <!-- Row 1: KPI & Request Log -->
             <div class="dashboard-row-1">
-              <div class="overview-performance-list">
+              <div class="overview-performance-list ">
                 <div class="overview-performance-heading">
                   <div class="overview-performance-title">Performance pulse</div>
                   <div class="overview-performance-subtitle">Live runtime signals</div>
@@ -2956,7 +3008,7 @@
                 <div class="req-visual-header">
                   <div>
                     <div class="req-visual-title">Total Requests</div>
-                    <div class="req-visual-sub">Session volume and response health</div>
+                    <div class="req-visual-sub">Recent response latency and health</div>
                   </div>
                   <div style="display: flex; align-items: center; gap: 8px;">
                     <span class="chip font-mono" id="request-count-badge">0 requests</span>
@@ -2980,10 +3032,10 @@
 
                 <!-- Real-time Spline/Bar Trend Area -->
                 <div class="request-chart-frame">
-                  <div class="request-chart-axis"><span id="request-chart-max">0</span><span>half</span><span>0</span></div>
+                  <div class="request-chart-axis"><span id="request-chart-max">0 ms</span><span>half</span><span>0 ms</span></div>
                   <canvas id="req-spline-canvas" class="req-spline-canvas"></canvas>
                 </div>
-                <div class="request-chart-caption"><span>Older</span><span>Requests per snapshot</span><span>Now</span></div>
+                <div class="request-chart-caption"><span>Older</span><span>Latency per request</span><span>Now</span></div>
 
                 <!-- Itemized Request Pills -->
                 <div class="req-pill-list" id="request-log-list">
@@ -3776,6 +3828,11 @@
                 <span>💻 <span id="studio-hw-device">Apple Silicon</span></span>
                 <span class="budget-tag" id="studio-hw-budget">True MLX Budget: -- GB</span>
               </div> -->
+            </div>
+
+            <div class="playground-studio-strip">
+              <div class="playground-studio-copy"><strong>Inference studio</strong> Choose a modality, tune the request, and inspect the result in place.</div>
+              <div class="playground-studio-meta"><span class="playground-live-dot"></span><span class="chip">Local runtime ready</span></div>
             </div>
 
 
@@ -5967,8 +6024,6 @@
       });
     }
 
-    const requestHistoryPoints = [];
-
     function drawRequestSpline(canvasId, reqs) {
       const canvas = document.getElementById(canvasId);
       if (!canvas) return;
@@ -5989,18 +6044,15 @@
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
 
-      // Track recent bucket activity
-      const activeCount = reqs ? reqs.length : 0;
-      requestHistoryPoints.push(activeCount);
-      if (requestHistoryPoints.length > 14) requestHistoryPoints.shift();
-
-      let pts = requestHistoryPoints.length > 1 ? requestHistoryPoints : [activeCount, activeCount];
-      const max = Math.max(...pts, 4);
+      const pts = (reqs || []).slice(-14).map(request => Number(request.duration_ms || 0));
+      if (pts.length === 0) pts.push(0, 0);
+      if (pts.length === 1) pts.push(pts[0]);
+      const max = Math.max(...pts, 1);
       const maxLabel = document.getElementById('request-chart-max');
-      if (maxLabel) maxLabel.textContent = max;
+      if (maxLabel) maxLabel.textContent = `${Math.round(max)} ms`;
       const barWidth = Math.max(6, Math.floor(w / (pts.length * 2)));
 
-      // 1. Draw Terracotta Volume Bars (from reference)
+      // Draw latency bars, highlighting the most recent request.
       pts.forEach((val, i) => {
         const x = (i / (pts.length - 1 || 1)) * (w - 30) + 15;
         const barHeight = (val / max) * (h - 30);
@@ -6020,7 +6072,7 @@
         }
       });
 
-      // 2. Draw Smooth Spline Trend Line
+      // Draw the latency trend line.
       ctx.beginPath();
       pts.forEach((val, i) => {
         const x = (i / (pts.length - 1 || 1)) * (w - 30) + 15;
@@ -6037,7 +6089,7 @@
       ctx.lineWidth = 2;
       ctx.stroke();
 
-      // 3. Peak Point Dot & Halo
+      // Mark the latest request.
       const lastX = w - 15;
       const lastY = h - ((pts[pts.length - 1] / max) * (h - 35)) - 14;
       ctx.fillStyle = '#ea580c';

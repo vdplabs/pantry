@@ -49,6 +49,10 @@ pantry dashboard
 ```
 *Launches the real-time glassmorphism System Monitor with interactive Playground, Model Performance benchmarks, and Cloud Cost Savings (ROI) Ledger.*
 
+<p align="center">
+  <img src="Docs/images/dashboard.jpg" alt="pantry" width="100%" />
+</p>
+
 ### 5. Chat via OpenAI-Compatible API
 ```bash
 curl -s http://127.0.0.1:18787/v1/chat/completions \
