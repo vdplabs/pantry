@@ -1,16 +1,16 @@
 import React from 'react';
 import {
-  FiDownload, FiPause, FiCalendar, FiSettings, FiZap,
-  FiMessageSquare, FiImage, FiBox, FiSliders, FiSearch
+  FiSettings, FiZap,
+  FiMessageSquare, FiImage, FiMusic, FiMic, FiSearch
 } from 'react-icons/fi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
 
 const navItems = [
   { id: 'chat', icon: FiMessageSquare, label: 'Chat' },
-  { id: 'generate', icon: FiImage, label: 'Generate' },
-  // { id: 'models', icon: FiBox, label: 'Models' },
-  // { id: 'settings', icon: FiSliders, label: 'Settings' },
+  { id: 'image', icon: FiImage, label: 'Image' },
+  { id: 'music', icon: FiMusic, label: 'Music' },
+  { id: 'stt', icon: FiMic, label: 'STT' },
 ];
 
 export default function TopMenu() {

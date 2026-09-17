@@ -1,5 +1,5 @@
 import { createRxDatabase, addRxPlugin, type RxDatabase, type RxCollection } from 'rxdb';
-import { getRxStorageLocalstorage } from 'rxdb/plugins/storage-localstorage';
+import { getRxStorageDexie } from 'rxdb/plugins/storage-dexie';
 import { RxDBLeaderElectionPlugin } from 'rxdb/plugins/leader-election';
 import { RxDBQueryBuilderPlugin } from 'rxdb/plugins/query-builder';
 import { RxDBUpdatePlugin } from 'rxdb/plugins/update';
@@ -33,7 +33,7 @@ export async function initDatabase(): Promise<RxDatabase> {
 
   database = await createRxDatabase({
     name: DB_NAME,
-    storage: getRxStorageLocalstorage(),
+    storage: getRxStorageDexie(),
     closeDuplicates: true,
   });
 

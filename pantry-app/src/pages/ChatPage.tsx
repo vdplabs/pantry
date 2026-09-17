@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiZap, FiLoader, FiChevronDown } from 'react-icons/fi';
+import { FiZap, FiLoader, FiChevronDown, FiImage } from 'react-icons/fi';
 import { useApp } from '@/context/AppContext';
 import ChatInput from '@/components/ChatInput';
-import type { Message, ModelInfo } from '@/types';
+import type { Message, ModelInfo, MessageContent } from '@/types';
+import { streamChat } from '@/services/streaming';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
 import 'highlight.js/styles/github.css';
@@ -33,6 +34,38 @@ function renderMarkdown(text: string): string {
   return marked.parse(text) as string;
 }
 
+function renderMessageContent(content: string | MessageContent[]): React.ReactNode {
+  if (typeof content === 'string') {
+    return content;
+  }
+  return (
+    <>
+      {content.map((part, idx) => {
+        if (part.type === 'text') {
+          return <span key={idx}>{part.text}</span>;
+        }
+        if (part.type === 'image_url') {
+          return (
+            <img
+              key={idx}
+              src={part.image_url.url}
+              alt="attachment"
+              className="chat-message-image"
+              style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', marginTop: '4px' }}
+            />
+          );
+        }
+        return null;
+      })}
+    </>
+  );
+}
+
+function getTextContent(content: string | MessageContent[]): string {
+  if (typeof content === 'string') return content;
+  return content.filter(p => p.type === 'text').map(p => p.text).join('');
+}
+
 const quickPrompts = [
   'Explain what you can do.',
   'Write a haiku about coding.',
@@ -47,16 +80,32 @@ export default function ChatPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSpeculative, setShowSpeculative] = useState(false);
   const [showModelSelect, setShowModelSelect] = useState(false);
+  
+  const hasImageAttachments = state.messages.some(msg => 
+    Array.isArray(msg.content) && msg.content.some(c => c.type === 'image_url')
+  );
+  
+  const currentModelSupportsVision = state.models.some(m => 
+    m.id === state.model && (m.modalities || []).some(mod => mod.toLowerCase().includes('vision') || mod.toLowerCase().includes('image'))
+  );
+  
+  const visionModels = state.models.filter(m =>
+    (m.modalities || []).some(mod => mod.toLowerCase().includes('vision') || mod.toLowerCase().includes('image'))
+  );
+  
   const chatModels = state.models.filter(m =>
     (m.modalities || []).some(mod => mod.toLowerCase().includes('chat')) ||
     (m.role || '').toLowerCase().includes('reasoning') ||
     (m.role || '').toLowerCase().includes('chat')
   );
-  const modelOptions = chatModels.length > 0
-    ? chatModels
-    : state.models.length > 0
-      ? state.models
-      : [{ id: state.model } as ModelInfo];
+  
+  const modelOptions = hasImageAttachments && visionModels.length > 0
+    ? visionModels
+    : chatModels.length > 0
+      ? chatModels
+      : state.models.length > 0
+        ? state.models
+        : [{ id: state.model } as ModelInfo];
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -68,8 +117,38 @@ export default function ChatPage() {
     scrollToBottom();
   }, [state.messages, state.isStreaming]);
 
-  const sendMessage = useCallback(async (text: string) => {
-    const userMsg: Message = { role: 'user', content: text };
+  const sendMessage = useCallback(async (content: string | MessageContent[]) => {
+    // Check if content has images
+    const hasImages = Array.isArray(content) && content.some(c => c.type === 'image_url');
+    
+    if (hasImages) {
+      // Check if current model supports vision
+      const currentModel = state.models.find(m => m.id === state.model);
+      const currentModelSupportsVision = currentModel && (currentModel.modalities || []).some(mod => 
+        mod.toLowerCase().includes('vision') || mod.toLowerCase().includes('image')
+      );
+      
+      if (!currentModelSupportsVision) {
+        // Try to auto-switch to a vision model
+        const visionModel = state.models.find(m => 
+          (m.modalities || []).some(mod => mod.toLowerCase().includes('vision') || mod.toLowerCase().includes('image'))
+        );
+        
+        if (visionModel) {
+          setModel(visionModel.id);
+        } else {
+          // Show error to user
+          setMessages(prev => [...prev, { 
+            role: 'assistant', 
+            content: 'Error: Cannot send images - no vision-capable model is available. Please load a vision model first.' 
+          }]);
+          setIsStreaming(false);
+          return;
+        }
+      }
+    }
+    
+    const userMsg: Message = { role: 'user', content };
     setIsStreaming(true);
 
     setMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
@@ -100,34 +179,34 @@ export default function ChatPage() {
         throw new Error(data.detail || data.error?.message || `Request failed (${res.status})`);
       }
 
-      if (res.body) {
-        const text = await res.text();
-        const lines = text.split('\n');
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6);
-          if (data === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(data);
-            const delta = parsed?.choices?.[0]?.delta?.content;
-            if (delta) {
-              setMessages(prev => {
-                const u = [...prev];
-                const idx = u.length - 1;
-                if (u[idx]?.role === 'assistant') {
-                  u[idx] = { ...u[idx], content: u[idx].content + delta };
-                }
-                return u;
-              });
+      streamChat(res,
+        (token) => {
+          setMessages(prev => {
+            const u = [...prev];
+            const idx = u.length - 1;
+            if (u[idx]?.role === 'assistant') {
+              u[idx] = { ...u[idx], content: u[idx].content + token };
             }
-          } catch { }
+            return u;
+          });
+        },
+        () => {
+          setIsStreaming(false);
+        },
+        (err) => {
+          setIsStreaming(false);
+          setMessages(prev => {
+            const u = [...prev];
+            const i = u.length - 1;
+            if (u[i]?.role === 'assistant') {
+              u[i] = { ...u[i], content: `Error: ${String(err).split('\n')[0]}` };
+            } else {
+              u.push({ role: 'assistant', content: `Error: ${String(err).split('\n')[0]}` });
+            }
+            return u;
+          });
         }
-      } else {
-        const data = await res.json();
-        const content = data.choices?.[0]?.message?.content || '';
-        setMessages(prev => { const u = [...prev]; const i = u.length - 1; if (u[i]?.role === 'assistant') u[i] = { ...u[i], content }; return u; });
-      }
-      setIsStreaming(false);
+      );
     } catch (err) {
       setIsStreaming(false);
       setMessages(prev => {
@@ -143,8 +222,8 @@ export default function ChatPage() {
     }
   }, [state.messages, state.model, state.temperature, state.maxTokens, state.systemPrompt, state.topP, state.preferSpeculative, state.adapters, state.selectedAdapter, state.draftModel]);
 
-  const handleSendFromInput = useCallback((text: string) => {
-    sendMessage(text);
+  const handleSendFromInput = useCallback((content: string | MessageContent[]) => {
+    sendMessage(content);
   }, [sendMessage]);
 
   return (
@@ -183,15 +262,14 @@ export default function ChatPage() {
               const isUser = msg.role === 'user';
               const isLastAssistant = i === state.messages.length - 1 && state.isStreaming;
               const isAssistant = msg.role === 'assistant';
+              const textContent = getTextContent(msg.content);
               return (
                 <div key={i} className={`chat-message-row ${isUser ? 'right' : 'left'}`}>
                   <div className="chat-message-content ">
                     {isAssistant && !isLastAssistant ? (
-
-
                       <div
                         className="markdown-body"
-                        dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
+                        dangerouslySetInnerHTML={{ __html: renderMarkdown(textContent) }}
                       />
                     ) : (
                       <div className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-assistant'}`}>
@@ -201,16 +279,20 @@ export default function ChatPage() {
                           {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                         </div>
-                        {isUser ? msg.content : <>{msg.content}<span className="chat-cursor">▌</span></>}
+                        <div className="chat-bubble-content">
+                          {isAssistant && isLastAssistant ? (
+                            <>  {/* Streaming: raw text + cursor, no markdown re-render */}
+                              <pre className="chat-streaming-text">{textContent}</pre>
+                              <span className="chat-cursor">▌</span>
+                            </>
+                          ) : (
+                            <>  {/* User message or completed assistant: render images only */}
+                              {renderMessageContent(msg.content)}
+                            </>
+                          )}
+                        </div>
                       </div>
                     )}
-                    {/* {isUser && (
-                      <div className="chat-message-time">
-                        <span className="chat-message-time-text">
-                          {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      </div>
-                    )} */}
                   </div>
                 </div>
               );
@@ -231,26 +313,33 @@ export default function ChatPage() {
             >
               <FiZap size={10} /> Speculative
             </button>
-            <button
-              onClick={() => setShowModelSelect(!showModelSelect)}
-              className={`chat-model-btn ${showModelSelect ? 'active' : ''}`}
-            >
-              <span className="chat-model-text">{state.model}</span>
-              <FiChevronDown size={10} />
-            </button>
-            {showModelSelect && modelOptions.length > 0 && (
-              <div className="chat-model-dropdown">
-                {modelOptions.map(m => (
-                  <button
-                    key={m.id}
-                    onClick={() => { setModel(m.id); setShowModelSelect(false); }}
-                    className={`chat-model-dropdown-btn ${state.model === m.id ? 'active' : ''}`}
-                  >
-                    {m.id}{m.alias ? ` (${m.alias})` : ''}
-                  </button>
-                ))}
-              </div>
-            )}
+            <div className="chat-model-wrapper">
+              <button
+                onClick={() => setShowModelSelect(!showModelSelect)}
+                className={`chat-model-btn ${showModelSelect ? 'active' : ''}`}
+              >
+                <span className="chat-model-text">{state.model}</span>
+                <FiChevronDown size={10} />
+              </button>
+              {hasImageAttachments && !currentModelSupportsVision && (
+                <span className="chat-model-warning" title="Current model doesn't support images">
+                  <FiImage size={10} /> Vision required
+                </span>
+              )}
+              {showModelSelect && modelOptions.length > 0 && (
+                <div className="chat-model-dropdown">
+                  {modelOptions.map(m => (
+                    <button
+                      key={m.id}
+                      onClick={() => { setModel(m.id); setShowModelSelect(false); }}
+                      className={`chat-model-dropdown-btn ${state.model === m.id ? 'active' : ''}`}
+                    >
+                      {m.id}{m.alias ? ` (${m.alias})` : ''}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             {state.isStreaming && (
               <span className="chat-streaming-label">
                 <FiLoader size={11} className="chat-spinner" /> Generating…
@@ -293,7 +382,16 @@ export default function ChatPage() {
         </div>
       </div>
 
-      <style>{`@keyframes blink { 50% { opacity: 0; } } @keyframes spin { to { transform: rotate(360deg); } }`}</style>
+<style>{`
+        @keyframes blink { 50% { opacity: 0; } }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .chat-message-image { max-width: 100%; max-height: 300px; border-radius: 6px; margin-top: 4px; display: block; }
+        .chat-bubble { display: flex; flex-direction: column; gap: 4px; }
+        .chat-bubble-content { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
+        .chat-streaming-text { margin: 0; font-family: inherit; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; max-width: 100%; }
+        .chat-model-wrapper { position: relative; display: flex; align-items: center; gap: 6px; }
+        .chat-model-warning { display: flex; align-items: center; gap: 4px; padding: 2px 8px; background: rgba(248, 81, 73, 0.15); border: 1px solid rgba(248, 81, 73, 0.3); border-radius: 4px; color: #f85149; font-size: 10px; font-weight: 500; }
+      `}</style>
     </div>
   );
 }

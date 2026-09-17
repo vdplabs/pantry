@@ -6,7 +6,9 @@ import Header from '@/components/Header';
 import ConversationList from '@/components/ConversationList';
 import ChatPage from '@/pages/ChatPage';
 import ModelsPage from '@/pages/ModelsPage';
-import GeneratePage from '@/pages/GeneratePage';
+import ImagePage from '@/pages/ImagePage';
+import MusicPage from '@/pages/MusicPage';
+import STTPage from '@/pages/STTPage';
 import SettingsPage from '@/pages/SettingsPage';
 import api from '@/services/api';
 
@@ -14,7 +16,9 @@ const TAB_MAP: Record<string, string> = {
   '': 'chat',
   '/': 'chat',
   chat: 'chat',
-  generate: 'generate',
+  image: 'image',
+  music: 'music',
+  stt: 'stt',
   models: 'models',
   settings: 'settings',
 };
@@ -60,11 +64,11 @@ function AppContentInner() {
     let target: string | null = null;
     if (state.activeTab === 'chat') {
       target = activeConversationId ? `/chat/${activeConversationId}` : '/chat';
-    } else if (state.activeTab === 'generate') {
+    } else if (['image', 'music', 'stt'].includes(state.activeTab)) {
       if (params.id) {
-        target = `/generate/${params.id}`;
+        target = `/${state.activeTab}/${params.id}`;
       } else {
-        target = '/generate';
+        target = `/${state.activeTab}`;
       }
     }
     if (target && navTargetRef.current !== target) {
@@ -76,8 +80,10 @@ function AppContentInner() {
   const renderPage = () => {
     switch (state.activeTab) {
       case 'chat': return <ChatPage />;
+      case 'image': return <ImagePage />;
+      case 'music': return <MusicPage />;
+      case 'stt': return <STTPage />;
       case 'models': return <ModelsPage />;
-      case 'generate': return <GeneratePage />;
       case 'settings': return <SettingsPage />;
       default: return <ChatPage />;
     }

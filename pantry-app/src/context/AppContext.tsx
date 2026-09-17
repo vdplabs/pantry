@@ -288,10 +288,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await deleteConversationFromDb(id).catch(e => console.error('deleteConversationFromDb failed:', e));
   }, [activeConversationId]);
 
-  const addGeneration = useCallback((gen: Generation) => {
+const addGeneration = useCallback((gen: Generation) => {
     setGenerations(prev => [gen, ...prev]);
     saveGenerationToDb(gen).catch(e => console.error('saveGeneration failed:', e));
-  }, []);
+}, []);
 
   const deleteGeneration = useCallback(async (id: string) => {
     console.log('deleteGeneration called for:', id);
