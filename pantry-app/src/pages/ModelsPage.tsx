@@ -76,7 +76,7 @@ export default function ModelsPage() {
 
   return (
     <div className="models-page">
-      <h1 className="models-title">Model Management</h1>
+      {/* <h1 className="models-title">Model Management</h1> */}
 
       {/* Resolve Section */}
       <div className="models-card">
@@ -181,9 +181,17 @@ export default function ModelsPage() {
                 </div>
                 <div className="models-model-meta">
                   {model.runtime} {model.size_gb && `· ${model.size_gb} GB`}
-                  {model.context_max && ` · ${model.context_max.toLocaleString()} ctx`}
-                  {model.quant_label && ` · ${model.quant_label}`}
+                  {/* {model.context_max && ` · ${model.context_max.toLocaleString()} ctx`} */}
+                  {model.family && ` · ${model.family}`}
+                  {model.quality_tier && ` · ${model.quality_tier}`}
                 </div>
+                <div>
+                   {model.aliases.map((alias) => (
+                    <span className="chip me-1" key={alias}>
+                      {alias}
+                    </span>
+                  ))}
+                  </div>
               </div>
             </div>
             <div className="models-model-actions">

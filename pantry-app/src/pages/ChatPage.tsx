@@ -36,7 +36,26 @@ function renderMarkdown(text: string): string {
 
 function renderMessageContent(content: string | MessageContent[]): React.ReactNode {
   if (typeof content === 'string') {
-    return content;
+    const parsed = parseThinkingContent(content);
+    if (parsed) {
+      return (
+        <>
+          <div className="chat-thinking-block">
+            <div className="chat-thinking-header">
+              <span className="chat-thinking-icon">💭</span>
+              <span className="chat-thinking-label">Thinking</span>
+            </div>
+            <div className="chat-thinking-content">
+              {marked.parse(parsed.thinking) as string}
+            </div>
+          </div>
+          <div className="markdown-body" dangerouslySetInnerHTML={{ __html: marked.parse(parsed.response) as string }} />
+        </>
+      );
+    }
+    return (
+      <div className="markdown-body" dangerouslySetInnerHTML={{ __html: marked.parse(content) as string }} />
+    );
   }
   return (
     <>
@@ -66,6 +85,23 @@ function getTextContent(content: string | MessageContent[]): string {
   return content.filter(p => p.type === 'text').map(p => p.text).join('');
 }
 
+function parseThinkingContent(text: string): { thinking: string; response: string } | null {
+  // Match <think>...</think> or <reasoning>...</reasoning> tags
+  const thinkMatch = text.match(/<think>([\s\S]*?)<\/think>/i);
+  const reasoningMatch = text.match(/<reasoning>([\s\S]*?)<\/reasoning>/i);
+  
+  const thinking = thinkMatch?.[1] || reasoningMatch?.[1];
+  if (!thinking) return null;
+  
+  // Remove the thinking tags from the response
+  const response = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
+    .trim();
+  
+  return { thinking: thinking.trim(), response };
+}
+
 const quickPrompts = [
   'Explain what you can do.',
   'Write a haiku about coding.',
@@ -80,6 +116,7 @@ export default function ChatPage() {
   const [showSettings, setShowSettings] = useState(false);
   const [showSpeculative, setShowSpeculative] = useState(false);
   const [showModelSelect, setShowModelSelect] = useState(false);
+  const [streamingContent, setStreamingContent] = useState('');
   
   const hasImageAttachments = state.messages.some(msg => 
     Array.isArray(msg.content) && msg.content.some(c => c.type === 'image_url')
@@ -121,6 +158,8 @@ export default function ChatPage() {
     // Check if content has images
     const hasImages = Array.isArray(content) && content.some(c => c.type === 'image_url');
     
+    let modelToUse = state.model;
+    
     if (hasImages) {
       // Check if current model supports vision
       const currentModel = state.models.find(m => m.id === state.model);
@@ -136,6 +175,7 @@ export default function ChatPage() {
         
         if (visionModel) {
           setModel(visionModel.id);
+          modelToUse = visionModel.id;
         } else {
           // Show error to user
           setMessages(prev => [...prev, { 
@@ -150,6 +190,7 @@ export default function ChatPage() {
     
     const userMsg: Message = { role: 'user', content };
     setIsStreaming(true);
+    setStreamingContent('');
 
     setMessages(prev => [...prev, userMsg, { role: 'assistant', content: '' }]);
 
@@ -160,7 +201,7 @@ export default function ChatPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: state.model,
+          model: modelToUse,
           messages: currentMessages,
           temperature: state.temperature,
           max_tokens: state.maxTokens,
@@ -181,17 +222,22 @@ export default function ChatPage() {
 
       streamChat(res,
         (token) => {
-          setMessages(prev => {
-            const u = [...prev];
-            const idx = u.length - 1;
-            if (u[idx]?.role === 'assistant') {
-              u[idx] = { ...u[idx], content: u[idx].content + token };
-            }
-            return u;
-          });
+          setStreamingContent(prev => prev + token);
         },
         () => {
           setIsStreaming(false);
+          // Finalize the message - get latest streamingContent
+          setStreamingContent(current => {
+            setMessages(prev => {
+              const u = [...prev];
+              const idx = u.length - 1;
+              if (u[idx]?.role === 'assistant') {
+                u[idx] = { ...u[idx], content: current };
+              }
+              return u;
+            });
+            return '';
+          });
         },
         (err) => {
           setIsStreaming(false);
@@ -205,6 +251,7 @@ export default function ChatPage() {
             }
             return u;
           });
+          setStreamingContent('');
         }
       );
     } catch (err) {
@@ -219,6 +266,7 @@ export default function ChatPage() {
         }
         return u;
       });
+      setStreamingContent('');
     }
   }, [state.messages, state.model, state.temperature, state.maxTokens, state.systemPrompt, state.topP, state.preferSpeculative, state.adapters, state.selectedAdapter, state.draftModel]);
 
@@ -275,14 +323,14 @@ export default function ChatPage() {
                       <div className={`chat-bubble ${isUser ? 'chat-bubble-user' : 'chat-bubble-assistant'}`}>
                         <div className="chat-bubble-name">
                           {isUser ? "Me" : "Assistant"}
-                          <span className="chat-message-time-text">
+                          <span className="chip">
                           {new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                         </div>
                         <div className="chat-bubble-content">
                           {isAssistant && isLastAssistant ? (
-                            <>  {/* Streaming: raw text + cursor, no markdown re-render */}
-                              <pre className="chat-streaming-text">{textContent}</pre>
+                            <>  {/* Streaming: use local state, no markdown re-render */}
+                              <div className="chat-streaming-text">{streamingContent}</div>
                               <span className="chat-cursor">▌</span>
                             </>
                           ) : (
@@ -380,6 +428,7 @@ export default function ChatPage() {
 
           <ChatInput onSend={handleSendFromInput} disabled={state.isStreaming} autoFocus />
         </div>
+        
       </div>
 
 <style>{`
@@ -388,10 +437,33 @@ export default function ChatPage() {
         .chat-message-image { max-width: 100%; max-height: 300px; border-radius: 6px; margin-top: 4px; display: block; }
         .chat-bubble { display: flex; flex-direction: column; gap: 4px; }
         .chat-bubble-content { white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
-        .chat-streaming-text { margin: 0; font-family: inherit; font-size: 14px; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; max-width: 100%; }
+        .chat-streaming-text { 
+          font-family: inherit; 
+          font-size: 14px; 
+          line-height: 1.5; 
+          white-space: pre-wrap; 
+          word-wrap: break-word; 
+          overflow-wrap: anywhere; 
+          max-width: 100%; 
+          padding: 10px 16px;
+          background: var(--bg-surface);
+          border: 1px solid var(--border-card);
+          border-radius: var(--radius-lg);
+          box-shadow: var(--shadow-card);
+          min-width: 0;
+        }
         .chat-model-wrapper { position: relative; display: flex; align-items: center; gap: 6px; }
         .chat-model-warning { display: flex; align-items: center; gap: 4px; padding: 2px 8px; background: rgba(248, 81, 73, 0.15); border: 1px solid rgba(248, 81, 73, 0.3); border-radius: 4px; color: #f85149; font-size: 10px; font-weight: 500; }
+        .chat-thinking-block { margin-bottom: 12px; border: 1px solid var(--border-faint); border-radius: 8px; background: var(--bg-hover); overflow: hidden; }
+        .chat-thinking-header { display: flex; align-items: center; gap: 6px; padding: 8px 12px; background: var(--bg-deep); border-bottom: 1px solid var(--border-faint); font-size: 11px; font-weight: 600; color: var(--text-muted-2); text-transform: uppercase; letter-spacing: 0.5px; }
+        .chat-thinking-icon { font-size: 12px; }
+        .chat-thinking-content { padding: 12px; font-size: 13px; line-height: 1.6; color: var(--text-body-2); }
+        .chat-thinking-content pre { background: var(--bg-deep); border: 1px solid var(--border-faint); border-radius: 6px; padding: 10px; overflow-x: auto; margin: 8px 0; }
+        .chat-thinking-content code { background: var(--bg-deep); color: var(--accent-amber); padding: 0.15em 0.4em; border-radius: 4px; font-family: var(--monospace); font-size: 0.88em; }
       `}</style>
+
+      
     </div>
+
   );
 }

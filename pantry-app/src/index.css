@@ -317,13 +317,16 @@ button, input, select, textarea {
 
 /* ============ CHAT SIDEBAR / CONVERSATION LIST ============ */
 .chat-layout {
-  display: flex;
-  flex: 1;
+  /* display: flex; */
+  /* flex: 1; */
   overflow: hidden;
+
+  display: grid;
+  grid-template-columns: 290px minmax(0, 1fr) 400px;
 }
 .chat-sidebar {
-  width: 240px;
-  min-width: 240px;
+  /* width: 240px;
+  min-width: 240px; */
   /* border-right: 1px solid var(--border-default); */
   overflow-y: auto;
   flex-shrink: 0;
@@ -497,7 +500,8 @@ button, input, select, textarea {
   border-radius: 12px 12px 12px 4px;
   background: var(--bg-hover);
   color: var(--text-primary);
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 600;
   white-space: pre-wrap;
   word-break: break-word;
   border: 1px solid var(--border-default);
@@ -974,7 +978,7 @@ button, input, select, textarea {
   overflow-x: hidden;
 }
 .chat-messages-inner {
-  max-width: 1000px;
+  /* max-width: 1000px; */
   margin: 0 auto;
   padding: 40px 20px 20px;
   width: 100%;
@@ -1035,11 +1039,15 @@ button, input, select, textarea {
   justify-content: flex-start;
 }
 .chat-message-content {
-  max-width: 80%;
+  /* max-width: 80%; */
 }
 .chat-bubble-name {
   font-weight: bold;
   font-size: 11px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: start;
 }
 .chat-bubble-user {
   padding: 10px 16px;
@@ -1071,7 +1079,7 @@ button, input, select, textarea {
 }
 .chat-composer {
   padding: 12px 20px 24px;
-  border-top: 1px solid var(--border-faint);
+  /* border-top: 1px solid var(--border-faint); */
   flex-shrink: 0;
 }
 .chat-composer-inner {
@@ -1409,7 +1417,7 @@ button, input, select, textarea {
   grid-template-columns:
     360px
     minmax(0, 1fr)
-    270px;
+    200px;
 
   overflow: hidden;
 }
@@ -1471,7 +1479,7 @@ button, input, select, textarea {
 .gen-eyebrow {
   color: #aeb5be;
 
-  font-size: 10px;
+  /* font-size: 10px; */
   font-weight: 700;
 
   letter-spacing: .09em;
@@ -1491,8 +1499,8 @@ button, input, select, textarea {
   background: transparent;
   color: var(--muted);
 
-  font: inherit;
-  font-size: 10px;
+  /* font: inherit; */
+  /* font-size: 10px; */
 
   cursor: pointer;
 }
@@ -1562,7 +1570,7 @@ button, input, select, textarea {
 .gen-label {
   color: #aeb5be;
 
-  font-size: 10px;
+  /* font-size: 10px; */
   font-weight: 600;
 }
 
@@ -1573,10 +1581,10 @@ button, input, select, textarea {
 
   color: #707a87;
 
-  font-size: 8px;
+  font-size: 90%;
   font-weight: 700;
 
-  letter-spacing: .10em;
+  
   text-transform: uppercase;
 }
 
@@ -1591,7 +1599,7 @@ button, input, select, textarea {
 .gen-char {
   color: #535d69;
 
-  font-size: 9px;
+  /* font-size: 9px; */
   font-variant-numeric: tabular-nums;
 }
 
@@ -1620,8 +1628,8 @@ button, input, select, textarea {
   color: #e9edf1;
 
   
-  font-size: 12px;
-  line-height: 1.58;
+  /* font-size: 12px; */
+  /* line-height: 1.58; */
 
   outline: none;
 
@@ -1674,7 +1682,7 @@ button, input, select, textarea {
 
   color: #b8bec6;
 
-  font-size: 9px;
+  /* font-size: 9px; */
   font-weight: 700;
 
   letter-spacing: .09em;
@@ -1725,7 +1733,7 @@ button, input, select, textarea {
   outline: none;
 
   
-  font-size: 11px;
+  /* font-size: 11px; */
 
   transition:
     border-color .15s ease,
@@ -1805,8 +1813,7 @@ select option {
   background: #090c10;
   color: #747e8a;
 
-  font: inherit;
-  font-size: 9px;
+  font-size: 90%;
   font-weight: 500;
 
   cursor: pointer;
@@ -2000,8 +2007,8 @@ select option {
 
   color: #596471;
 
-  font-size: 9px;
-  line-height: 1.5;
+  /* font-size: 9px;
+  line-height: 1.5; */
 }
 
 
@@ -2024,7 +2031,7 @@ select option {
 
   color: #a0a8b2;
 
-  font-size: 10px;
+  /* font-size: 10px; */
   font-weight: 600;
 
   cursor: pointer;
@@ -2098,35 +2105,21 @@ select option {
    ========================================================= */
 
 .gen-submit {
-  width: 100%;
-  height: 44px;
-
-  margin-top: 20px;
-
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-
-  border: 0;
-  border-radius: 9px;
-
-  background: var(--accent);
-  color: white;
-
-  
-  font-size: 11px;
-  font-weight: 700;
-
-  cursor: pointer;
-
-  box-shadow:
-    0 7px 22px rgba(255,112,72,.13);
-
-  transition:
-    background .15s ease,
-    transform .12s ease,
-    box-shadow .15s ease;
+width: 100%;
+    background: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+    margin-top: 10px;
 }
 
 .gen-submit:hover:not(:disabled) {
@@ -2224,7 +2217,7 @@ select option {
 
   color: #626d79;
 
-  font-size: 8px;
+  /* font-size: 8px; */
   font-weight: 600;
 
   letter-spacing: .10em;
@@ -2263,11 +2256,11 @@ select option {
   border: 1px solid #202731;
   border-radius: 6px;
 
-  background: #10141a;
-  color: #737e8a;
+  background: #202731;
+  color: #ffffff;
 
-  font: inherit;
-  font-size: 8px;
+  /* font: inherit;
+  font-size: 8px; */
 
   text-decoration: none;
 
@@ -2629,7 +2622,7 @@ select option {
 .gen-gallery-title strong {
   color: #aeb5be;
 
-  font-size: 9px;
+  /* font-size: 9px; */
   font-weight: 700;
 
   letter-spacing: .10em;
@@ -2649,7 +2642,7 @@ select option {
 
   color: #6d7783;
 
-  font-size: 8px;
+  /* font-size: 8px; */
 }
 
 .gen-gallery-grid {
@@ -2965,9 +2958,11 @@ input[type="number"] {
 }
 /* ============ MODELS PAGE ============ */
 .models-page {
-  padding: 24px;
-  max-width: 1000px;
+  padding: 24px 15px;
+  /* max-width: 1000px; */
   margin: 0 auto;
+  overflow: auto;
+  height: calc(100vh - 120px);
 }
 .models-title {
   color: var(--text-heading);
@@ -3102,7 +3097,7 @@ input[type="number"] {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--bg-card);
+  background: var(--bg-card-inner);
   border: 1px solid var(--border-default);
   border-radius: 10px;
   padding: 12px 16px;
@@ -3234,6 +3229,19 @@ input[type="number"] {
 .markdown-body h3 { font-size: 1.15em; }
 .markdown-body h4 { font-size: 1em; }
 
+.chat-bubble-user  {
+  background: transparent!important;
+  /* border-left: 1px solid var(--accent-amber); */
+  border-radius: 0em;
+}
+
+.chat-bubble-user .markdown-body {
+  padding: 0px 0px!important;
+  border: 0px!important;
+  background: transparent!important;
+  box-shadow: none!important;
+}
+
 .markdown-body p {
   /* margin: 0.8em 0; */
 }
@@ -3325,4 +3333,35 @@ input[type="number"] {
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+.btn-run-primary {
+    width: 100%;
+    background: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: all 0.15s ease;
+}
+
+.chip {
+    font-size: 11px;
+    font-weight: 500;
+    padding: 3px 9px;
+    border-radius: 6px;
+    background: var(--chip-bg);
+    color: var(--chip-text);
+    border: 1px solid var(--chip-border);
+    white-space: nowrap;
+}
+.me-1 {
+  margin-right: 2px;
 }

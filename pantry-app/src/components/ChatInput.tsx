@@ -33,6 +33,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
   const [showTokenControls, setShowTokenControls] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [inputValue, setInputValue] = useState('');
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
@@ -41,7 +42,9 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
     }
   };
 
-  const handleInput = () => {
+  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    setInputValue(value);
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
@@ -51,6 +54,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
   const handleCompositionStart = () => setIsComposing(true);
   const handleCompositionEnd = (e: React.CompositionEvent<HTMLTextAreaElement>) => {
     setIsComposing(false);
+    setInputValue(e.currentTarget.value);
     if (e.data && !(e.nativeEvent as any).isComposing) {
       handleSend();
     }
@@ -108,7 +112,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
   };
 
   const handleSend = () => {
-    const text = textareaRef.current?.value.trim() || '';
+    const text = inputValue.trim();
     if ((!text && attachments.length === 0) || !onSend || disabled) return;
 
     const content: MessageContent[] = [];
@@ -118,6 +122,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
     }
 
     onSend(content.length === 1 && content[0].type === 'text' ? content[0].text : content);
+    setInputValue('');
     if (textareaRef.current) {
       textareaRef.current.value = '';
       textareaRef.current.style.height = 'auto';
@@ -248,8 +253,8 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
         <button
           type="button"
           onClick={handleSend}
-          disabled={disabled || (!textareaRef.current?.value.trim() && attachments.length === 0)}
-          className={`chat-input-send ${(textareaRef.current?.value.trim() || attachments.length > 0) && !disabled ? 'active' : 'inactive'}`}
+          disabled={disabled || (!inputValue.trim() && attachments.length === 0)}
+          className={`chat-input-send ${(inputValue.trim() || attachments.length > 0) && !disabled ? 'active' : 'inactive'}`}
         >
           <FiSend size={14} />
         </button>

@@ -339,7 +339,7 @@ export default function ImagePage() {
             </div>
           </details>
 
-          <button className="gen-submit" onClick={handleGenerateImage} disabled={isGenerating || !imagePrompt.trim()}>
+          <button className="gen-submit btn-run-primary" onClick={handleGenerateImage} disabled={isGenerating || !imagePrompt.trim()}>
             {isGenerating ? <FiLoader size={13} className="gen-spinner" style={{ margin: 0 }} /> : <FiZap size={13} />}
             {isGenerating ? `Generating · ${Math.round(generatingPercent)}%` : `Generate · ${selectedModelLabel}`}
           </button>

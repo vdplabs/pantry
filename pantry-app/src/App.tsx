@@ -24,7 +24,7 @@ const TAB_MAP: Record<string, string> = {
 };
 
 function AppContentInner() {
-  const { state, setModels, setActiveTab, conversations, activeConversationId, generations, selectConversation, dbReady } = useApp();
+  const { state, setModels, setActiveTab, conversations, activeConversationId, generations, selectConversation, dbReady, createConversation } = useApp();
   const location = useLocation();
   const navigate = useNavigate();
   const params = useParams<{ tab?: string; id?: string }>();
@@ -49,15 +49,25 @@ function AppContentInner() {
     if (!dbReady) return;
     if (urlId === lastUrlIdRef.current) return;
     lastUrlIdRef.current = urlId;
-    if (urlTab === 'chat' && urlId) {
-      const conv = conversations.find(c => c.id === urlId);
-      if (conv) {
-        selectConversation(urlId);
+    if (urlTab === 'chat') {
+      if (urlId) {
+        const conv = conversations.find(c => c.id === urlId);
+        if (conv) {
+          selectConversation(urlId);
+        }
+      } else if (activeConversationId) {
+        // Navigate to the saved active conversation
+        navigate(`/chat/${activeConversationId}`, { replace: true });
+      } else if (conversations.length > 0) {
+        // Load the most recent conversation
+        const latest = conversations[0];
+        navigate(`/chat/${latest.id}`, { replace: true });
+      } else {
+        // No conversations exist, create a new one
+        createConversation();
       }
-    } else if (urlTab === 'chat' && !urlId && activeConversationId) {
-      selectConversation(null);
     }
-  }, [urlId, urlTab, dbReady, conversations, activeConversationId, selectConversation]);
+  }, [urlId, urlTab, dbReady, conversations, activeConversationId, selectConversation, navigate, createConversation]);
 
   useEffect(() => {
     if (!dbReady) return;
@@ -105,6 +115,8 @@ function AppContentInner() {
                   {renderPage()}
                 </div>
               </div>
+              <aside><ModelsPage /></aside>
+              
             </div>
           ) : (
             <>

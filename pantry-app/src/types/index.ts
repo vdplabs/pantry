@@ -2,6 +2,7 @@ export interface ModelInfo {
   id: string;
   alias?: string;
   modalities: string[];
+  aliases: string[];
   runtime: string;
   role?: string;
   size_gb?: number;
@@ -11,6 +12,7 @@ export interface ModelInfo {
   resident?: boolean;
   draft_package_id?: string;
   family?: string;
+  quality_tier?: string;
 }
 
 export interface Message {
