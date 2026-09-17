@@ -1,0 +1,131 @@
+import React, { useEffect, useRef } from 'react';
+import { Routes, Route, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { AppProvider, useApp } from '@/context/AppContext';
+import TopMenu from '@/components/TopMenu';
+import Header from '@/components/Header';
+import ConversationList from '@/components/ConversationList';
+import ChatPage from '@/pages/ChatPage';
+import ModelsPage from '@/pages/ModelsPage';
+import GeneratePage from '@/pages/GeneratePage';
+import SettingsPage from '@/pages/SettingsPage';
+import api from '@/services/api';
+
+const TAB_MAP: Record<string, string> = {
+  '': 'chat',
+  '/': 'chat',
+  chat: 'chat',
+  generate: 'generate',
+  models: 'models',
+  settings: 'settings',
+};
+
+function AppContentInner() {
+  const { state, setModels, setActiveTab, conversations, activeConversationId, generations, selectConversation, dbReady } = useApp();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const params = useParams<{ tab?: string; id?: string }>();
+  const navTargetRef = useRef<string | null>(null);
+  const lastUrlIdRef = useRef<string | null>(null);
+
+  const urlTab = TAB_MAP[params.tab || ''] || 'chat';
+  const urlId = params.id || null;
+
+  useEffect(() => {
+    setActiveTab(urlTab);
+  }, [urlTab, setActiveTab]);
+
+  useEffect(() => {
+    api.listModels().then(res => {
+      const models = res.data || res;
+      if (Array.isArray(models)) setModels(models as any);
+    }).catch(() => { });
+  }, [setModels]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    if (urlId === lastUrlIdRef.current) return;
+    lastUrlIdRef.current = urlId;
+    if (urlTab === 'chat' && urlId) {
+      const conv = conversations.find(c => c.id === urlId);
+      if (conv) {
+        selectConversation(urlId);
+      }
+    } else if (urlTab === 'chat' && !urlId && activeConversationId) {
+      selectConversation(null);
+    }
+  }, [urlId, urlTab, dbReady, conversations, activeConversationId, selectConversation]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    let target: string | null = null;
+    if (state.activeTab === 'chat') {
+      target = activeConversationId ? `/chat/${activeConversationId}` : '/chat';
+    } else if (state.activeTab === 'generate') {
+      if (params.id) {
+        target = `/generate/${params.id}`;
+      } else {
+        target = '/generate';
+      }
+    }
+    if (target && navTargetRef.current !== target) {
+      navTargetRef.current = target;
+      navigate(target, { replace: true });
+    }
+  }, [state.activeTab, activeConversationId, generations, dbReady, navigate, params.id]);
+
+  const renderPage = () => {
+    switch (state.activeTab) {
+      case 'chat': return <ChatPage />;
+      case 'models': return <ModelsPage />;
+      case 'generate': return <GeneratePage />;
+      case 'settings': return <SettingsPage />;
+      default: return <ChatPage />;
+    }
+  };
+
+  return (
+    <div className="app-layout">
+      <div className="app-main">
+        <TopMenu />
+        <div className="app-content">
+          {state.activeTab === 'chat' ? (
+            <div className="chat-layout">
+              <div className="chat-sidebar">
+                <ConversationList />
+              </div>
+              <div className="chat-main">
+                {/* <Header /> */}
+                <div className="app-content">
+                  {renderPage()}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* <Header /> */}
+              <div className="app-content">
+                {renderPage()}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AppContent() {
+  return <AppContentInner />;
+}
+
+export default function App() {
+  return (
+    <AppProvider>
+      <Routes>
+        <Route path="/" element={<AppContent />} />
+        <Route path="/:tab" element={<AppContent />} />
+        <Route path="/:tab/:id" element={<AppContent />} />
+      </Routes>
+    </AppProvider>
+  );
+}
