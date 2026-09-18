@@ -166,7 +166,7 @@ export default function ChatPage() {
     const t0 = performance.now();
     let tokenCount = 0;
 
-    const messagesPayload = [...state.messages, userMsg];
+    const messagesPayload: Message[] = [...state.messages, userMsg];
 
     // Compute effective system prompt (incorporating living canvas state if active)
     let effectiveSystemPrompt = state.systemPrompt || undefined;
@@ -174,8 +174,28 @@ export default function ChatPage() {
       effectiveSystemPrompt = plugin.buildSystemPrompt(currentConv.canvas_state, currentConv.plugin_framework);
     }
 
+    // For Studio sessions, the living canvas maintains the full state of truth (findings, doc, questions).
+    // We compact previous message history to prevent context window saturation and ensure maximum generation headroom.
+    let effectiveMessages = messagesPayload;
+    if (plugin) {
+      const recent = messagesPayload.slice(-6).map((m: Message, idx: number, arr: Message[]) => {
+        if (m.role === 'assistant' && typeof m.content === 'string') {
+          let clean = m.content
+            .replace(/```(?:research_patch|rfc_patch|threat_model_patch|json)[\s\S]*?```/g, '')
+            .replace(/Final (?:Research|RFC|Threat Model) Patch:?[\s\S]*$/gi, '')
+            .trim();
+          if (idx < arr.length - 2 && clean.length > 800) {
+            clean = clean.slice(0, 800) + '\n\n*(Prior analysis synthesized into Canvas)*';
+          }
+          return { ...m, content: clean };
+        }
+        return m;
+      });
+      effectiveMessages = recent;
+    }
+
     try {
-      const res = await api.chat(messagesPayload, {
+      const res = await api.chat(effectiveMessages, {
         model: state.model || 'chat-compact',
         temperature: state.temperature ?? 0.7,
         max_tokens: state.maxTokens ?? 4096,

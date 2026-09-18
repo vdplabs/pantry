@@ -72,48 +72,45 @@ Investigate the core architectural tradeoffs, performance profiles, and implemen
 }
 
 export function buildResearchSystemPrompt(canvasState: ResearchState, framework: string = 'technical'): string {
-  const findingsSummary = (canvasState.findings || []).slice(0, 15).map(f =>
-    `- [${f.id}] ${f.topic}: "${f.insight}" (Confidence: ${f.confidence}) -> Takeaway: ${f.takeaway || 'N/A'}`
+  const findingsSummary = (canvasState.findings || []).slice(0, 6).map(f =>
+    `- [${f.id}] ${f.topic}: "${f.insight.slice(0, 120)}"`
   ).join('\n');
 
-  const questionsSummary = (canvasState.questions || []).map(q =>
-    `- [${q.id}] (${q.status.toUpperCase()}): ${q.question}${q.findings ? ` -> Resolved: ${q.findings}` : ''}`
+  const openQs = (canvasState.questions || []).filter(q => q.status !== 'resolved');
+  const resolvedQs = (canvasState.questions || []).filter(q => q.status === 'resolved').slice(-2);
+  const questionsSummary = [...openQs, ...resolvedQs].map(q =>
+    `- [${q.id}] (${q.status.toUpperCase()}): ${q.question}`
   ).join('\n');
 
   return `You are a Principal Research Engineer and Technical Fellow collaborating with the user in Pantry's **Research Studio**.
 
 CURRENT RESEARCH CANVAS:
 - **Topic**: ${canvasState.topicTitle || 'Technical Research'}
-- **Hypothesis / Goal**: ${canvasState.hypothesis || 'Exploring technical tradeoffs'}
-- **Key Questions**:
+- **Hypothesis**: ${canvasState.hypothesis || 'Exploring technical tradeoffs'}
+- **Questions**:
 ${questionsSummary || 'None registered.'}
-- **Recorded Findings (${(canvasState.findings || []).length})**:
+- **Key Findings (${(canvasState.findings || []).length})**:
 ${findingsSummary || 'No findings recorded yet.'}
 
 RESPONSE GUIDELINES:
-1. Write a thorough, insightful, and well-structured response in Markdown with clear sections, comparative tables, and actionable conclusions.
-2. At the end of your response, output a compact \`\`\`research_patch JSON block to synchronize the canvas findings and questions.
-3. CRITICAL: Fill in realistic values in the patch. NEVER output empty strings like "" or empty template placeholders.
+1. Provide a direct, rigorous, and structured technical analysis in Markdown (tables, bulleted evidence, actionable takeaways).
+2. Avoid repeating entire previous responses or echoing prompt templates.
+3. Conclude your answer and append a compact \`\`\`research_patch JSON block.
 
 COMPACT PATCH FORMAT:
 \`\`\`research_patch
 {
-  "topicTitle": "Saviynt vs SailPoint IGA Evaluation",
-  "hypothesis": "Comparing cloud-native IGA architecture against enterprise legacy identity governance.",
   "addFindings": [
     {
       "topic": "SLA & Cost Efficiency",
-      "insight": "SailPoint's SLA pricing favors massive enterprises, whereas Saviynt's SaaS delivers lower TCO for agile deployments.",
+      "insight": "SailPoint SLA pricing favors large enterprises; Saviynt SaaS delivers lower TCO.",
       "confidence": "High",
-      "takeaway": "Adopt Saviynt for cloud-first infrastructure and SailPoint for deep legacy on-prem directories."
+      "takeaway": "Adopt Saviynt for cloud-first and SailPoint for deep legacy AD."
     }
-  ],
-  "addQuestions": [
-    { "question": "How do Saviynt and SailPoint handle automated role mining and AI access certifications?" }
   ]
 }
 \`\`\`
-Always write your full research analysis in normal Markdown before the patch.`;
+Always write your analysis in normal Markdown before the patch.`;
 }
 
 function tryRepairJson(jsonStr: string): any {
