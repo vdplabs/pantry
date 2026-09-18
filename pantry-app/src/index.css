@@ -96,6 +96,10 @@ html, body, #root {
   -moz-osx-font-smoothing: grayscale;
 }
 
+button, select, textarea {
+  font-family: var(--font);
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
@@ -767,7 +771,7 @@ html, body, #root {
 
 /* Markdown & Content */
 .chat-markdown-content {
-  font-size: 14px;
+  font-size: 13px;
   line-height: 1.65;
   color: var(--text-primary);
   background: var(--bg-card);
@@ -879,7 +883,7 @@ pre code.hljs {
   padding: 0 !important;
   background: transparent !important;
   font-family: var(--mono) !important;
-  font-size: 13px !important;
+  font-size: 12px !important;
   line-height: 1.6 !important;
   color: #e2e8f0;
 }
@@ -1284,6 +1288,18 @@ pre code.hljs {
    STUDIO LAYOUTS & WORKBENCHES (Code, Image, STT, Music, Models, Settings)
    ========================================================================== */
 
+.app-page-viewport {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0%;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+}
+
 /* Full-width Studio Page (.studio-layout) */
 .studio-layout {
   display: flex;
@@ -1293,10 +1309,7 @@ pre code.hljs {
   max-width: 1440px;
   margin: 0 auto;
   padding: 28px 36px;
-  height: 100%;
-  min-height: 0;
-  overflow-y: auto;
-  overscroll-behavior-y: contain;
+  min-height: 100%;
 }
 
 .studio-header {

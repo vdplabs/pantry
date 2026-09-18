@@ -120,7 +120,7 @@ function AppContentInner() {
               </div>
             </div>
           ) : (
-            <div className="studio-layout">
+            <div className="app-page-viewport">
               {renderPage()}
             </div>
           )}
