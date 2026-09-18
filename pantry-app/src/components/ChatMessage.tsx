@@ -95,11 +95,6 @@ function ChatMessageComponent({ message, isStreaming, onRetry }: Props) {
           <span className="chat-sender-name">
             {isUser ? 'You' : isSystem ? 'System Prompt' : isTool ? 'Tool Result' : 'Pantry Assistant'}
           </span>
-          {message.token_stats?.tps && (
-            <span className="chat-tps-badge">
-              ⚡ {message.token_stats.tps.toFixed(1)} tok/s
-            </span>
-          )}
         </div>
 
         {/* Reasoning / Thinking Accordion */}
