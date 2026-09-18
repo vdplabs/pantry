@@ -6,8 +6,19 @@ export interface StreamingResult {
   reasoningContent?: string;
   toolCalls?: ToolCall[];
   finishReason: string;
-  usage?: any;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    total_tokens?: number;
+    prompt_tokens_details?: {
+      cached_tokens?: number;
+    };
+  };
   model: string;
+  id?: string;
+  speculative?: boolean;
+  draftPackageId?: string | null;
+  created?: number;
 }
 
 export function streamChat(
@@ -33,6 +44,10 @@ export function streamChat(
   let modelName = '';
   let usageInfo: any = null;
   let finishReason = 'stop';
+  let chunkId: string | undefined = undefined;
+  let isSpeculative: boolean | undefined = undefined;
+  let draftPackageId: string | null | undefined = undefined;
+  let createdTimestamp: number | undefined = undefined;
 
   const readLoop = async () => {
     try {
@@ -65,8 +80,12 @@ export function streamChat(
             throw new Error(errMsg);
           }
 
+          if (parsed.id) chunkId = parsed.id;
           if (parsed.model) modelName = parsed.model;
           if (parsed.usage) usageInfo = parsed.usage;
+          if (parsed.speculative !== undefined) isSpeculative = parsed.speculative;
+          if (parsed.draft_package_id !== undefined) draftPackageId = parsed.draft_package_id;
+          if (parsed.created) createdTimestamp = parsed.created;
 
           const choice = parsed?.choices?.[0];
           if (choice) {
@@ -121,6 +140,10 @@ export function streamChat(
         finishReason,
         usage: usageInfo,
         model: modelName,
+        id: chunkId,
+        speculative: isSpeculative,
+        draftPackageId,
+        created: createdTimestamp,
       });
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;

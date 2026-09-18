@@ -199,7 +199,11 @@ export default function ChatPage() {
             rafId = null;
           }
           const duration_s = Math.max(0.01, (performance.now() - t0) / 1000);
-          const tps = tokenCount > 0 ? tokenCount / duration_s : undefined;
+          const completionTokens = result.usage?.completion_tokens ?? tokenCount;
+          const promptTokens = result.usage?.prompt_tokens;
+          const totalTokens = result.usage?.total_tokens ?? ((promptTokens ?? 0) + completionTokens);
+          const cachedTokens = result.usage?.prompt_tokens_details?.cached_tokens;
+          const tps = completionTokens > 0 ? completionTokens / duration_s : undefined;
 
           setIsStreaming(false);
           setMessages(prev => {
@@ -211,10 +215,22 @@ export default function ChatPage() {
                 content: result.content || currentStreamContent,
                 reasoning_content: result.reasoningContent || currentReasoning || undefined,
                 tool_calls: result.toolCalls || (currentTools.length > 0 ? currentTools : undefined),
+                model: result.model || state.model,
+                meta: {
+                  id: result.id,
+                  model: result.model || state.model,
+                  finish_reason: result.finishReason,
+                  speculative: result.speculative,
+                  draft_package_id: result.draftPackageId,
+                  created: result.created,
+                },
                 token_stats: {
                   tps,
                   duration_s,
-                  total_tokens: tokenCount,
+                  total_tokens: totalTokens,
+                  prompt_tokens: promptTokens,
+                  completion_tokens: completionTokens,
+                  cached_tokens: cachedTokens,
                 },
               };
             }

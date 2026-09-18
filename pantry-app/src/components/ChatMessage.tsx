@@ -184,7 +184,7 @@ function ChatMessageComponent({ message, isStreaming, onRetry }: Props) {
           </div>
         ) : null}
 
-        {/* Actions Toolbar */}
+        {/* Actions & Metadata Toolbar */}
         {!isUser && mainText && (
           <div className="chat-message-actions">
             <button onClick={handleCopy} className="chat-action-btn" title="Copy response">
@@ -196,6 +196,59 @@ function ChatMessageComponent({ message, isStreaming, onRetry }: Props) {
                 <FiRefreshCw size={12} />
                 <span>Retry</span>
               </button>
+            )}
+
+            {/* Response Metadata Badges */}
+            {(message.token_stats || message.meta || message.model) && (
+              <div className="chat-meta-group">
+                {message.token_stats?.tps && (
+                  <span className="chat-meta-pill highlight" title="Generation Speed">
+                    ⚡ {message.token_stats.tps.toFixed(1)} tok/s
+                  </span>
+                )}
+                {message.token_stats?.duration_s !== undefined && (
+                  <span className="chat-meta-pill" title="Inference Latency">
+                    ⏱ {message.token_stats.duration_s < 1
+                      ? `${Math.round(message.token_stats.duration_s * 1000)}ms`
+                      : `${message.token_stats.duration_s.toFixed(2)}s`}
+                  </span>
+                )}
+                {message.token_stats?.completion_tokens !== undefined && (
+                  <span
+                    className="chat-meta-pill"
+                    title={
+                      message.token_stats.prompt_tokens
+                        ? `${message.token_stats.prompt_tokens} input + ${message.token_stats.completion_tokens} output = ${message.token_stats.total_tokens || (message.token_stats.prompt_tokens + message.token_stats.completion_tokens)} total tokens`
+                        : `${message.token_stats.completion_tokens} tokens`
+                    }
+                  >
+                    🔤 {message.token_stats.prompt_tokens
+                      ? `${message.token_stats.prompt_tokens} ↑ · ${message.token_stats.completion_tokens} ↓`
+                      : `${message.token_stats.completion_tokens} tok`}
+                  </span>
+                )}
+                {message.token_stats?.cached_tokens && message.token_stats.cached_tokens > 0 ? (
+                  <span className="chat-meta-pill cache" title={`${message.token_stats.cached_tokens} prompt tokens served from prefix cache`}>
+                    🎯 {message.token_stats.cached_tokens} cached
+                  </span>
+                ) : null}
+                {message.meta?.speculative ? (
+                  <span
+                    className="chat-meta-pill speculative"
+                    title={`Speculative decoding active${message.meta.draft_package_id ? ` (draft: ${message.meta.draft_package_id})` : ''}`}
+                  >
+                    🚀 Speculative
+                  </span>
+                ) : null}
+                {(message.meta?.model || message.model) && (
+                  <span
+                    className="chat-meta-pill"
+                    title={`Model: ${message.meta?.model || message.model}${message.meta?.id ? ` (${message.meta.id})` : ''}`}
+                  >
+                    🤖 {message.meta?.model || message.model}
+                  </span>
+                )}
+              </div>
             )}
           </div>
         )}

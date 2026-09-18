@@ -1159,6 +1159,53 @@ pre code.hljs {
   background: var(--bg-card-hover);
 }
 
+.chat-meta-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  flex-wrap: wrap;
+}
+
+.chat-meta-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border-card);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.2;
+  user-select: none;
+  transition: all 0.15s ease;
+}
+
+.chat-meta-pill:hover {
+  border-color: var(--border-highlight);
+  color: var(--text-primary);
+}
+
+.chat-meta-pill.highlight {
+  color: var(--accent-cyan);
+  background: var(--accent-cyan-subtle);
+  border-color: rgba(56, 189, 248, 0.25);
+}
+
+.chat-meta-pill.speculative {
+  color: var(--accent-purple);
+  background: rgba(168, 85, 247, 0.1);
+  border-color: rgba(168, 85, 247, 0.3);
+}
+
+.chat-meta-pill.cache {
+  color: var(--accent-emerald);
+  background: var(--accent-emerald-subtle);
+  border-color: rgba(16, 185, 129, 0.3);
+}
+
 /* Chat Input Bar */
 .chat-input-container {
   padding: 14px 24px 20px 24px;

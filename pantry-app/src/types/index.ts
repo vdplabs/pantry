@@ -22,12 +22,22 @@ export interface Message {
   tool_calls?: ToolCall[];
   tool_call_id?: string;
   name?: string;
+  model?: string;
+  meta?: {
+    id?: string;
+    model?: string;
+    finish_reason?: string;
+    speculative?: boolean;
+    draft_package_id?: string | null;
+    created?: number;
+  };
   token_stats?: {
     tps?: number;
     duration_s?: number;
     total_tokens?: number;
     prompt_tokens?: number;
     completion_tokens?: number;
+    cached_tokens?: number;
   };
 }
 
