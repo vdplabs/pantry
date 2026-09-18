@@ -15,6 +15,7 @@ interface Props {
 // Configure mermaid with Pantry dark neon theme
 mermaid.initialize({
   startOnLoad: false,
+  suppressErrorRendering: true,
   theme: 'base',
   securityLevel: 'loose',
   fontFamily: 'Outfit, system-ui, sans-serif',
@@ -51,7 +52,7 @@ mermaid.initialize({
   },
 });
 
-export default function MermaidViewer({ code, onOpenCanvas, inline = true }: Props) {
+function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
   const [svgContent, setSvgContent] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isAutoRepaired, setIsAutoRepaired] = useState(false);
@@ -63,52 +64,73 @@ export default function MermaidViewer({ code, onOpenCanvas, inline = true }: Pro
   const [viewMode, setViewMode] = useState<'diagram' | 'code'>('diagram');
 
   const containerRef = useRef<HTMLDivElement>(null);
-
-  const cleanupMermaidArtifacts = () => {
-    // Remove any rogue mermaid error divs injected into body
-    document.querySelectorAll('[id^="dmermaid-render-"]').forEach(el => el.remove());
-  };
+  const lastRenderedCodeRef = useRef<string>('');
+  const renderTimeoutRef = useRef<any>(null);
+  const renderSeqRef = useRef<number>(0);
 
   const renderDiagram = useCallback(async () => {
-    if (!code.trim()) return;
-    setError(null);
-    setIsAutoRepaired(false);
+    const trimmed = (code || '').trim();
+    if (!trimmed) return;
+    if (trimmed === lastRenderedCodeRef.current && svgContent) return;
 
-    const tryRender = async (sourceCode: string): Promise<string> => {
-      const id = `mermaid-render-${Math.random().toString(36).substring(2, 9)}`;
-      const { svg } = await mermaid.render(id, sourceCode);
-      return svg;
-    };
+    const currentSeq = ++renderSeqRef.current;
 
-    try {
-      // 1. First attempt: render raw code
-      const svg = await tryRender(code.trim());
-      setSvgContent(svg);
-    } catch (err: any) {
-      cleanupMermaidArtifacts();
-      // 2. Second attempt: auto-repair syntax
+    const validateAndRender = async () => {
+      setError(null);
+      let targetCode = trimmed;
+      let repaired = false;
+
+      // 1. Try parsing raw code first
       try {
-        const repaired = sanitizeMermaidCode(code);
-        if (repaired && repaired !== code.trim()) {
-          const svg = await tryRender(repaired);
-          setSvgContent(svg);
-          setIsAutoRepaired(true);
-          return;
+        await mermaid.parse(targetCode);
+      } catch {
+        // 2. If raw fails, try sanitized code
+        const sanitized = sanitizeMermaidCode(targetCode);
+        if (sanitized && sanitized !== targetCode) {
+          try {
+            await mermaid.parse(sanitized);
+            targetCode = sanitized;
+            repaired = true;
+          } catch {}
         }
-      } catch (retryErr: any) {
-        cleanupMermaidArtifacts();
       }
 
-      console.warn('[MermaidViewer] render error:', err);
-      // Clean up error message to be more readable
-      const rawMsg = err?.message || 'Invalid Mermaid syntax';
-      const cleanMsg = rawMsg.replace(/Parse error on line \d+:/g, (m: string) => m.trim());
-      setError(cleanMsg);
+      try {
+        const id = `mermaid-render-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+        const { svg } = await mermaid.render(id, targetCode);
+
+        if (renderSeqRef.current !== currentSeq) return;
+        setSvgContent(svg);
+        setIsAutoRepaired(repaired);
+        lastRenderedCodeRef.current = trimmed;
+        setError(null);
+      } catch (err: any) {
+        if (renderSeqRef.current !== currentSeq) return;
+        console.warn('[MermaidViewer] render error:', err);
+        const rawMsg = err?.message || 'Invalid Mermaid syntax';
+        let cleanMsg = rawMsg;
+        if (rawMsg.includes('firstChild') || rawMsg.includes('null')) {
+          cleanMsg = 'Mermaid syntax requires repair. Click below to auto-fix.';
+        } else {
+          cleanMsg = rawMsg.replace(/Parse error on line \d+:/g, (m: string) => m.trim());
+        }
+        setError(cleanMsg);
+      }
+    };
+
+    if (renderTimeoutRef.current) {
+      clearTimeout(renderTimeoutRef.current);
     }
-  }, [code]);
+    renderTimeoutRef.current = setTimeout(validateAndRender, 120);
+  }, [code, svgContent]);
 
   useEffect(() => {
     renderDiagram();
+    return () => {
+      if (renderTimeoutRef.current) {
+        clearTimeout(renderTimeoutRef.current);
+      }
+    };
   }, [renderDiagram]);
 
   const handleZoomIn = () => setZoom(z => Math.min(z + 0.2, 3));
@@ -313,3 +335,13 @@ export default function MermaidViewer({ code, onOpenCanvas, inline = true }: Pro
     </div>
   );
 }
+
+const MermaidViewer = React.memo(MermaidViewerComponent, (prev, next) => {
+  return (
+    prev.code === next.code &&
+    prev.inline === next.inline &&
+    prev.onOpenCanvas === next.onOpenCanvas
+  );
+});
+
+export default MermaidViewer;

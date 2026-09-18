@@ -14,9 +14,11 @@ interface Props {
 }
 
 interface ContentBlock {
+  id: string;
   type: 'markdown' | 'code';
   content: string;
   language?: string;
+  isClosed?: boolean;
 }
 
 function parseMarkdownBlocks(text: string, isStreaming = false): ContentBlock[] {
@@ -25,18 +27,25 @@ function parseMarkdownBlocks(text: string, isStreaming = false): ContentBlock[] 
   const regex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
+  let blockIdx = 0;
 
   while ((match = regex.exec(text)) !== null) {
     if (match.index > lastIndex) {
       const chunk = text.slice(lastIndex, match.index);
-      if (chunk.trim()) {
-        blocks.push({ type: 'markdown', content: chunk });
+      if (chunk) {
+        blocks.push({
+          id: `md-${blockIdx++}`,
+          type: 'markdown',
+          content: chunk,
+        });
       }
     }
     blocks.push({
+      id: `code-${blockIdx++}`,
       type: 'code',
-      language: match[1] || '',
+      language: (match[1] || '').trim().toLowerCase(),
       content: match[2] || '',
+      isClosed: true,
     });
     lastIndex = match.index + match[0].length;
   }
@@ -47,28 +56,26 @@ function parseMarkdownBlocks(text: string, isStreaming = false): ContentBlock[] 
       const openCodeMatch = remaining.match(/```([a-zA-Z0-9_-]*)\n([\s\S]*)$/);
       if (openCodeMatch && openCodeMatch.index !== undefined) {
         const pre = remaining.slice(0, openCodeMatch.index);
-        if (pre.trim()) {
-          blocks.push({ type: 'markdown', content: pre });
+        if (pre) {
+          blocks.push({ id: `md-${blockIdx++}`, type: 'markdown', content: pre });
         }
         blocks.push({
+          id: `streaming-code-${blockIdx++}`,
           type: 'code',
-          language: openCodeMatch[1] || '',
+          language: (openCodeMatch[1] || '').trim().toLowerCase(),
           content: openCodeMatch[2] || '',
+          isClosed: false,
         });
       } else {
-        if (remaining.trim()) {
-          blocks.push({ type: 'markdown', content: remaining });
-        }
+        blocks.push({ id: `md-${blockIdx++}`, type: 'markdown', content: remaining });
       }
     } else {
-      if (remaining.trim()) {
-        blocks.push({ type: 'markdown', content: remaining });
-      }
+      blocks.push({ id: `md-${blockIdx++}`, type: 'markdown', content: remaining });
     }
   }
 
-  if (blocks.length === 0 && text.trim()) {
-    blocks.push({ type: 'markdown', content: text });
+  if (blocks.length === 0 && text) {
+    blocks.push({ id: 'md-0', type: 'markdown', content: text });
   }
 
   return blocks;
@@ -85,6 +92,23 @@ function parseThinking(text: string): { thinking: string; response: string } | n
     .trim();
   return { thinking: thinking.trim(), response };
 }
+
+const MarkdownSegment = React.memo(function MarkdownSegment({ content }: { content: string }) {
+  const html = useMemo(() => {
+    try {
+      return marked.parse(content) as string;
+    } catch {
+      return content;
+    }
+  }, [content]);
+
+  return (
+    <div
+      className="chat-markdown-segment"
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+});
 
 function ChatMessageComponent({ message, isStreaming, onRetry, onOpenCanvas }: Props) {
   const [copied, setCopied] = useState(false);
@@ -206,28 +230,22 @@ function ChatMessageComponent({ message, isStreaming, onRetry, onOpenCanvas }: P
         {contentBlocks.length > 0 ? (
           <div className="chat-markdown-content-wrapper">
             <div className="chat-markdown-content">
-              {contentBlocks.map((block, idx) => {
+              {contentBlocks.map(block => {
                 if (block.type === 'code') {
                   return (
                     <ArtifactBlock
-                      key={idx}
+                      key={block.id}
                       code={block.content}
                       language={block.language}
+                      isClosed={block.isClosed}
                       onOpenCanvas={onOpenCanvas}
                     />
                   );
                 }
-                let renderedHtml = '';
-                try {
-                  renderedHtml = marked.parse(block.content) as string;
-                } catch {
-                  renderedHtml = block.content;
-                }
                 return (
-                  <div
-                    key={idx}
-                    className="chat-markdown-segment"
-                    dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                  <MarkdownSegment
+                    key={block.id}
+                    content={block.content}
                   />
                 );
               })}

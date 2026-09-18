@@ -7,26 +7,30 @@ import LiveHtmlPreview from './LiveHtmlPreview';
 interface Props {
   code: string;
   language?: string;
+  isClosed?: boolean;
   onOpenCanvas?: (code: string, type: string) => void;
 }
 
-export default function ArtifactBlock({ code, language = '', onOpenCanvas }: Props) {
+function ArtifactBlockComponent({ code, language = '', isClosed = true, onOpenCanvas }: Props) {
   const [copied, setCopied] = useState(false);
   const cleanLang = (language || '').trim().toLowerCase();
 
-  // 1. Mermaid Diagram
-  if (cleanLang === 'mermaid' || code.trim().startsWith('graph ') || code.trim().startsWith('flowchart ') || code.trim().startsWith('sequenceDiagram')) {
-    return <MermaidViewer code={code} onOpenCanvas={onOpenCanvas ? (c, t) => onOpenCanvas(c, t) : undefined} />;
-  }
+  // If the block is currently streaming and not yet closed, keep in lightweight code mode
+  if (isClosed) {
+    // 1. Mermaid Diagram
+    if (cleanLang === 'mermaid' || code.trim().startsWith('graph ') || code.trim().startsWith('flowchart ') || code.trim().startsWith('sequenceDiagram')) {
+      return <MermaidViewer code={code} onOpenCanvas={onOpenCanvas ? (c, t) => onOpenCanvas(c, t) : undefined} />;
+    }
 
-  // 2. HTML / Interactive SVG Live App
-  const isHtml = cleanLang === 'html' || cleanLang === 'svg' || (cleanLang === 'xml' && code.includes('<svg'));
-  const looksLikeInteractiveWeb = isHtml || (
-    cleanLang === '' && (code.includes('<!DOCTYPE html>') || (code.includes('<div') && code.includes('</div>')))
-  );
+    // 2. HTML / Interactive SVG Live App
+    const isHtml = cleanLang === 'html' || cleanLang === 'svg' || (cleanLang === 'xml' && code.includes('<svg'));
+    const looksLikeInteractiveWeb = isHtml || (
+      cleanLang === '' && (code.includes('<!DOCTYPE html>') || (code.includes('<div') && code.includes('</div>')))
+    );
 
-  if (looksLikeInteractiveWeb && (code.includes('<html') || code.includes('<svg') || code.includes('<button') || code.includes('<style>') || code.includes('<script>'))) {
-    return <LiveHtmlPreview code={code} language={cleanLang || 'html'} onOpenCanvas={onOpenCanvas ? (c, t) => onOpenCanvas(c, t) : undefined} />;
+    if (looksLikeInteractiveWeb && (code.includes('<html') || code.includes('<svg') || code.includes('<button') || code.includes('<style>') || code.includes('<script>'))) {
+      return <LiveHtmlPreview code={code} language={cleanLang || 'html'} onOpenCanvas={onOpenCanvas ? (c, t) => onOpenCanvas(c, t) : undefined} />;
+    }
   }
 
   // 3. Standard Code Block with syntax highlighting and workbench integration
@@ -90,3 +94,15 @@ export default function ArtifactBlock({ code, language = '', onOpenCanvas }: Pro
     </div>
   );
 }
+
+const ArtifactBlock = React.memo(ArtifactBlockComponent, (prev, next) => {
+  return (
+    prev.code === next.code &&
+    prev.language === next.language &&
+    prev.isClosed === next.isClosed &&
+    prev.onOpenCanvas === next.onOpenCanvas
+  );
+});
+
+export default ArtifactBlock;
+

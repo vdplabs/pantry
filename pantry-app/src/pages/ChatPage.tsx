@@ -463,7 +463,7 @@ export default function ChatPage() {
           ) : (
             state.messages.map((msg, idx) => (
               <ChatMessage
-                key={idx}
+                key={msg.meta?.id || `${msg.role}-${idx}`}
                 message={msg}
                 isStreaming={state.isStreaming && idx === state.messages.length - 1}
                 onRetry={idx === state.messages.length - 1 ? handleRetry : undefined}
