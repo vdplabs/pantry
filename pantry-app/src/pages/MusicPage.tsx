@@ -488,6 +488,19 @@ export default function MusicPage() {
                   >
                     <FiDownload size={13} /> Save WAV
                   </button>
+
+                  <button
+                    onClick={() => {
+                      const activeId = viewingGen || generations.find(g => g.result === activeAudioSrc)?.id;
+                      if (activeId) deleteGeneration(activeId);
+                      clearEditor();
+                    }}
+                    className="gen-canvas-action"
+                    style={{ padding: '8px 14px', borderRadius: 8, marginLeft: 8, color: 'var(--accent-rose)', borderColor: 'rgba(244, 63, 94, 0.3)' }}
+                    title="Delete Track"
+                  >
+                    <FiTrash2 size={13} /> Delete
+                  </button>
                 </div>
               </div>
             )}

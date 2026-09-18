@@ -440,6 +440,18 @@ export default function STTPage() {
                   >
                     <FiDownload size={11} /> JSON
                   </button>
+                  <button
+                    className="gen-canvas-action"
+                    onClick={() => {
+                      const activeId = viewingGen || generations.find(g => g.result === activeResultText)?.id;
+                      if (activeId) deleteGeneration(activeId);
+                      clearEditor();
+                    }}
+                    style={{ color: 'var(--accent-rose)', borderColor: 'rgba(244, 63, 94, 0.3)' }}
+                    title="Delete Transcript"
+                  >
+                    <FiTrash2 size={11} /> Delete
+                  </button>
                 </>
               )}
               <button className="gen-canvas-action" onClick={() => setShowGallery(v => !v)}>

@@ -8,6 +8,8 @@ import { streamImage, ImageStepEvent, ImageDoneEvent } from '@/services/streamin
 import type { Generation } from '@/types';
 
 const ASPECT_RATIOS = [
+  { id: '1:1:256', label: '1:1 Square (small)', size: '256x256', icon: '■' },
+  { id: '1:1:512', label: '1:1 Square (medium)', size: '512x512', icon: '■' },
   { id: '1:1', label: '1:1 Square', size: '1024x1024', icon: '■' },
   { id: '16:9', label: '16:9 Landscape', size: '1024x576', icon: '▬' },
   { id: '9:16', label: '9:16 Story/Portrait', size: '576x1024', icon: '▮' },
@@ -219,25 +221,14 @@ export default function ImagePage() {
             />
           </div>
 
-          {isGenerating ? (
-            <button
-              onClick={handleStop}
-              className="primary-action-btn"
-              style={{ background: 'var(--accent-rose)', borderColor: 'var(--accent-rose)' }}
-            >
-              <FiSquare size={15} />
-              <span>Stop Rendering</span>
-            </button>
-          ) : (
-            <button
-              onClick={handleGenerate}
-              disabled={isGenerating || !prompt.trim()}
-              className="primary-action-btn"
-            >
-              <FiZap size={15} />
-              <span>Generate Image</span>
-            </button>
-          )}
+          <button
+            onClick={handleGenerate}
+            disabled={isGenerating || !prompt.trim()}
+            className="primary-action-btn"
+          >
+            {isGenerating ? <FiRefreshCw className="spinning" size={15} /> : <FiZap size={15} />}
+            <span>{isGenerating ? 'Rendering Pixels...' : 'Generate Image'}</span>
+          </button>
         </div>
 
         {/* Studio Center Workspace */}
@@ -264,73 +255,20 @@ export default function ImagePage() {
           </div>
 
           {/* Canvas Preview Box */}
-          <div className="studio-panel" style={{ padding: '20px', minHeight: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+          <div className="studio-panel" style={{ padding: '20px', minHeight: '380px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
             {errorMsg && (
               <div style={{ padding: '12px 16px', borderRadius: '8px', background: 'var(--accent-rose-subtle)', color: 'var(--accent-rose)', fontSize: '13px', textAlign: 'center' }}>
                 ⚠️ {errorMsg}
               </div>
             )}
 
-            {isGenerating && stepPreview && (
-              <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '520px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                <div style={{ position: 'relative', borderRadius: 'var(--radius-lg)', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.35)' }}>
-                  <img
-                    src={stepPreview}
-                    alt="Step preview"
-                    style={{ maxWidth: '100%', maxHeight: '420px', objectFit: 'contain', display: 'block' }}
-                  />
-                  <div style={{
-                    position: 'absolute',
-                    top: '12px',
-                    left: '12px',
-                    padding: '6px 14px',
-                    borderRadius: '20px',
-                    background: 'rgba(10, 14, 26, 0.85)',
-                    backdropFilter: 'blur(8px)',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    fontSize: '12px',
-                    fontWeight: 600,
-                    color: 'var(--accent-primary)',
-                  }}>
-                    <span className="pulsing-dot" />
-                    <span>Step {currentStep} / {totalSteps} ({progressPercent}%)</span>
-                  </div>
+            {isGenerating && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignContent: 'center', alignItems: 'center', gap: '12px' }}>
+                <FiRefreshCw className="spinning" size={32} color="var(--accent-primary)" />
+                <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Diffusion denoising in progress... ({progressPercent}%)</span>
+                <div style={{ width: '200px', height: '4px', background: 'var(--border-card)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: `${progressPercent}%`, height: '100%', background: 'var(--accent-primary)', transition: 'width 0.3s ease' }} />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '14px', width: '100%', maxWidth: '360px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '12px', color: 'var(--text-muted)' }}>
-                    <span>{statusMessage || `Denoising step ${currentStep} of ${totalSteps}...`}</span>
-                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{progressPercent}%</span>
-                  </div>
-                  <div style={{ width: '100%', height: '6px', background: 'var(--border-card)', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ width: `${progressPercent}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-purple))', transition: 'width 0.4s ease' }} />
-                  </div>
-                  <button onClick={handleStop} className="chat-control-pill" style={{ marginTop: '4px' }}>
-                    <FiSquare size={12} /> Stop Rendering
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {isGenerating && !stepPreview && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignContent: 'center', alignItems: 'center', gap: '14px' }}>
-                <FiRefreshCw className="spinning" size={36} color="var(--accent-primary)" />
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '4px' }}>
-                    {statusMessage || 'Initializing neural diffusion model...'}
-                  </div>
-                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
-                    {currentStep > 0 ? `Step ${currentStep} of ${totalSteps} (${progressPercent}%)` : 'Encoding text prompt & allocating latent tensors on Apple Silicon'}
-                  </span>
-                </div>
-                <div style={{ width: '240px', height: '6px', background: 'var(--border-card)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${Math.max(5, progressPercent)}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-purple))', transition: 'width 0.4s ease' }} />
-                </div>
-                <button onClick={handleStop} className="chat-control-pill" style={{ marginTop: '6px' }}>
-                  <FiSquare size={12} /> Stop Rendering
-                </button>
               </div>
             )}
 
@@ -341,7 +279,7 @@ export default function ImagePage() {
                   alt="Generated"
                   style={{ maxWidth: '100%', maxHeight: '480px', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-card)', objectFit: 'contain' }}
                 />
-                <div style={{ display: 'flex', gap: '10px', marginTop: '14px' }}>
+                <div style={{ display: 'flex', gap: '10px', marginTop: '14px', flexWrap: 'wrap', justifyContent: 'center' }}>
                   <button onClick={() => setLightboxOpen(true)} className="chat-control-pill" title="Enlarge">
                     <FiMaximize2 size={13} /> Fullscreen
                   </button>
@@ -351,6 +289,20 @@ export default function ImagePage() {
                   <button onClick={handleCopyPrompt} className="chat-control-pill" title="Copy Prompt">
                     {copied ? <FiCheck size={13} /> : <FiCopy size={13} />}
                     {copied ? 'Copied' : 'Copy Prompt'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      const matchGen = imageGenerations.find(g => g.result === currentResult);
+                      if (matchGen) {
+                        deleteGeneration(matchGen.id);
+                      }
+                      setCurrentResult(null);
+                    }}
+                    className="chat-control-pill"
+                    title="Delete Image"
+                    style={{ color: 'var(--accent-rose)', borderColor: 'rgba(244, 63, 94, 0.3)' }}
+                  >
+                    <FiTrash2 size={13} /> Delete
                   </button>
                 </div>
               </div>
@@ -367,8 +319,10 @@ export default function ImagePage() {
           {/* History Gallery Strip */}
           {imageGenerations.length > 0 && (
             <div className="studio-panel" style={{ padding: '16px' }}>
-              <span className="studio-panel-title" style={{ fontSize: '13px' }}>Recent Generations ({imageGenerations.length})</span>
-              <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', padding: '10px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <span className="studio-panel-title" style={{ fontSize: '13px' }}>Recent Generations ({imageGenerations.length})</span>
+              </div>
+              <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', padding: '6px 0' }}>
                 {imageGenerations.map(gen => (
                   <div
                     key={gen.id}
@@ -385,6 +339,37 @@ export default function ImagePage() {
                     }}
                   >
                     <img src={gen.result} alt="Thumbnail" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <button
+                      type="button"
+                      title="Delete this image"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        deleteGeneration(gen.id);
+                        if (currentResult === gen.result) {
+                          setCurrentResult(null);
+                        }
+                      }}
+                      style={{
+                        position: 'absolute',
+                        top: '4px',
+                        right: '4px',
+                        width: '22px',
+                        height: '22px',
+                        borderRadius: '50%',
+                        background: 'rgba(15, 23, 42, 0.85)',
+                        backdropFilter: 'blur(4px)',
+                        border: '1px solid rgba(255, 255, 255, 0.2)',
+                        color: 'var(--accent-rose)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        padding: 0,
+                        zIndex: 2,
+                      }}
+                    >
+                      <FiTrash2 size={11} />
+                    </button>
                   </div>
                 ))}
               </div>
