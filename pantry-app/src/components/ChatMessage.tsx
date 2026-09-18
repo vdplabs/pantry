@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiCpu, FiTerminal, FiZap, FiUser, FiRefreshCw, FiPlay } from 'react-icons/fi';
+import { FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiCpu, FiTerminal, FiZap, FiUser, FiRefreshCw, FiPlay, FiX, FiDownload, FiMaximize2 } from 'react-icons/fi';
 import type { Message, MessageContent, ToolCall } from '@/types';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
@@ -143,6 +143,7 @@ function ChatMessageComponent({ message, isStreaming, onRetry, onContinue, onOpe
   const [copied, setCopied] = useState(false);
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(true);
+  const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
 
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system' || message.role === 'developer';
@@ -245,13 +246,16 @@ function ChatMessageComponent({ message, isStreaming, onRetry, onContinue, onOpe
         {images.length > 0 && (
           <div className="chat-image-attachments">
             {images.map((img, idx) => (
-              <img
-                key={idx}
-                src={img}
-                alt="Attachment"
-                className="chat-attachment-img"
-                onClick={() => window.open(img, '_blank')}
-              />
+              <div key={idx} className="chat-attachment-thumb-wrap" onClick={() => setActiveLightboxImg(img)}>
+                <img
+                  src={img}
+                  alt={`Attachment ${idx + 1}`}
+                  className="chat-attachment-img"
+                />
+                <div className="chat-attachment-zoom-overlay">
+                  <FiMaximize2 size={14} />
+                </div>
+              </div>
             ))}
           </div>
         )}
@@ -371,6 +375,39 @@ function ChatMessageComponent({ message, isStreaming, onRetry, onContinue, onOpe
           </div>
         )}
       </div>
+
+      {/* Lightbox Modal */}
+      {activeLightboxImg && (
+        <div className="image-lightbox-overlay" onClick={() => setActiveLightboxImg(null)}>
+          <div className="image-lightbox-card" onClick={e => e.stopPropagation()}>
+            <div className="image-lightbox-header">
+              <span className="image-lightbox-title">Image Attachment Preview</span>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <a
+                  href={activeLightboxImg}
+                  download={`pantry-attachment-${Date.now()}.png`}
+                  className="image-lightbox-action-btn"
+                  title="Download full image"
+                >
+                  <FiDownload size={14} />
+                  <span>Download</span>
+                </a>
+                <button
+                  type="button"
+                  onClick={() => setActiveLightboxImg(null)}
+                  className="image-lightbox-action-btn"
+                  title="Close"
+                >
+                  <FiX size={14} />
+                </button>
+              </div>
+            </div>
+            <div className="image-lightbox-img-area">
+              <img src={activeLightboxImg} alt="Enlarged preview" className="image-lightbox-full-img" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

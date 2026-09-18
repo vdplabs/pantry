@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { FiSend, FiPaperclip, FiX, FiSliders, FiZap, FiCode, FiLayers } from 'react-icons/fi';
+import { FiSend, FiPaperclip, FiX, FiSliders, FiZap, FiCode, FiLayers, FiFileText, FiFile, FiAlertCircle } from 'react-icons/fi';
 import { useApp } from '@/context/AppContext';
 import type { MessageContent } from '@/types';
 
@@ -8,6 +8,16 @@ interface Props {
   onSend?: (content: string | MessageContent[]) => void;
   autoFocus?: boolean;
   disabled?: boolean;
+}
+
+export interface ChatAttachment {
+  id: string;
+  type: 'image' | 'file';
+  name: string;
+  size: number;
+  preview?: string; // base64 for images
+  content?: string; // text content for files
+  file: File;
 }
 
 function fileToBase64(file: File): Promise<string> {
@@ -19,15 +29,36 @@ function fileToBase64(file: File): Promise<string> {
   });
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { state, setMaxTokens, setTemperature, setPreferSpeculative } = useApp();
+  const { state, setModel, setMaxTokens, setTemperature, setPreferSpeculative } = useApp();
   const defaultPlaceholder = placeholder || 'Message Pantry model... (Enter to send, Shift+Enter for newline)';
 
-  const [attachments, setAttachments] = useState<{ id: string; preview: string; file: File }[]>([]);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [showControls, setShowControls] = useState(false);
   const [inputValue, setInputValue] = useState('');
+
+  const currentModel = state.models.find(m => m.id === state.model || (m.aliases || []).includes(state.model));
+  const isVisionModel = (currentModel?.modalities || []).some(m => m.toLowerCase().includes('vision') || m.toLowerCase().includes('image')) ||
+    (currentModel?.role || '').toLowerCase().includes('vision') ||
+    (state.model || '').toLowerCase().includes('vision') ||
+    (state.model || '').toLowerCase().includes('vl');
+
+  const visionModels = state.models.filter(m =>
+    (m.modalities || []).some(mod => mod.toLowerCase().includes('vision') || mod.toLowerCase().includes('image')) ||
+    (m.role || '').toLowerCase().includes('vision') ||
+    m.id.toLowerCase().includes('vision') ||
+    m.id.toLowerCase().includes('vl')
+  );
+
+  const hasImages = attachments.some(a => a.type === 'image');
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -46,29 +77,70 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
     }
   };
 
+  const processFile = async (file: File): Promise<ChatAttachment> => {
+    const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(file.name);
+    if (isImage) {
+      const preview = await fileToBase64(file);
+      return {
+        id: crypto.randomUUID(),
+        type: 'image',
+        name: file.name,
+        size: file.size,
+        preview,
+        file,
+      };
+    } else {
+      try {
+        const content = await file.text();
+        return {
+          id: crypto.randomUUID(),
+          type: 'file',
+          name: file.name,
+          size: file.size,
+          content,
+          file,
+        };
+      } catch {
+        return {
+          id: crypto.randomUUID(),
+          type: 'file',
+          name: file.name,
+          size: file.size,
+          content: `[Attached file: ${file.name}, size: ${formatFileSize(file.size)}]`,
+          file,
+        };
+      }
+    }
+  };
+
   const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = e.clipboardData?.items;
     if (!items) return;
+    const newAttachments: ChatAttachment[] = [];
     for (const item of items) {
-      if (item.type.startsWith('image/')) {
-        e.preventDefault();
+      if (item.kind === 'file') {
         const file = item.getAsFile();
         if (file) {
-          const base64 = await fileToBase64(file);
-          setAttachments(prev => [...prev, { id: crypto.randomUUID(), preview: base64, file }]);
+          const att = await processFile(file);
+          newAttachments.push(att);
         }
       }
+    }
+    if (newAttachments.length > 0) {
+      e.preventDefault();
+      setAttachments(prev => [...prev, ...newAttachments]);
     }
   }, []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    const newAttachments: ChatAttachment[] = [];
     for (const file of files) {
-      if (file.type.startsWith('image/')) {
-        const base64 = await fileToBase64(file);
-        setAttachments(prev => [...prev, { id: crypto.randomUUID(), preview: base64, file }]);
-      }
+      const att = await processFile(file);
+      newAttachments.push(att);
     }
+    setAttachments(prev => [...prev, ...newAttachments]);
     if (e.target) e.target.value = '';
   };
 
@@ -80,13 +152,28 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
     const text = inputValue.trim();
     if ((!text && attachments.length === 0) || !onSend || disabled) return;
 
-    if (attachments.length === 0) {
-      onSend(text);
+    const imageAtts = attachments.filter(a => a.type === 'image' && a.preview);
+    const fileAtts = attachments.filter(a => a.type === 'file');
+
+    let combinedText = text;
+    if (fileAtts.length > 0) {
+      const fileBlocks = fileAtts.map(f => {
+        const ext = f.name.includes('.') ? f.name.split('.').pop() : '';
+        return `[Attached file: ${f.name} (${formatFileSize(f.size)})]\n\`\`\`${ext || ''}\n${f.content || ''}\n\`\`\``;
+      }).join('\n\n');
+
+      combinedText = combinedText ? `${fileBlocks}\n\n${combinedText}` : fileBlocks;
+    }
+
+    if (imageAtts.length === 0) {
+      onSend(combinedText);
     } else {
       const parts: MessageContent[] = [];
-      if (text) parts.push({ type: 'text', text });
-      for (const att of attachments) {
-        parts.push({ type: 'image_url', image_url: { url: att.preview, detail: 'auto' } });
+      if (combinedText) parts.push({ type: 'text', text: combinedText });
+      for (const att of imageAtts) {
+        if (att.preview) {
+          parts.push({ type: 'image_url', image_url: { url: att.preview, detail: 'auto' } });
+        }
       }
       onSend(parts);
     }
@@ -113,43 +200,47 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
       <div className="chat-composer-box">
         {/* Attachment Previews */}
         {attachments.length > 0 && (
-          <div className="composer-attachments-row" style={{ display: 'flex', gap: '8px', padding: '10px 14px 0 14px' }}>
+          <div className="composer-attachments-row">
             {attachments.map(att => (
-              <div
-                key={att.id}
-                style={{
-                  position: 'relative',
-                  width: '54px',
-                  height: '54px',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
-                  border: '1px solid var(--border-card)',
-                }}
-              >
-                <img src={att.preview} alt="Attachment" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div key={att.id} className="composer-attachment-pill">
+                {att.type === 'image' ? (
+                  <img src={att.preview} alt={att.name} className="composer-attachment-thumb" />
+                ) : (
+                  <div className="composer-file-icon-box">
+                    <FiFileText size={16} />
+                  </div>
+                )}
+                <div className="composer-attachment-info">
+                  <span className="composer-attachment-name" title={att.name}>{att.name}</span>
+                  <span className="composer-attachment-size">{formatFileSize(att.size)}</span>
+                </div>
                 <button
                   type="button"
                   onClick={() => removeAttachment(att.id)}
-                  style={{
-                    position: 'absolute',
-                    top: '2px',
-                    right: '2px',
-                    width: '16px',
-                    height: '16px',
-                    borderRadius: '50%',
-                    border: 'none',
-                    background: 'rgba(0,0,0,0.7)',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer',
-                  }}
+                  className="composer-attachment-remove-btn"
+                  title="Remove attachment"
                 >
-                  <FiX size={10} />
+                  <FiX size={12} />
                 </button>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Vision Model Suggestion Pill */}
+        {hasImages && !isVisionModel && (
+          <div className="composer-vision-warning">
+            <FiAlertCircle size={14} color="#f59e0b" />
+            <span>Image attached, but <strong>{currentModel?.id || state.model}</strong> is a text-only model.</span>
+            {visionModels.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setModel(visionModels[0].id)}
+                className="composer-switch-vision-btn"
+              >
+                Switch to {visionModels[0].id}
+              </button>
+            )}
           </div>
         )}
 
@@ -211,12 +302,12 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
         {/* Bottom Bar */}
         <div className="composer-bottom-bar">
           <div className="composer-tools-left">
-            <label className="composer-btn" title="Attach Image">
+            <label className="composer-btn" title="Attach image, text, code, or document">
               <FiPaperclip size={16} />
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="*"
                 multiple
                 onChange={handleFileSelect}
                 style={{ display: 'none' }}
