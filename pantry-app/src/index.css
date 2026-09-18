@@ -1939,6 +1939,79 @@ pre code.hljs {
   background: var(--accent-primary-subtle);
 }
 
+.composer-tools-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-full);
+  background: var(--accent-primary);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.composer-tools-dropdown {
+  width: 360px;
+  max-height: 440px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 10px;
+}
+
+.composer-tools-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.composer-tool-card {
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-card);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  user-select: none;
+}
+
+.composer-tool-card:hover {
+  background: var(--bg-card-hover);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.composer-tool-card.selected {
+  background: rgba(99, 102, 241, 0.08);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+
+.composer-tool-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.composer-tool-card-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+
+.composer-tool-card-desc {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.35;
+}
+
 .composer-controls-drawer {
   padding: 10px 14px;
   border-top: 1px solid var(--border-card-subtle);
@@ -3555,6 +3628,7 @@ pre code.hljs {
   font-weight: 700;
   color: var(--text-title);
   margin: 0;
+  margin-top: 3px;
 }
 
 .tm-topbar-actions {

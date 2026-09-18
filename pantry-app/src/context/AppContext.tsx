@@ -34,6 +34,8 @@ interface AppState {
   isStreaming: boolean;
   apiUrl: string;
   generations: Generation[];
+  enabledToolIds: string[];
+  customToolsJson: string;
 }
 
 interface AppContextType {
@@ -68,6 +70,8 @@ interface AppContextType {
   setIsStreaming: (s: boolean) => void;
   setModels: (m: ModelInfo[]) => void;
   setSidebarOpen: (o: boolean) => void;
+  setEnabledToolIds: (ids: string[]) => void;
+  setCustomToolsJson: (json: string) => void;
   generations: Generation[];
   addGeneration: (g: Generation) => void;
   deleteGeneration: (id: string) => void;
@@ -94,6 +98,8 @@ const defaultState: AppState = {
   isStreaming: false,
   apiUrl: 'http://127.0.0.1:18787',
   generations: [],
+  enabledToolIds: ['fetch_weather', 'get_stock_price', 'calculate'],
+  customToolsJson: '',
 };
 
 export function generateAutoTitle(text: string): string {
@@ -449,6 +455,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setIsStreaming: useCallback((s) => updateState({ isStreaming: s }), [updateState]),
         setModels: useCallback((m) => updateState({ models: m }), [updateState]),
         setSidebarOpen: useCallback((o) => updateState({ sidebarOpen: o }), [updateState]),
+        setEnabledToolIds: useCallback((ids) => updateState({ enabledToolIds: ids }), [updateState]),
+        setCustomToolsJson: useCallback((json) => updateState({ customToolsJson: json }), [updateState]),
         generations,
         addGeneration,
         deleteGeneration,

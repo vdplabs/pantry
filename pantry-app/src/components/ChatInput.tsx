@@ -14,10 +14,12 @@ import {
   FiCheck,
   FiUser,
   FiSettings,
+  FiTool,
 } from 'react-icons/fi';
 import { useApp } from '@/context/AppContext';
 import type { MessageContent } from '@/types';
 import { extractTextFromPdf } from '@/utils/pdfExtractor';
+import { PRESET_TOOLS } from '@/utils/tools';
 
 interface Props {
   placeholder?: string;
@@ -63,6 +65,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelDropdownRef = useRef<HTMLDivElement>(null);
   const personaDrawerRef = useRef<HTMLDivElement>(null);
+  const toolsDropdownRef = useRef<HTMLDivElement>(null);
 
   const {
     state,
@@ -71,6 +74,8 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
     setMaxTokens,
     setTemperature,
     setPreferSpeculative,
+    setEnabledToolIds,
+    setCustomToolsJson,
   } = useApp();
   const defaultPlaceholder = placeholder || 'Message Pantry model... (Enter to send, Shift+Enter for newline)';
 
@@ -79,6 +84,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
   const [showControls, setShowControls] = useState(false);
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showPersonaDrawer, setShowPersonaDrawer] = useState(false);
+  const [showToolsDrawer, setShowToolsDrawer] = useState(false);
   const [activePromptId, setActivePromptId] = useState('default');
   const [inputValue, setInputValue] = useState('');
 
@@ -90,6 +96,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
     (m.role || '').toLowerCase().includes('reasoning')
   );
   const displayModels = chatModels.length > 0 ? chatModels : state.models;
+
   const isVisionModel = (currentModel?.modalities || []).some(m => m.toLowerCase().includes('vision') || m.toLowerCase().includes('image')) ||
     (currentModel?.role || '').toLowerCase().includes('vision') ||
     (state.model || '').toLowerCase().includes('vision') ||
@@ -112,6 +119,9 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
       }
       if (personaDrawerRef.current && !personaDrawerRef.current.contains(event.target as Node)) {
         setShowPersonaDrawer(false);
+      }
+      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(event.target as Node)) {
+        setShowToolsDrawer(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -470,6 +480,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
                 onClick={() => {
                   setShowPersonaDrawer(prev => !prev);
                   setShowModelDropdown(false);
+                  setShowToolsDrawer(false);
                   setShowControls(false);
                 }}
                 title="System Persona & Instructions"
@@ -521,6 +532,99 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
                       }}
                       placeholder="Enter custom instructions or persona guidelines for the model..."
                       className="composer-persona-textarea"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Function Calling Tools Pill & Popup */}
+            <div className="composer-tool-item" ref={toolsDropdownRef}>
+              <button
+                type="button"
+                className={`composer-persona-pill ${showToolsDrawer ? 'active' : ''} ${state.enabledToolIds?.length ? 'active' : ''}`}
+                onClick={() => {
+                  setShowToolsDrawer(prev => !prev);
+                  setShowModelDropdown(false);
+                  setShowPersonaDrawer(false);
+                  setShowControls(false);
+                }}
+                title="Function Calling Tools"
+              >
+                <FiTool size={13} />
+                <span>Tools</span>
+                {state.enabledToolIds && state.enabledToolIds.length > 0 && (
+                  <span className="composer-tools-badge">{state.enabledToolIds.length}</span>
+                )}
+              </button>
+
+              {showToolsDrawer && (
+                <div className="composer-popup-menu composer-tools-dropdown">
+                  <div className="composer-popup-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FiTool size={13} color="var(--accent-primary)" />
+                      <span>Function Calling Tools ({state.enabledToolIds?.length || 0})</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowToolsDrawer(false)}
+                      className="composer-drawer-close-btn"
+                    >
+                      Done
+                    </button>
+                  </div>
+
+                  <div className="composer-tools-list">
+                    {PRESET_TOOLS.map(tool => {
+                      const isEnabled = state.enabledToolIds?.includes(tool.id);
+                      return (
+                        <div
+                          key={tool.id}
+                          className={`composer-tool-card ${isEnabled ? 'selected' : ''}`}
+                          onClick={() => {
+                            const current = state.enabledToolIds || [];
+                            if (isEnabled) {
+                              setEnabledToolIds(current.filter(id => id !== tool.id));
+                            } else {
+                              setEnabledToolIds([...current, tool.id]);
+                            }
+                          }}
+                        >
+                          <div className="composer-tool-card-head">
+                            <span className="composer-tool-card-title">{tool.label}</span>
+                            <input
+                              type="checkbox"
+                              checked={isEnabled}
+                              readOnly
+                              style={{ accentColor: 'var(--accent-primary)', cursor: 'pointer' }}
+                            />
+                          </div>
+                          <span className="composer-tool-card-desc">{tool.description}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="composer-persona-custom">
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <label className="composer-persona-label">Custom Tool (JSON Schema):</label>
+                      {state.customToolsJson && (
+                        <button
+                          type="button"
+                          onClick={() => setCustomToolsJson('')}
+                          style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', fontSize: '11px', cursor: 'pointer' }}
+                        >
+                          Clear
+                        </button>
+                      )}
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={state.customToolsJson || ''}
+                      onChange={e => setCustomToolsJson(e.target.value)}
+                      placeholder='[{"type":"function","function":{"name":"my_tool","description":"...","parameters":{...}}}]'
+                      className="composer-persona-textarea"
+                      style={{ fontFamily: 'var(--mono)', fontSize: '11px' }}
                     />
                   </div>
                 </div>

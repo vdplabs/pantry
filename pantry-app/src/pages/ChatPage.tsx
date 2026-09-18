@@ -11,6 +11,7 @@ import type { Message, ModelInfo, MessageContent, ToolCall } from '@/types';
 import { streamChat } from '@/services/streaming';
 import api from '@/services/api';
 import { getPluginById } from '@/plugins/registry';
+import { PRESET_TOOLS } from '@/utils/tools';
 
 const SYSTEM_PROMPTS = [
   { id: 'default', label: 'Default Assistant', prompt: 'You are a helpful, accurate, and concise AI assistant.' },
@@ -178,6 +179,29 @@ export default function ChatPage() {
       effectiveMessages = recent;
     }
 
+    // Gather active function calling tool schemas (for standard chat mode)
+    const activeToolSchemas: any[] = [];
+    if (!plugin) {
+      if (state.enabledToolIds && state.enabledToolIds.length > 0) {
+        for (const tid of state.enabledToolIds) {
+          const pt = PRESET_TOOLS.find(t => t.id === tid);
+          if (pt) activeToolSchemas.push(pt.schema);
+        }
+      }
+      if (state.customToolsJson && state.customToolsJson.trim()) {
+        try {
+          const parsed = JSON.parse(state.customToolsJson);
+          if (Array.isArray(parsed)) {
+            activeToolSchemas.push(...parsed);
+          } else if (typeof parsed === 'object') {
+            activeToolSchemas.push(parsed);
+          }
+        } catch (e) {
+          console.warn('Failed to parse custom tool JSON:', e);
+        }
+      }
+    }
+
     try {
       const res = await api.chat(effectiveMessages, {
         model: state.model || 'chat-compact',
@@ -187,6 +211,8 @@ export default function ChatPage() {
         stream: true,
         system_prompt: effectiveSystemPrompt,
         prefer_speculative: state.preferSpeculative,
+        tools: activeToolSchemas.length > 0 ? activeToolSchemas : undefined,
+        tool_choice: activeToolSchemas.length > 0 ? 'auto' : undefined,
       });
 
       if (!res.ok) {
