@@ -52,57 +52,62 @@ export function streamChat(
           const data = trimmed.slice(6);
           if (data === '[DONE]') continue;
 
+          let parsed: any = null;
           try {
-            const parsed = JSON.parse(data);
-            if (parsed.error) {
-              throw new Error(parsed.error.message || 'Streaming generation error');
-            }
-            if (parsed.model) modelName = parsed.model;
-            if (parsed.usage) usageInfo = parsed.usage;
-
-            const choice = parsed?.choices?.[0];
-            if (choice) {
-              if (choice.finish_reason) finishReason = choice.finish_reason;
-
-              // 1. Text delta
-              const deltaContent = choice.delta?.content ?? choice.text;
-              if (deltaContent) {
-                fullText += deltaContent;
-                onToken?.(deltaContent);
-              }
-
-              // 2. Reasoning delta (<think>)
-              const deltaReasoning = choice.delta?.reasoning_content;
-              if (deltaReasoning) {
-                fullReasoning += deltaReasoning;
-                onReasoning?.(deltaReasoning);
-              }
-
-              // 3. Tool calls delta
-              const deltaTools = choice.delta?.tool_calls;
-              if (deltaTools && Array.isArray(deltaTools)) {
-                for (const dt of deltaTools) {
-                  const idx = dt.index ?? 0;
-                  if (!accumulatedToolCalls[idx]) {
-                    accumulatedToolCalls[idx] = {
-                      id: dt.id || `call_${idx}`,
-                      type: dt.type || 'function',
-                      function: {
-                        name: dt.function?.name || '',
-                        arguments: dt.function?.arguments || '',
-                      },
-                    };
-                  } else {
-                    if (dt.id) accumulatedToolCalls[idx].id = dt.id;
-                    if (dt.function?.name) accumulatedToolCalls[idx].function.name += dt.function.name;
-                    if (dt.function?.arguments) accumulatedToolCalls[idx].function.arguments += dt.function.arguments;
-                  }
-                }
-                onToolCalls?.(accumulatedToolCalls);
-              }
-            }
+            parsed = JSON.parse(data);
           } catch {
             // skip malformed SSE JSON lines
+            continue;
+          }
+
+          if (parsed?.error) {
+            const errMsg = typeof parsed.error === 'string' ? parsed.error : parsed.error.message || 'Streaming generation error';
+            throw new Error(errMsg);
+          }
+
+          if (parsed.model) modelName = parsed.model;
+          if (parsed.usage) usageInfo = parsed.usage;
+
+          const choice = parsed?.choices?.[0];
+          if (choice) {
+            if (choice.finish_reason) finishReason = choice.finish_reason;
+
+            // 1. Text delta
+            const deltaContent = choice.delta?.content ?? choice.text;
+            if (deltaContent) {
+              fullText += deltaContent;
+              onToken?.(deltaContent);
+            }
+
+            // 2. Reasoning delta (<think>)
+            const deltaReasoning = choice.delta?.reasoning_content;
+            if (deltaReasoning) {
+              fullReasoning += deltaReasoning;
+              onReasoning?.(deltaReasoning);
+            }
+
+            // 3. Tool calls delta
+            const deltaTools = choice.delta?.tool_calls;
+            if (deltaTools && Array.isArray(deltaTools)) {
+              for (const dt of deltaTools) {
+                const idx = dt.index ?? 0;
+                if (!accumulatedToolCalls[idx]) {
+                  accumulatedToolCalls[idx] = {
+                    id: dt.id || `call_${idx}`,
+                    type: dt.type || 'function',
+                    function: {
+                      name: dt.function?.name || '',
+                      arguments: dt.function?.arguments || '',
+                    },
+                  };
+                } else {
+                  if (dt.id) accumulatedToolCalls[idx].id = dt.id;
+                  if (dt.function?.name) accumulatedToolCalls[idx].function.name += dt.function.name;
+                  if (dt.function?.arguments) accumulatedToolCalls[idx].function.arguments += dt.function.arguments;
+                }
+              }
+              onToolCalls?.(accumulatedToolCalls);
+            }
           }
         }
       }

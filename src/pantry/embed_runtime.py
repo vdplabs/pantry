@@ -77,7 +77,7 @@ class MLXEmbedRuntime(EmbedRuntime):
     ) -> tuple[list[list[float]], dict[str, int]]:
         try:
             import mlx.core as mx  # type: ignore
-            from mlx_lm import load  # type: ignore
+            from pantry.runtime import load_mlx_model
         except ImportError as e:
             raise RuntimeError(
                 "MLX embed runtime requested but mlx / mlx-lm is not installed. "
@@ -90,7 +90,7 @@ class MLXEmbedRuntime(EmbedRuntime):
             else (manifest.runtime.hf_repo or "")
         )
         if weights_path not in self._models:
-            model, tokenizer = load(weights_path)
+            model, tokenizer = load_mlx_model(weights_path)
             self._models[weights_path] = (model, tokenizer)
         else:
             model, tokenizer = self._models[weights_path]

@@ -376,6 +376,47 @@ def resolve_draft_path(
     return str(store.weights_dir(draft_man.id)), draft_man.id
 
 
+def load_mlx_model(
+    path_or_hf_repo: str,
+    tokenizer_config: dict[str, Any] | None = None,
+    model_config: dict[str, Any] | None = None,
+    adapter_path: str | None = None,
+    lazy: bool = False,
+) -> tuple[Any, Any]:
+    """Load model and tokenizer using mlx-lm, supporting strict=False fallback for FP8/MoE weights."""
+    import pathlib
+
+    try:
+        from mlx_lm.utils import _download, load_adapters, load_model, load_tokenizer
+    except ImportError as e:
+        raise RuntimeError(
+            "MLX runtime requested but mlx-lm is not installed. "
+            "pip install 'pantry[mlx]' then retry."
+        ) from e
+
+    p = pathlib.Path(path_or_hf_repo)
+    model_path = p if p.exists() else _download(path_or_hf_repo)
+
+    tok_cfg = {"trust_remote_code": True}
+    if tokenizer_config:
+        tok_cfg.update(tokenizer_config)
+
+    try:
+        model, config = load_model(model_path, lazy=lazy, strict=True, model_config=model_config)
+    except Exception:
+        # Retry with strict=False to support FP8 / quantized MoE weights with extra parameters or scales
+        model, config = load_model(model_path, lazy=lazy, strict=False, model_config=model_config)
+
+    if adapter_path is not None:
+        model = load_adapters(model, adapter_path)
+        model.eval()
+
+    tokenizer = load_tokenizer(
+        model_path, tok_cfg, eos_token_ids=config.get("eos_token_id", None)
+    )
+    return model, tokenizer
+
+
 class MLXRuntime(Runtime):
     """Optional mlx-lm backend. Import is deferred so pantry works without [mlx]."""
 
@@ -471,7 +512,7 @@ class MLXRuntime(Runtime):
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         try:
-            from mlx_lm import load, stream_generate  # type: ignore
+            from mlx_lm import stream_generate  # type: ignore
         except ImportError as e:
             raise RuntimeError(
                 "MLX runtime requested but mlx-lm is not installed. "
@@ -480,7 +521,7 @@ class MLXRuntime(Runtime):
 
         model_path = self._resolve_weights_path(manifest)
         if model_path not in self._models:
-            loaded = await asyncio.to_thread(load, model_path)
+            loaded = await asyncio.to_thread(load_mlx_model, model_path)
             self._models[model_path] = loaded  # type: ignore[assignment]
         if self.store is not None:
             self.store.mark_loaded(manifest.id, pin=False)
@@ -502,7 +543,7 @@ class MLXRuntime(Runtime):
         draft_model_obj = None
         if draft_path is not None:
             if draft_path not in self._models:
-                loaded_draft = await asyncio.to_thread(load, draft_path)
+                loaded_draft = await asyncio.to_thread(load_mlx_model, draft_path)
                 self._models[draft_path] = loaded_draft  # type: ignore[assignment]
             draft_model_obj, _draft_tok = self._models[draft_path]
 
@@ -734,13 +775,13 @@ class MLXRuntime(Runtime):
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         try:
-            from mlx_lm import load, stream_generate
+            from mlx_lm import stream_generate
         except ImportError as e:
             raise RuntimeError("MLX runtime requested but mlx-lm is not installed.") from e
 
         model_path = self._resolve_weights_path(manifest)
         if model_path not in self._models:
-            loaded = await asyncio.to_thread(load, model_path)
+            loaded = await asyncio.to_thread(load_mlx_model, model_path)
             self._models[model_path] = loaded
         if self.store is not None:
             self.store.mark_loaded(manifest.id, pin=False)

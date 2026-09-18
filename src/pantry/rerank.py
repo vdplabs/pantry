@@ -124,7 +124,7 @@ class MLXRerankRuntime(RerankRuntime):
     ) -> tuple[list[tuple[int, float]], dict[str, int]]:
         try:
             import mlx.core as mx  # type: ignore
-            from mlx_lm import load  # type: ignore
+            from pantry.runtime import load_mlx_model
         except ImportError:
             # Fallback to EchoRerankRuntime if MLX not available
             return EchoRerankRuntime(self.store).rank(manifest, query, documents)
@@ -138,7 +138,7 @@ class MLXRerankRuntime(RerankRuntime):
             return EchoRerankRuntime(self.store).rank(manifest, query, documents)
 
         if weights_path not in self._models:
-            model, tokenizer = load(weights_path)
+            model, tokenizer = load_mlx_model(weights_path)
             self._models[weights_path] = (model, tokenizer)
         else:
             model, tokenizer = self._models[weights_path]
