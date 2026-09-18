@@ -915,7 +915,15 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     duration_ms=dur_ms,
                     status=st,
                 )
-                raise
+                err_payload = {
+                    "error": {
+                        "message": str(exc) or "Text completion generation error",
+                        "type": "server_error",
+                        "code": st,
+                    }
+                }
+                yield f"data: {json.dumps(err_payload)}\n\n".encode()
+                yield b"data: [DONE]\n\n"
             finally:
                 svc.active_streams = max(0, svc.active_streams - 1)
 
@@ -1287,7 +1295,15 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     duration_ms=dur_ms,
                     status=st,
                 )
-                raise
+                err_payload = {
+                    "error": {
+                        "message": str(exc) or "Chat completion generation error",
+                        "type": "server_error",
+                        "code": st,
+                    }
+                }
+                yield f"data: {json.dumps(err_payload)}\n\n".encode()
+                yield b"data: [DONE]\n\n"
             finally:
                 svc.active_streams = max(0, svc.active_streams - 1)
 

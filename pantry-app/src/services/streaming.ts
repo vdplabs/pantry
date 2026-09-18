@@ -54,6 +54,9 @@ export function streamChat(
 
           try {
             const parsed = JSON.parse(data);
+            if (parsed.error) {
+              throw new Error(parsed.error.message || 'Streaming generation error');
+            }
             if (parsed.model) modelName = parsed.model;
             if (parsed.usage) usageInfo = parsed.usage;
 

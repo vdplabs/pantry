@@ -170,17 +170,17 @@ function ChatMessageComponent({ message, isStreaming, onRetry }: Props) {
 
         {/* Main Message Content */}
         {parsedHtml ? (
-          <div
-            className="chat-markdown-content"
-            dangerouslySetInnerHTML={{ __html: parsedHtml }}
-          />
+          <div className="chat-markdown-content-wrapper">
+            <div
+              className="chat-markdown-content"
+              dangerouslySetInnerHTML={{ __html: parsedHtml }}
+            />
+            {isStreaming && <span className="chat-streaming-cursor">▌</span>}
+          </div>
         ) : isStreaming && !reasoningText && !message.tool_calls?.length ? (
-          <div className="chat-streaming-placeholder">
-            <span className="chat-typing-dots">
-              <span />
-              <span />
-              <span />
-            </span>
+          <div className="streaming-status-pill">
+            <span className="pulsing-indicator-dot" />
+            <span>Thinking & generating response...</span>
           </div>
         ) : null}
 

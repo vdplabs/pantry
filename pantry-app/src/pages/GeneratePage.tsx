@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback, useMemo } from 'react';
-import { FiCode, FiPlay, FiCopy, FiCheck, FiSliders, FiZap, FiRefreshCw } from 'react-icons/fi';
+import { FiCode, FiPlay, FiCopy, FiCheck, FiSliders, FiZap, FiRefreshCw, FiSquare } from 'react-icons/fi';
 import { useApp } from '@/context/AppContext';
 import { streamTextCompletion } from '@/services/streaming';
 import api from '@/services/api';
@@ -101,6 +101,7 @@ export default function GeneratePage() {
   const [stopTokens, setStopTokens] = useState('\n\n');
   const [copied, setCopied] = useState(false);
   const [tps, setTps] = useState<number | null>(null);
+  const streamAbortRef = useRef<AbortController | null>(null);
 
   const codeModels = state.models.filter(m =>
     (m.modalities || []).some(mod => mod.toLowerCase().includes('text') || mod.toLowerCase().includes('chat')) ||
@@ -113,6 +114,14 @@ export default function GeneratePage() {
     setPrefix(preset.prefix);
     setSuffix(preset.suffix);
     setGeneratedText('');
+  };
+
+  const handleStop = () => {
+    if (streamAbortRef.current) {
+      streamAbortRef.current.abort();
+      streamAbortRef.current = null;
+    }
+    setIsGenerating(false);
   };
 
   const handleGenerate = useCallback(async () => {
@@ -141,7 +150,7 @@ export default function GeneratePage() {
       }
 
       let accumulated = '';
-      streamTextCompletion(
+      const controller = streamTextCompletion(
         res,
         (chunk) => {
           tokenCount++;
@@ -152,14 +161,18 @@ export default function GeneratePage() {
           const duration_s = Math.max(0.01, (performance.now() - t0) / 1000);
           setTps(tokenCount > 0 ? tokenCount / duration_s : null);
           setIsGenerating(false);
+          streamAbortRef.current = null;
         },
         (err) => {
           setIsGenerating(false);
+          streamAbortRef.current = null;
           setGeneratedText(prev => prev + `\n\n[Error: ${err.message}]`);
         }
       );
+      streamAbortRef.current = controller;
     } catch (err: any) {
       setIsGenerating(false);
+      streamAbortRef.current = null;
       setGeneratedText(`[Error: ${err.message || String(err)}]`);
     }
   }, [mode, prefix, suffix, rawPrompt, selectedModel, maxTokens, temperature, stopTokens]);
@@ -299,14 +312,25 @@ export default function GeneratePage() {
             </div>
           )}
 
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            className="primary-action-btn"
-          >
-            {isGenerating ? <FiRefreshCw className="spinning" size={15} /> : <FiPlay size={15} />}
-            <span>{isGenerating ? 'Generating...' : 'Complete Code'}</span>
-          </button>
+          {isGenerating ? (
+            <button
+              onClick={handleStop}
+              className="primary-action-btn"
+              style={{ background: '#dc2626', borderColor: '#ef4444' }}
+              title="Stop ongoing completion"
+            >
+              <FiSquare size={14} />
+              <span>Stop Generation</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleGenerate}
+              className="primary-action-btn"
+            >
+              <FiPlay size={15} />
+              <span>Complete Code</span>
+            </button>
+          )}
         </div>
 
         {/* Code Editor & Output Workbench */}
@@ -356,6 +380,13 @@ export default function GeneratePage() {
 
           {/* Result Output Terminal */}
           <div className="studio-panel" style={{ padding: '0', overflow: 'hidden' }}>
+            {isGenerating && (
+              <div className="fim-generating-bar">
+                <span className="spin-loader" />
+                <span>Loading weights & streaming code completion in background...</span>
+              </div>
+            )}
+
             <div className="code-block-header" style={{ padding: '10px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ fontWeight: 700, color: 'var(--text-title)' }}>Generated Code Output</span>
@@ -380,9 +411,13 @@ export default function GeneratePage() {
                     {generatedText ? (
                       <span className="fim-insertion">
                         <span dangerouslySetInnerHTML={{ __html: highlightedGenerated }} />
+                        {isGenerating && <span className="fim-cursor" />}
                       </span>
                     ) : isGenerating ? (
-                      <span className="fim-cursor" />
+                      <span style={{ color: '#38bdf8', fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <span className="fim-cursor" />
+                        <span>[Generating FIM completion...]</span>
+                      </span>
                     ) : null}
                     <span dangerouslySetInnerHTML={{ __html: highlightedSuffix }} />
                   </>
@@ -392,9 +427,13 @@ export default function GeneratePage() {
                     {generatedText ? (
                       <span className="fim-insertion">
                         <span dangerouslySetInnerHTML={{ __html: highlightedGenerated }} />
+                        {isGenerating && <span className="fim-cursor" />}
                       </span>
                     ) : isGenerating ? (
-                      <span className="fim-cursor" />
+                      <span style={{ color: '#38bdf8', fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                        <span className="fim-cursor" />
+                        <span>[Generating continuation...]</span>
+                      </span>
                     ) : null}
                   </>
                 )}
