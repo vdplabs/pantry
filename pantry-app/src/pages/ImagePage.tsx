@@ -29,7 +29,7 @@ export default function ImagePage() {
   const [negativePrompt, setNegativePrompt] = useState('blurry, low quality, distorted, extra limbs, watermark');
   const [selectedRatio, setSelectedRatio] = useState(ASPECT_RATIOS[0]);
   const [steps, setSteps] = useState(4);
-  const [guidance, setGuidance] = useState(0.0);
+  const [guidance, setGuidance] = useState(1.0);
   const [seed, setSeed] = useState(-1);
   const [selectedModel, setSelectedModel] = useState('image-standard');
   const [isGenerating, setIsGenerating] = useState(false);

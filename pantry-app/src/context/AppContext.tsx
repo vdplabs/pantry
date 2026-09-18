@@ -43,7 +43,7 @@ interface AppContextType {
   activeConversationId: string | null;
   activeConversation: Conversation | null;
   selectConversation: (id: string | null) => void;
-  createConversation: () => Promise<Conversation>;
+  createConversation: (initialTitle?: string) => Promise<Conversation>;
   renameConversation: (id: string, title: string) => void;
   deleteConversation: (id: string) => void;
   loadConversation: (conv: Conversation) => void;
@@ -91,6 +91,18 @@ const defaultState: AppState = {
   apiUrl: 'http://127.0.0.1:18787',
   generations: [],
 };
+
+export function generateAutoTitle(text: string): string {
+  const cleaned = text
+    .replace(/^[#\s*`>-]+/, '')
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
+  if (!cleaned) return 'New Chat';
+  if (cleaned.length <= 42) return cleaned;
+  const truncated = cleaned.slice(0, 40);
+  const lastSpace = truncated.lastIndexOf(' ');
+  return (lastSpace > 20 ? truncated.slice(0, lastSpace) : truncated).trim() + '...';
+}
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -186,10 +198,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
     if (activeConversationId) {
       setConversations(prev => {
-        const updated = prev.map(c => c.id === activeConversationId
-          ? { ...c, messages, message_count: messages.length }
-          : c
-        );
+        const updated = prev.map(c => {
+          if (c.id !== activeConversationId) return c;
+
+          let title = c.title;
+          // Auto-rename if title is default 'New Chat' or 'Untitled Chat' and we have user messages
+          if ((!title || title === 'New Chat' || title === 'Untitled Chat') && messages.length > 0) {
+            const firstUserMsg = messages.find(m => m.role === 'user');
+            if (firstUserMsg) {
+              let text = '';
+              if (typeof firstUserMsg.content === 'string') {
+                text = firstUserMsg.content;
+              } else if (Array.isArray(firstUserMsg.content)) {
+                const textObj = firstUserMsg.content.find(p => p.type === 'text');
+                text = textObj?.text || '';
+              }
+              const autoTitle = generateAutoTitle(text);
+              if (autoTitle && autoTitle !== 'New Chat') {
+                title = autoTitle;
+              }
+            }
+          }
+
+          return {
+            ...c,
+            title,
+            messages,
+            message_count: messages.length,
+            updated_at: new Date().toISOString(),
+          };
+        });
         const conv = updated.find(c => c.id === activeConversationId);
         if (conv) {
           saveConversationToDb(conv).catch(e => console.error('saveConversation failed:', e));
@@ -247,15 +285,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (conv.model) updateState({ model: conv.model });
   }, [updateState]);
 
-  const createConversation = useCallback(async () => {
+  const createConversation = useCallback(async (initialTitle?: string) => {
     const id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
     const conv: Conversation = {
       id,
-      title: 'New Chat',
+      title: initialTitle || 'New Chat',
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       message_count: 0,
-      model: 'chat-standard',
+      model: state.model || 'chat-standard',
       messages: [],
     };
     setConversations(prev => [conv, ...prev]);
@@ -263,7 +301,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setMessages([]);
     await saveConversationToDb(conv).catch(e => console.error('saveConversation failed:', e));
     return conv;
-  }, []);
+  }, [state.model]);
 
   const renameConversation = useCallback((id: string, title: string) => {
     setConversations(prev =>

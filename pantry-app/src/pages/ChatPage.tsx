@@ -3,7 +3,7 @@ import {
   FiZap, FiChevronDown, FiSettings, FiLayers, FiCpu,
   FiMessageSquare, FiSliders, FiArrowDown, FiTerminal, FiCode, FiCompass
 } from 'react-icons/fi';
-import { useApp } from '@/context/AppContext';
+import { useApp, generateAutoTitle } from '@/context/AppContext';
 import ChatInput from '@/components/ChatInput';
 import ChatMessage from '@/components/ChatMessage';
 import type { Message, ModelInfo, MessageContent, ToolCall } from '@/types';
@@ -25,7 +25,17 @@ const PROMPT_SUGGESTIONS = [
 ];
 
 export default function ChatPage() {
-  const { state, setMessages, setIsStreaming, setModel, setSystemPrompt, activeConversationId } = useApp();
+  const {
+    state,
+    setMessages,
+    setIsStreaming,
+    setModel,
+    setSystemPrompt,
+    conversations,
+    activeConversationId,
+    createConversation,
+    renameConversation,
+  } = useApp();
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showSystemPromptDrawer, setShowSystemPromptDrawer] = useState(false);
   const [activePromptId, setActivePromptId] = useState('default');
@@ -89,6 +99,28 @@ export default function ChatPage() {
   };
 
   const sendMessage = useCallback(async (content: string | MessageContent[]) => {
+    let convId = activeConversationId;
+    if (!convId) {
+      const newConv = await createConversation();
+      convId = newConv.id;
+    }
+
+    // Auto-rename chat if it currently has a default title
+    const activeConv = conversations.find(c => c.id === convId);
+    if (activeConv && (!activeConv.title || activeConv.title === 'New Chat' || activeConv.title === 'Untitled Chat')) {
+      let promptText = '';
+      if (typeof content === 'string') {
+        promptText = content;
+      } else if (Array.isArray(content)) {
+        const textObj = content.find(p => p.type === 'text');
+        promptText = textObj?.text || '';
+      }
+      const newTitle = generateAutoTitle(promptText);
+      if (newTitle && newTitle !== 'New Chat') {
+        renameConversation(convId, newTitle);
+      }
+    }
+
     const userMsg: Message = { role: 'user', content };
     
     // Add user message and empty assistant placeholder
@@ -237,7 +269,22 @@ export default function ChatPage() {
         return copy;
       });
     }
-  }, [state.messages, state.model, state.temperature, state.maxTokens, state.topP, state.systemPrompt, state.preferSpeculative, setMessages, setIsStreaming, scrollToBottom]);
+  }, [
+    state.messages,
+    state.model,
+    state.temperature,
+    state.maxTokens,
+    state.topP,
+    state.systemPrompt,
+    state.preferSpeculative,
+    activeConversationId,
+    conversations,
+    createConversation,
+    renameConversation,
+    setMessages,
+    setIsStreaming,
+    scrollToBottom,
+  ]);
 
   const handleRetry = () => {
     if (state.messages.length < 2) return;
