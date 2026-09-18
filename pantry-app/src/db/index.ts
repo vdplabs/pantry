@@ -95,15 +95,13 @@ export const conversationSchema = {
     updated_at: { type: 'string' },
     message_count: { type: 'number' },
     model: { type: 'string' },
+    plugin_id: { type: 'string' },
+    plugin_framework: { type: 'string' },
+    canvas_state: { type: 'object' },
     messages: {
       type: 'array',
       items: {
         type: 'object',
-        properties: {
-          role: { type: 'string' },
-          content: { type: 'string' },
-        },
-        required: ['role', 'content'],
       },
     },
   },

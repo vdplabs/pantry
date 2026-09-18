@@ -13,6 +13,7 @@ import {
   removeSetting,
 } from '@/db';
 import { sortConversations } from '@/utils/conversationUtils';
+import { getPluginById } from '@/plugins/registry';
 
 interface AppState {
   sidebarOpen: boolean;
@@ -44,12 +45,14 @@ interface AppContextType {
   activeConversationId: string | null;
   activeConversation: Conversation | null;
   selectConversation: (id: string | null) => void;
-  createConversation: (initialTitle?: string) => Promise<Conversation>;
+  createConversation: (initialTitle?: string, pluginId?: string, pluginFramework?: string) => Promise<Conversation>;
   renameConversation: (id: string, title: string) => void;
   deleteConversation: (id: string) => void;
   loadConversation: (conv: Conversation) => void;
   refreshConversations: () => Promise<void>;
   setConversations: React.Dispatch<React.SetStateAction<Conversation[]>>;
+  updateCanvasState: (updater: any | ((prev: any) => any)) => void;
+  setConversationPlugin: (id: string, pluginId: string, pluginFramework?: string) => void;
   setActiveTab: (tab: string) => void;
   setModel: (model: string) => void;
   setModality: (m: ChatModality) => void;
@@ -298,17 +301,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (conv.model) updateState({ model: conv.model });
   }, [updateState]);
 
-  const createConversation = useCallback(async (initialTitle?: string) => {
+  const createConversation = useCallback(async (initialTitle?: string, pluginId?: string, pluginFramework?: string) => {
     const id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
     const now = new Date().toISOString();
+
+    let canvas_state: any = undefined;
+    let title = initialTitle || 'New Chat';
+    let plugin_framework = pluginFramework;
+
+    if (pluginId) {
+      const plugin = getPluginById(pluginId);
+      if (plugin) {
+        plugin_framework = pluginFramework || plugin.defaultFramework;
+        canvas_state = plugin.getInitialState(plugin_framework);
+        if (!initialTitle) {
+          title = `${plugin.shortName || plugin.name} (${plugin_framework})`;
+        }
+      }
+    }
+
     const conv: Conversation = {
       id,
-      title: initialTitle || 'New Chat',
+      title,
       created_at: now,
       updated_at: now,
       message_count: 0,
       model: state.model || 'chat-standard',
       messages: [],
+      plugin_id: pluginId,
+      plugin_framework,
+      canvas_state,
     };
     setConversations(prev => sortConversations([conv, ...prev]));
     setActiveConversationId(conv.id);
@@ -316,6 +338,42 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await saveConversationToDb(conv).catch(e => console.error('saveConversation failed:', e));
     return conv;
   }, [state.model]);
+
+  const updateCanvasState = useCallback((updater: any) => {
+    if (!activeConversationId) return;
+    setConversations(prev => {
+      const conv = prev.find(c => c.id === activeConversationId);
+      if (!conv) return prev;
+      const nextState = typeof updater === 'function' ? updater(conv.canvas_state) : { ...conv.canvas_state, ...updater };
+      const updatedConv: Conversation = {
+        ...conv,
+        canvas_state: nextState,
+        updated_at: new Date().toISOString(),
+      };
+      saveConversationToDb(updatedConv).catch(e => console.error('saveConversation failed:', e));
+      return prev.map(c => c.id === activeConversationId ? updatedConv : c);
+    });
+  }, [activeConversationId]);
+
+  const setConversationPlugin = useCallback((id: string, pluginId: string, pluginFramework?: string) => {
+    const plugin = getPluginById(pluginId);
+    if (!plugin) return;
+    const framework = pluginFramework || plugin.defaultFramework;
+    const initialState = plugin.getInitialState(framework);
+    setConversations(prev => {
+      const conv = prev.find(c => c.id === id);
+      if (!conv) return prev;
+      const updatedConv: Conversation = {
+        ...conv,
+        plugin_id: pluginId,
+        plugin_framework: framework,
+        canvas_state: initialState,
+        updated_at: new Date().toISOString(),
+      };
+      saveConversationToDb(updatedConv).catch(e => console.error('saveConversation failed:', e));
+      return prev.map(c => c.id === id ? updatedConv : c);
+    });
+  }, []);
 
   const renameConversation = useCallback((id: string, title: string) => {
     setConversations(prev => {
@@ -337,10 +395,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     await deleteConversationFromDb(id).catch(e => console.error('deleteConversationFromDb failed:', e));
   }, [activeConversationId]);
 
-const addGeneration = useCallback((gen: Generation) => {
+  const addGeneration = useCallback((gen: Generation) => {
     setGenerations(prev => [gen, ...prev]);
     saveGenerationToDb(gen).catch(e => console.error('saveGeneration failed:', e));
-}, []);
+  }, []);
 
   const deleteGeneration = useCallback(async (id: string) => {
     console.log('deleteGeneration called for:', id);
@@ -374,6 +432,8 @@ const addGeneration = useCallback((gen: Generation) => {
         loadConversation,
         refreshConversations,
         setConversations,
+        updateCanvasState,
+        setConversationPlugin,
         setActiveTab: useCallback((tab) => updateState({ activeTab: tab }), [updateState]),
         setModel: useCallback((model) => updateState({ model }), [updateState]),
         setModality: useCallback((modality) => updateState({ modality }), [updateState]),

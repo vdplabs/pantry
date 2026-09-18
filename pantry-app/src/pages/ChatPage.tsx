@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FiZap, FiChevronDown, FiSettings, FiLayers, FiCpu,
-  FiMessageSquare, FiSliders, FiArrowDown, FiTerminal, FiCode, FiCompass
+  FiMessageSquare, FiSliders, FiArrowDown, FiTerminal, FiCode, FiCompass, FiColumns, FiShield
 } from 'react-icons/fi';
 import { useApp, generateAutoTitle } from '@/context/AppContext';
 import ChatInput from '@/components/ChatInput';
@@ -10,6 +10,7 @@ import CanvasWorkbench, { CanvasArtifact } from '@/components/artifacts/CanvasWo
 import type { Message, ModelInfo, MessageContent, ToolCall } from '@/types';
 import { streamChat } from '@/services/streaming';
 import api from '@/services/api';
+import { getPluginById } from '@/plugins/registry';
 
 const SYSTEM_PROMPTS = [
   { id: 'default', label: 'Default Assistant', prompt: 'You are a helpful, accurate, and concise AI assistant.' },
@@ -36,12 +37,14 @@ export default function ChatPage() {
     activeConversationId,
     createConversation,
     renameConversation,
+    updateCanvasState,
   } = useApp();
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showSystemPromptDrawer, setShowSystemPromptDrawer] = useState(false);
   const [activePromptId, setActivePromptId] = useState('default');
   const [userScrolledUp, setUserScrolledUp] = useState(false);
   const [activeArtifact, setActiveArtifact] = useState<CanvasArtifact | null>(null);
+  const [canvasCollapsed, setCanvasCollapsed] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
@@ -110,6 +113,9 @@ export default function ChatPage() {
     setSystemPrompt(preset.prompt);
   };
 
+  const activeConv = conversations.find(c => c.id === activeConversationId);
+  const activePlugin = getPluginById(activeConv?.plugin_id);
+
   const sendMessage = useCallback(async (content: string | MessageContent[]) => {
     let convId = activeConversationId;
     if (!convId) {
@@ -117,9 +123,11 @@ export default function ChatPage() {
       convId = newConv.id;
     }
 
+    const currentConv = conversations.find(c => c.id === convId);
+    const plugin = getPluginById(currentConv?.plugin_id);
+
     // Auto-rename chat if it currently has a default title
-    const activeConv = conversations.find(c => c.id === convId);
-    if (activeConv && (!activeConv.title || activeConv.title === 'New Chat' || activeConv.title === 'Untitled Chat')) {
+    if (currentConv && (!currentConv.title || currentConv.title === 'New Chat' || currentConv.title === 'Untitled Chat')) {
       let promptText = '';
       if (typeof content === 'string') {
         promptText = content;
@@ -160,14 +168,20 @@ export default function ChatPage() {
 
     const messagesPayload = [...state.messages, userMsg];
 
+    // Compute effective system prompt (incorporating living canvas state if active)
+    let effectiveSystemPrompt = state.systemPrompt || undefined;
+    if (plugin && currentConv?.canvas_state) {
+      effectiveSystemPrompt = plugin.buildSystemPrompt(currentConv.canvas_state, currentConv.plugin_framework);
+    }
+
     try {
       const res = await api.chat(messagesPayload, {
         model: state.model || 'chat-compact',
         temperature: state.temperature ?? 0.7,
-        max_tokens: state.maxTokens ?? 1024,
+        max_tokens: state.maxTokens ?? 2048,
         top_p: state.topP ?? 1.0,
         stream: true,
-        system_prompt: state.systemPrompt || undefined,
+        system_prompt: effectiveSystemPrompt,
         prefer_speculative: state.preferSpeculative,
       });
 
@@ -187,13 +201,18 @@ export default function ChatPage() {
           rafId = null;
           if (activeStreamingConvIdRef.current !== currentTargetConvId) return;
 
+          let displayContent = currentStreamContent;
+          if (plugin && displayContent.includes('```threat_model_patch')) {
+            displayContent = displayContent.replace(/```threat_model_patch[\s\S]*$/, '✨ *Updating Threat Model Canvas...*');
+          }
+
           setMessages(prev => {
             const copy = [...prev];
             const idx = copy.length - 1;
             if (copy[idx]?.role === 'assistant') {
               copy[idx] = {
                 ...copy[idx],
-                content: currentStreamContent,
+                content: displayContent,
                 reasoning_content: currentReasoning || undefined,
                 tool_calls: currentTools.length > 0 ? currentTools : undefined,
               };
@@ -233,6 +252,15 @@ export default function ChatPage() {
           const cachedTokens = result.usage?.prompt_tokens_details?.cached_tokens;
           const tps = completionTokens > 0 ? completionTokens / duration_s : undefined;
 
+          let finalAssistantContent = result.content || currentStreamContent;
+          if (plugin && currentConv?.canvas_state) {
+            const parsed = plugin.parseModelOutput(finalAssistantContent, currentConv.canvas_state);
+            finalAssistantContent = parsed.cleanText;
+            if (parsed.updatedState) {
+              updateCanvasState(parsed.updatedState);
+            }
+          }
+
           setIsStreaming(false);
           setMessages(prev => {
             const copy = [...prev];
@@ -240,7 +268,7 @@ export default function ChatPage() {
             if (copy[idx]?.role === 'assistant') {
               copy[idx] = {
                 ...copy[idx],
-                content: result.content || currentStreamContent,
+                content: finalAssistantContent,
                 reasoning_content: result.reasoningContent || currentReasoning || undefined,
                 tool_calls: result.toolCalls || (currentTools.length > 0 ? currentTools : undefined),
                 model: result.model || state.model,
@@ -340,6 +368,7 @@ export default function ChatPage() {
     setMessages,
     setIsStreaming,
     scrollToBottom,
+    updateCanvasState,
   ]);
 
   const handleRetry = () => {
@@ -349,7 +378,10 @@ export default function ChatPage() {
       // Remove last assistant message
       setMessages(prev => {
         const copy = [...prev];
-        if (copy[copy.length - 1]?.role === 'assistant') copy.pop();
+        const lastIdx = copy.length - 1;
+        if (copy[lastIdx]?.role === 'assistant') {
+          copy.pop();
+        }
         return copy;
       });
       sendMessage(lastUserMsg.content);
@@ -357,14 +389,15 @@ export default function ChatPage() {
   };
 
   const handleContinue = () => {
-    sendMessage('Please continue generating from exactly where you stopped.');
+    sendMessage('Please continue where you left off.');
   };
 
   return (
-    <div className={`chat-page-container ${activeArtifact ? 'with-canvas-workbench' : ''}`}>
-      <div className="chat-main-area">
-        {/* Top Header Controls */}
-        <div className="chat-header-bar">
+    <div className={`chat-page-container ${activePlugin && !canvasCollapsed ? 'with-studio-layout' : ''}`}>
+      {/* Left Chat Pane */}
+      <div className="chat-layout">
+        {/* Model Bar */}
+        <div className="chat-header">
           <div style={{ position: 'relative' }}>
             <button
               className="chat-model-selector-btn"
@@ -427,6 +460,24 @@ export default function ChatPage() {
           </div>
 
           <div className="chat-header-controls">
+            {activePlugin && (
+              <div className="studio-header-pill">
+                <span className="studio-pill-icon">{activePlugin.icon}</span>
+                <span className="studio-pill-title">{activePlugin.shortName}</span>
+                {activeConv?.plugin_framework && (
+                  <span className="studio-pill-framework">{activeConv.plugin_framework}</span>
+                )}
+                <button
+                  onClick={() => setCanvasCollapsed(prev => !prev)}
+                  className="studio-pill-toggle"
+                  title={canvasCollapsed ? "Open Studio Canvas" : "Collapse Studio Canvas"}
+                >
+                  <FiColumns size={12} />
+                  <span>{canvasCollapsed ? 'Show Canvas' : 'Hide Canvas'}</span>
+                </button>
+              </div>
+            )}
+
             <button
               className={`chat-control-pill ${showSystemPromptDrawer ? 'active' : ''}`}
               onClick={() => setShowSystemPromptDrawer(!showSystemPromptDrawer)}
@@ -482,24 +533,47 @@ export default function ChatPage() {
           {state.messages.length === 0 ? (
             <div className="chat-empty-state">
               <div className="empty-logo-glow">
-                <FiZap size={32} />
+                {activePlugin ? <FiShield size={32} /> : <FiZap size={32} />}
               </div>
-              <h1 className="empty-title">What would you like to explore?</h1>
+              <h1 className="empty-title">
+                {activePlugin ? `${activePlugin.name}` : 'What would you like to explore?'}
+              </h1>
               <p className="empty-sub">
-                Running locally on Apple Silicon / MLX with Pantry. Full OpenAI API compatibility with real tool calling, reasoning models, and instant low latency.
+                {activePlugin ? activePlugin.description : 'Running locally on Apple Silicon / MLX with Pantry. Full OpenAI API compatibility with real tool calling, reasoning models, and instant low latency.'}
               </p>
 
               <div className="prompt-suggestions-grid">
-                {PROMPT_SUGGESTIONS.map((item, idx) => (
-                  <button
-                    key={idx}
-                    className="prompt-suggestion-card"
-                    onClick={() => sendMessage(item.desc)}
-                  >
-                    <strong style={{ color: 'var(--text-title)', marginBottom: '4px' }}>{item.title}</strong>
-                    <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{item.desc}</span>
-                  </button>
-                ))}
+                {activePlugin ? (
+                  <>
+                    <button className="prompt-suggestion-card" onClick={() => sendMessage("Let's threat model a modern web application with an API Gateway (Envoy), OAuth2 Auth Service, Go Backend, and PostgreSQL database.")}>
+                      <strong style={{ color: 'var(--text-title)', marginBottom: '4px' }}>🛡️ Initialize Full Architecture</strong>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Decompose API Gateway, Auth, Backend, and DB into DFD and components</span>
+                    </button>
+                    <button className="prompt-suggestion-card" onClick={() => sendMessage("What are the realistic threat actors, motivations, and attack vectors targeted against our API Gateway?")}>
+                      <strong style={{ color: 'var(--text-title)', marginBottom: '4px' }}>🦹 Identify Threat Actors</strong>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Analyze adversaries targeting our public entry points and APIs</span>
+                    </button>
+                    <button className="prompt-suggestion-card" onClick={() => sendMessage("Perform a STRIDE threat categorization across all internal services and data stores.")}>
+                      <strong style={{ color: 'var(--text-title)', marginBottom: '4px' }}>🔍 Full STRIDE Analysis</strong>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Map Spoofing, Tampering, Info Disclosure, and Elevation threats</span>
+                    </button>
+                    <button className="prompt-suggestion-card" onClick={() => sendMessage("What countermeasures and security controls should we prioritize for high-risk assets?")}>
+                      <strong style={{ color: 'var(--text-title)', marginBottom: '4px' }}>🔒 Countermeasures & Controls</strong>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Formulate prioritized mitigations for open vulnerabilities</span>
+                    </button>
+                  </>
+                ) : (
+                  PROMPT_SUGGESTIONS.map((item, idx) => (
+                    <button
+                      key={idx}
+                      className="prompt-suggestion-card"
+                      onClick={() => sendMessage(item.desc)}
+                    >
+                      <strong style={{ color: 'var(--text-title)', marginBottom: '4px' }}>{item.title}</strong>
+                      <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{item.desc}</span>
+                    </button>
+                  ))
+                )}
               </div>
             </div>
           ) : (
@@ -541,6 +615,18 @@ export default function ChatPage() {
           autoFocus
         />
       </div>
+
+      {/* Living Studio Canvas Pane */}
+      {activePlugin && !canvasCollapsed && activeConv?.canvas_state && (
+        <div className="studio-canvas-column">
+          <activePlugin.RendererComponent
+            state={activeConv.canvas_state}
+            framework={activeConv.plugin_framework}
+            onChange={(newState) => updateCanvasState(newState)}
+            onSendPrompt={(prompt) => sendMessage(prompt)}
+          />
+        </div>
+      )}
 
       {/* Slide-out / Split Canvas Workbench */}
       {activeArtifact && (

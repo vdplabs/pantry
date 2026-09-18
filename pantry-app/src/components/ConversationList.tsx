@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { FiPlus, FiMessageSquare, FiTrash2, FiEdit3, FiSearch, FiCheck, FiX } from 'react-icons/fi';
+import { FiPlus, FiMessageSquare, FiTrash2, FiEdit3, FiSearch, FiCheck, FiX, FiShield, FiChevronDown } from 'react-icons/fi';
 import { useApp } from '@/context/AppContext';
 import type { Conversation } from '@/types';
 import { formatTime, getGroupLabel, getConversationTimestamp, sortConversations } from '@/utils/conversationUtils';
@@ -7,6 +7,7 @@ import { formatTime, getGroupLabel, getConversationTimestamp, sortConversations 
 export default function ConversationList() {
   const { conversations, activeConversationId, selectConversation, createConversation, deleteConversation, renameConversation } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
+  const [showStudioMenu, setShowStudioMenu] = useState(false);
 
   const filtered = useMemo(() => {
     let list = conversations;
@@ -47,12 +48,69 @@ export default function ConversationList() {
       <div className="conversation-list-header">
         <button
           onClick={() => createConversation()}
-          title="Start a new chat session"
+          title="Start a new standard chat"
           className="new-chat-btn"
         >
           <FiPlus size={16} />
           <span>New Chat</span>
         </button>
+
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setShowStudioMenu(!showStudioMenu)}
+            title="Start a specialized Studio session (Threat Modeling, etc.)"
+            className="new-studio-btn"
+          >
+            <FiShield size={14} />
+            <span>Studio</span>
+            <FiChevronDown size={11} />
+          </button>
+
+          {showStudioMenu && (
+            <div className="studio-menu-dropdown">
+              <div className="studio-menu-header">Specialized Studio Canvases</div>
+              <button
+                className="studio-menu-item"
+                onClick={() => {
+                  createConversation('Threat Model (PASTA)', 'threat-model', 'PASTA');
+                  setShowStudioMenu(false);
+                }}
+              >
+                <div className="menu-item-icon">🛡️</div>
+                <div className="menu-item-info">
+                  <div className="menu-item-title">PASTA Threat Modeling</div>
+                  <div className="menu-item-desc">Risk-centric 7-stage architecture analysis</div>
+                </div>
+              </button>
+              <button
+                className="studio-menu-item"
+                onClick={() => {
+                  createConversation('Threat Model (STRIDE)', 'threat-model', 'STRIDE');
+                  setShowStudioMenu(false);
+                }}
+              >
+                <div className="menu-item-icon">🔍</div>
+                <div className="menu-item-info">
+                  <div className="menu-item-title">STRIDE Matrix Studio</div>
+                  <div className="menu-item-desc">Asset & trust boundary threat breakdown</div>
+                </div>
+              </button>
+              <button
+                className="studio-menu-item"
+                onClick={() => {
+                  createConversation('Threat Model (MAESTRO)', 'threat-model', 'MAESTRO');
+                  setShowStudioMenu(false);
+                }}
+              >
+                <div className="menu-item-icon">🤖</div>
+                <div className="menu-item-info">
+                  <div className="menu-item-title">MAESTRO Agentic Security</div>
+                  <div className="menu-item-desc">LLM agent, prompt injection & tool analysis</div>
+                </div>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="conversation-search-wrap">
@@ -140,7 +198,11 @@ function ConversationItem({
       role="button"
       tabIndex={0}
     >
-      <FiMessageSquare className="conversation-item-icon" size={14} />
+      {conv.plugin_id === 'threat-model' ? (
+        <FiShield className="conversation-item-icon studio-badge-icon" size={14} />
+      ) : (
+        <FiMessageSquare className="conversation-item-icon" size={14} />
+      )}
       
       <div className="conversation-item-content">
         {renaming ? (

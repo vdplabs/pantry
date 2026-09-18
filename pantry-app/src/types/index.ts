@@ -318,4 +318,7 @@ export interface Conversation {
   message_count: number;
   model: string;
   messages: Message[];
+  plugin_id?: string;
+  plugin_framework?: string;
+  canvas_state?: any;
 }
