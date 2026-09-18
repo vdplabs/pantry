@@ -81,6 +81,7 @@
       --radius-md: 0.25rem;
       --font: "Myriad Pro", "Outfit", -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Plus Jakarta Sans", "Inter", "Segoe UI", Roboto, sans-serif;
       --mono: "Myriad Pro", "Outfit", "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      --monospace: "SF Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     }
 
     [data-theme="dark"] {
@@ -2782,6 +2783,201 @@
       background: var(--accent-rose-subtle);
       color: var(--accent-rose);
     }
+
+    .help-section {
+      margin-bottom: 28px;
+    }
+
+    .help-section-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .help-section-title {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: -0.2px;
+      color: var(--text-title);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .help-section-desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .help-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 12px;
+    }
+
+    .help-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px;
+      box-shadow: var(--shadow-card);
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .help-card:hover {
+      border-color: var(--border-highlight);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
+    }
+
+    .help-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+      gap: 8px;
+    }
+
+    .help-card-title {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent-primary);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .help-card-cmd {
+      font-family: var(--monospace);
+      font-size: 12px;
+      color: var(--text-title);
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border-card-subtle);
+      border-radius: 6px;
+      padding: 6px 10px;
+      margin-bottom: 6px;
+      word-break: break-all;
+      line-height: 1.4;
+    }
+
+    .help-card-desc {
+      font-size: 11.5px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    .help-api-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12.5px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-card);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      box-shadow: var(--shadow-card);
+    }
+
+    .help-api-table th {
+      background: var(--bg-subtle);
+      color: var(--text-muted);
+      font-size: 10.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border-card);
+    }
+
+    .help-api-table td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-card-subtle);
+      color: var(--text-primary);
+      vertical-align: top;
+    }
+
+    .help-api-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .help-api-table tr:hover td {
+      background: var(--bg-subtle);
+    }
+
+    .help-method {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 4px;
+      display: inline-block;
+      min-width: 50px;
+      text-align: center;
+    }
+
+    .help-method.post {
+      background: var(--accent-primary-subtle);
+      color: var(--accent-primary);
+    }
+
+    .help-method.get {
+      background: var(--accent-emerald-subtle);
+      color: var(--accent-emerald);
+    }
+
+    .help-endpoint {
+      font-family: var(--monospace);
+      font-size: 12px;
+      color: var(--text-title);
+      font-weight: 500;
+    }
+
+    .help-example {
+      background: var(--bg-card-inner);
+      border: 1px solid var(--border-card-subtle);
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+    }
+
+    .help-example-title {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-title);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .help-example pre {
+      font-family: var(--monospace);
+      font-size: 11px;
+      color: var(--text-body);
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-all;
+      margin: 0;
+      overflow-x: auto;
+    }
+
+    .help-cmd-chip {
+      display: inline-block;
+      font-family: var(--monospace);
+      font-size: 10.5px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--chip-bg);
+      color: var(--chip-text);
+      border: 1px solid var(--chip-border);
+      margin-right: 3px;
+    }
+
   </style>
 </head>
 
@@ -2814,18 +3010,42 @@
               onclick="switchMainTab('playground')">Playground</button>
             <button class="pill-nav-item" data-tab="governance" id="pill-tab-governance"
               onclick="switchMainTab('governance')">Governance</button>
+            <button class="pill-nav-item" data-tab="help" id="pill-tab-help" onclick="switchMainTab('help')">Help</button>
           </nav>
         </div>
 
         <div class="nav-right-actions">
-          <div class="nav-search-wrap">
+          <!-- <div class="nav-search-wrap">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
               stroke-linecap="round" stroke-linejoin="round" style="color: #a1a1aa;">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
             <input type="text" id="nav-search-input" placeholder="Search..." onkeyup="handleGlobalSearch(event)" />
-          </div>
+          </div> -->
+
+          <div class="dashboard-action-group">
+            <button class="dashboard-export-btn" id="btn-export-top" onclick="triggerExportReport()">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
+                      stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                      <polyline points="7 10 12 15 17 10"></polyline>
+                      <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    Export
+                  </button>
+                  
+                  <div class="dashboard-date-pill">
+                    <div class="interval-controls" id="monitor-interval-controls">
+                      <button class="btn-interval" data-interval="500" title="Poll 0.5s">0.5s</button>
+                      <button class="btn-interval active" data-interval="1000" title="Poll 1s">1s</button>
+                      <button class="btn-interval" data-interval="3000" title="Poll 3s">3s</button>
+                      <button class="btn-icon" id="btn-pause" title="Pause/Resume">⏸</button>
+                      <button class="btn-icon" id="btn-copy" title="Copy Telemetry">📋</button>
+                    </div>
+                  </div>
+                  
+                </div>
 
           <button class="btn-icon-circle-action" id="btn-settings" title="Toggle Theme"
             onclick="toggleThemePreference()">
@@ -2864,26 +3084,7 @@
                 <p class="dashboard-page-sub">Real-time insights into local AI runtime performance.</p>
               </div>
               <div class="dashboard-sub-right">
-                <div class="dashboard-action-group">
-                  <div class="dashboard-date-pill">
-                    <div class="interval-controls" id="monitor-interval-controls">
-                      <button class="btn-interval" data-interval="500" title="Poll 0.5s">0.5s</button>
-                      <button class="btn-interval active" data-interval="1000" title="Poll 1s">1s</button>
-                      <button class="btn-interval" data-interval="3000" title="Poll 3s">3s</button>
-                      <button class="btn-icon" id="btn-pause" title="Pause/Resume">⏸</button>
-                      <button class="btn-icon" id="btn-copy" title="Copy Telemetry">📋</button>
-                    </div>
-                  </div>
-                  <button class="dashboard-export-btn" id="btn-export-top" onclick="triggerExportReport()">
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                      stroke-linecap="round" stroke-linejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                      <polyline points="7 10 12 15 17 10"></polyline>
-                      <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    Export Report
-                  </button>
-                </div>
+                
               </div>
             </div>
 
@@ -4295,6 +4496,272 @@
           </div>
         </div>
 
+        <!-- VIEW 7: HELP -->
+            <div id="tab-view-help" class="tab-view" style="display: none;">
+              <div class="dashboard-canvas">
+                <div class="dashboard-subheader">
+                  <div>
+                    <div class="dashboard-page-title">Help & Command Reference</div>
+                    <div class="dashboard-page-sub">Every pantry CLI command and HTTP API endpoint, organized by category.</div>
+                  </div>
+                </div>
+
+                <!-- CLI Commands -->
+                <div class="help-section">
+                  <div class="help-section-header">
+                    <div>
+                      <div class="help-section-title">🖥️ CLI Commands</div>
+                      <div class="help-section-desc">Run these from your terminal while the daemon is running or standalone.</div>
+                    </div>
+                  </div>
+                  <div class="help-grid">
+                    <div class="help-card">
+                      <div class="help-card-header">
+                        <div class="help-card-title">📦 Model Management</div>
+                      </div>
+                      <div class="help-card-cmd">pantry init</div>
+                      <div class="help-card-desc">Initialize library directory tree and seed the bundled model catalog.</div>
+                      <div class="help-card-cmd">pantry pull &lt;package_id&gt;</div>
+                      <div class="help-card-desc">Download and verify package weights into shared store.</div>
+                      <div class="help-card-cmd">pantry list</div>
+                      <div class="help-card-desc">List all available and installed model packages with their status.</div>
+                      <div class="help-card-cmd">pantry load / pantry unload</div>
+                      <div class="help-card-desc">Warm model weights into memory or release allocations.</div>
+                    </div>
+
+                    <div class="help-card">
+                      <div class="help-card-header">
+                        <div class="help-card-title">⚙️ Server & Daemon</div>
+                      </div>
+                      <div class="help-card-cmd">pantry serve [--host] [--port] [--worker-isolation]</div>
+                      <div class="help-card-desc">Start OpenAI-compatible HTTP daemon + macOS menu bar. Use --worker-isolation so unloading reclaims Metal allocations.</div>
+                      <div class="help-card-cmd">pantry serve --no-menubar</div>
+                      <div class="help-card-desc">HTTP server only (default on headless/Linux).</div>
+                      <div class="help-card-cmd">pantry dashboard</div>
+                      <div class="help-card-desc">Open the Web System Monitor in your default browser.</div>
+                      <div class="help-card-cmd">pantry service install / start / stop / status / uninstall</div>
+                      <div class="help-card-desc">Manage macOS login LaunchAgent daemon.</div>
+                    </div>
+
+                    <div class="help-card">
+                      <div class="help-card-header">
+                        <div class="help-card-title">💬 Inference & Media</div>
+                      </div>
+                      <div class="help-card-cmd">pantry chat "&lt;prompt&gt;"</div>
+                      <div class="help-card-desc">Fast terminal chat completions with optional speculative decoding.</div>
+                      <div class="help-card-cmd">pantry transcribe &lt;file&gt;</div>
+                      <div class="help-card-desc">Local speech-to-text audio transcription via Whisper.</div>
+                      <div class="help-card-cmd">pantry image "&lt;prompt&gt;"</div>
+                      <div class="help-card-desc">Generate diffusion images locally via Metal acceleration (FLUX).</div>
+                    </div>
+
+                    <div class="help-card">
+                      <div class="help-card-header">
+                        <div class="help-card-title">🔧 System & Utility</div>
+                      </div>
+                      <div class="help-card-cmd">pantry resolve --modality chat --ram-gb-max 8 --quality compact</div>
+                      <div class="help-card-desc">Arbitrate model selection from capability constraints (Patent Claim 1). Supports --task, --quality, --speculative flags.</div>
+                      <div class="help-card-cmd">pantry status</div>
+                      <div class="help-card-desc">JSON library snapshot + Metal memory usage.</div>
+                      <div class="help-card-cmd">pantry health [--host] [--port]</div>
+                      <div class="help-card-desc">Hit /v1/health endpoint for service status.</div>
+                      <div class="help-card-cmd">pantry storage</div>
+                      <div class="help-card-desc">Inspect CAS deduplication ratio and disk savings.</div>
+                      <div class="help-card-cmd">pantry prune [--dry-run]</div>
+                      <div class="help-card-desc">Reclaim unreferenced model weight chunks.</div>
+                      <div class="help-card-cmd">pantry patent / pantry patent --json</div>
+                      <div class="help-card-desc">Display Patent Application # 64/148,883 specifications & live telemetry.</div>
+                      <div class="help-card-cmd">pantry catalog update / list</div>
+                      <div class="help-card-desc">Sync remote catalog manifests or list available catalogs.</div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- HTTP API Endpoints -->
+                <div class="help-section">
+                  <div class="help-section-header">
+                    <div>
+                      <div class="help-section-title">🌐 HTTP API Endpoints</div>
+                      <div class="help-section-desc">OpenAI-compatible + local management APIs at http://127.0.0.1:18787</div>
+                    </div>
+                  </div>
+                  <table class="help-api-table">
+                    <thead>
+                      <tr>
+                        <th>Method</th>
+                        <th>Endpoint</th>
+                        <th>Description</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/chat/completions</span></td>
+                        <td>Streaming SSE & non-streaming chat with token accounting & tool calling</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/embeddings</span></td>
+                        <td>Vector embeddings generation (single or batched)</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/resolve</span></td>
+                        <td>Capability Arbitration (Patent Claim 1): intent tuple → ExecutionPlan</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/pull</span></td>
+                        <td>Pull model weights into local store</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/load / /v1/unload</span></td>
+                        <td>Warm model weights or release allocations</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/images/generations</span></td>
+                        <td>Diffusion image generation via mflux (FLUX) with Metal acceleration</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/audio/generations</span></td>
+                        <td>Music / audio generation for music packages</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/audio/transcriptions</span></td>
+                        <td>Speech-to-text via mlx-whisper (multipart upload)</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method get">GET</span></td>
+                        <td><span class="help-endpoint">/v1/models</span></td>
+                        <td>OpenAI-style model list with modality & readiness info</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method get">GET</span></td>
+                        <td><span class="help-endpoint">/v1/storage</span></td>
+                        <td>CAS telemetry: apparent vs physical bytes, dedup ratio</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/storage/prune</span></td>
+                        <td>Garbage collection of unreferenced weight chunks</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method get">GET</span></td>
+                        <td><span class="help-endpoint">/v1/monitor/stats</span></td>
+                        <td>Comprehensive telemetry feed powering the Web Dashboard</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/monitor/reset</span></td>
+                        <td>Reset session token counters (prompt, completion, requests)</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method get">GET</span></td>
+                        <td><span class="help-endpoint">/v1/health</span></td>
+                        <td>Service uptime, active models, unified memory pressure</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method get">GET</span></td>
+                        <td><span class="help-endpoint">/v1/memory</span></td>
+                        <td>Memory watchdog status and cache details</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/memory/clear</span></td>
+                        <td>Clear Metal/CUDA cache</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method post">POST</span></td>
+                        <td><span class="help-endpoint">/v1/models/unload</span></td>
+                        <td>Eager memory release with worker process termination</td>
+                      </tr>
+                      <tr>
+                        <td><span class="help-method get">GET</span></td>
+                        <td><span class="help-endpoint">/v1/dashboard</span></td>
+                        <td>Interactive Web System Monitor Dashboard HTML</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- Quick Examples -->
+                <div class="help-section">
+                  <div class="help-section-header">
+                    <div>
+                      <div class="help-section-title">⚡ Quick Examples</div>
+                      <div class="help-section-desc">Common operations via curl</div>
+                    </div>
+                  </div>
+
+                  <div class="help-example">
+                    <div class="help-example-title">💬 Chat Completion</div>
+                    <pre>curl -s http://127.0.0.1:18787/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "chat-standard",
+    "messages": [{"role": "user", "content": "Explain unified memory in one sentence."}],
+    "max_tokens": 64
+  }' | jq '.choices[0].message.content'</pre>
+                  </div>
+
+                  <div class="help-example">
+                    <div class="help-example-title">⚡ Speculative Decoding</div>
+                    <pre># Using explicit flag
+curl -s http://127.0.0.1:18787/v1/chat/completions \
+  -H 'content-type: application/json' \
+  -d '{
+    "model": "chat-standard",
+    "messages": [{"role":"user","content":"hi"}],
+    "prefer_speculative": true,
+    "max_tokens": 64
+  }'
+
+# Or use chat-fast alias (implies prefer_speculative)
+curl … -d '{"model":"chat-fast","messages":[{"role":"user","content":"hi"}]}'</pre>
+                  </div>
+
+                  <div class="help-example">
+                    <div class="help-example-title">🎨 Image Generation</div>
+                    <pre>curl -s http://127.0.0.1:18787/v1/images/generations \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "image-standard",
+    "prompt": "A cozy glass greenhouse in a misty mountain forest at sunrise",
+    "size": "1024x1024"
+  }' | jq '.data[0].b64_json' | base64 -d > image.png</pre>
+                  </div>
+
+                  <div class="help-example">
+                    <div class="help-example-title">🎙️ Speech-to-Text</div>
+                    <pre>curl http://127.0.0.1:18787/v1/audio/transcriptions \
+  -F "file=@meeting.wav" \
+  -F "model=whisper-1" \
+  -F "response_format=verbose_json"</pre>
+                  </div>
+
+                  <div class="help-example">
+                    <div class="help-example-title">🧩 Capability Resolution</div>
+                    <pre>pantry resolve --modality chat --ram-gb-max 8 --quality compact
+pantry resolve --modality embed --quality compact
+pantry resolve --modality image_gen
+pantry resolve --modality music
+pantry resolve --modality stt --quality compact</pre>
+                  </div>
+
+                  <div class="help-example">
+                    <div class="help-example-title">🗄️ Storage & Pruning</div>
+                    <pre>pantry storage
+pantry prune --dry-run
+pantry prune</pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+
       </div>
     </div>
   </div>
@@ -4358,6 +4825,8 @@
       </div>
     </div>
   </div>
+
+            
 
   <script>
     let pollInterval = 1000;
@@ -5040,9 +5509,12 @@
 
         const actionButtons = m.isResident
           ? `<button class="btn-action launch" onclick="launchInPlayground('${escapeHtml(m.id)}', '${escapeHtml(m.modality || 'chat')}')">⚡ Play</button>
-             <button class="btn-action unload" onclick="unloadModel('${escapeHtml(m.id)}')">Unload</button>`
+             <button class="btn-action unload" onclick="unloadModel('${escapeHtml(m.id)}')">Unload</button>
+             <button class="btn-action unload" onclick="deleteModel(decodeURIComponent('${encodeURIComponent(m.id)}'))">Delete</button>`
+             
           : `<button class="btn-action launch" onclick="launchInPlayground('${escapeHtml(m.id)}', '${escapeHtml(m.modality || 'chat')}')">⚡ Play</button>
-             <button class="btn-action load" onclick="loadModel('${escapeHtml(m.id)}')">Load</button>`;
+             <button class="btn-action load" onclick="loadModel('${escapeHtml(m.id)}')">Load</button>
+             <button class="btn-action unload" onclick="deleteModel(decodeURIComponent('${encodeURIComponent(m.id)}'))">Delete</button>`;
 
         return `
           <tr class="${m.isResident ? 'row-resident' : ''}">
@@ -5244,12 +5716,28 @@
       }
     }
 
+    async function deleteModel(packageId) {
+      if(!confirm(`Delete "${packageId}" and purge its downloaded weights from disk?`)) return;
+      try {
+        const res = await fetch(`/v1/packs/${encodeURIComponent(packageId)}?purge=true`, {
+          method: 'DELETE'
+        });
+        const data = await res.json();
+        if(!res.ok) throw new Error(data.detail || 'Delete Failed');
+        modelsLoaded = false;
+        await fetchStats();
+        fetchPlaygroundModels();
+      } catch (err) {
+        alert(`Failed to delete model: ${err.message}`);
+      }
+    }
+
     function switchMainTab(tab) {
       document.querySelectorAll('.pill-nav-item').forEach(btn => {
         btn.classList.toggle('active', btn.getAttribute('data-tab') === tab);
       });
 
-      const allViews = ['monitor', 'performance', 'usage', 'playground', 'packs', 'governance'];
+      const allViews = ['monitor', 'performance', 'usage', 'playground', 'packs', 'governance', 'help'];
       allViews.forEach(v => {
         const el = document.getElementById(`tab-view-${v}`);
         if (el) el.style.display = (v === tab) ? 'block' : 'none';

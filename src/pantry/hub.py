@@ -13,6 +13,21 @@ from pantry.store import PackageStore
 
 logger = logging.getLogger(__name__)
 
+def is_hf_repo_id(value: str) -> bool: 
+    """Check if a string looks like a Hugging Face repo id (owner/repo)."""
+    return re.fullmatch(r"[a-zA-Z0-9_.-][\w.-]*/[a-zA-Z0-9_.-][\w.-]*", value.strip()) is not None
+
+def register_hf_repo(store: PackageStore, repo_id: str) -> PackageManifest:
+    """ Register a Hugging Face repository using an inferred local manifest. """
+    clean_repo = repo_id.strip()
+    if not is_hf_repo_id(clean_repo):
+        raise ValueError(f"Invalid Hugging Face repo id: {repo_id}")
+    manifest = generate_manifest_template(repo_id=clean_repo)
+    existing = store.load_manifeset(manifest.id)
+    if existing is not None:
+        return existing
+    return create_custom_pack(store, manifest.model_dump())
+
 # Curated high-performance models optimized for Apple Silicon MLX and diffusers
 CURATED_MODELS: list[dict[str, Any]] = [
     {
@@ -728,8 +743,12 @@ def generate_manifest_template(
         title = clean_repo.split("/")[-1].replace("-", " ")
 
     family = "custom"
-    if "coder" in clean_slug and "qwen" in clean_slug:
+    if "coder" in clean_slug and "qwen3" in clean_slug:
+        family = "qwen3-coder"
+    elif "coder" in clean_slug and "qwen" in clean_slug:
         family = "qwen2.5-coder"
+    elif "qwen3" in clean_slug:
+        family = "qwen3"
     elif "qwen" in clean_slug:
         family = "qwen2.5"
     elif "deepseek" in clean_slug:
@@ -786,8 +805,14 @@ def generate_manifest_template(
         role=role,
         params_b=params_b,
         quality_tier=q_tier,
-        quant_method="mlx_4bit" if "4bit" in clean_slug else "bfloat16",
-        bits_approx=4.0 if "4bit" in clean_slug else 16.0,
+        quant_method=(
+            "mlx_4bit" 
+            if "4bit" in clean_slug 
+            else "mlx_8bit"
+            if "8bit" in clean_slug
+            else "bfloat16"
+        ),
+        bits_approx=4.0 if "4bit" in clean_slug else 8.0 if "8bit" in clean_slug else 16.0,
         ram_gb_min=ram_min,
         ram_gb_comfortable=ram_comf,
         modalities=mod_list,
@@ -1040,13 +1065,38 @@ def create_custom_pack(
     return manifest
 
 
-def delete_custom_pack(store: PackageStore, package_id: str) -> bool:
+def delete_custom_pack(store: PackageStore, package_id: str, *, purge_hf_cache: bool = False) -> bool:
     """Delete a custom package from store."""
+    """ When `purge_hf_cache` is true, also remove the shared Hugging Face repository cache unless another register package refrences it """
+
+    manifest = store.load_manifest(package_id)
+    hf_repo = manifest.runtime.hf_repo if manifest is not None else None
+    repo_is_shared = bool(
+        hf_repo
+        and any(
+            other.id != package_id and other.runtime.hf_repo == hf_repo
+            for other in store.list_manifests(max_age=0)
+        )
+    )
+    store.mark_unloaded(package_id)
+
     pdir = store.package_dir(package_id)
     if pdir.exists() and pdir.is_dir():
         shutil.rmtree(pdir, ignore_errors=True)
     wdir = store.weights_dir(package_id)
     if wdir.exists() and wdir.is_dir():
         shutil.rmtree(wdir, ignore_errors=True)
+
+    try:
+        store.cas.index.remove_package(package_id)
+        store.cas.prune()
+    except Exception:
+        logger.warning("Could not prune CAS data for %s", package_id, exc_info=True)
+
+    if purge_hf_cache and hf_repo and not repo_is_shared:
+        for cache_dir in store.hf_repo_cache_dirs(hf_repo):
+            if cache_dir.is_dir():
+                shutil.rmtree(cache_dir, ignore_errors=True)
+
     store._manifests_cache = None
     return True

@@ -213,8 +213,14 @@ def load(
     if manifest is None:
         manifest = store.install_from_bundled_catalog(package_id)
     if manifest is None:
-        typer.secho(f"unknown package: {package_id}", fg=typer.colors.RED, err=True)
-        raise typer.Exit(1)
+        from pantry.hub import is_hf_repo_id, register_hf_repo
+
+        if is_hf_repo_id(package_id):
+            manifest = register_hf_repo(store, package_id)
+
+        if manifest is None:
+            typer.secho(f"unknown package: {package_id}; expected a Pantry package/alias or Hugging Face owner/repository id", fg=typer.colors.RED, err=True)
+            raise typer.Exit(1)
     target_id = manifest.id
     remote = _daemon_post(
         "/v1/load",

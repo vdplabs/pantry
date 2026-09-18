@@ -637,13 +637,14 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.delete("/v1/packs/{package_id:path}")
-    def pack_delete(package_id: str) -> dict[str, Any]:
+    def pack_delete(package_id: str, purge: bool = True) -> dict[str, Any]:
         from pantry.hub import delete_custom_pack
 
         try:
-            deleted = delete_custom_pack(store, package_id)
+            svc.runtimes.unload(package_id)
+            deleted = delete_custom_pack(store, package_id, purge_hf_cache=purge)
             svc.log_event(f"Deleted model pack: {package_id}")
-            return {"status": "ok", "deleted": package_id, "success": deleted}
+            return {"status": "ok", "deleted": package_id, "success": deleted, "purged_weights": purge}
         except Exception as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -663,7 +664,19 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             except Exception:
                 pkg = None
         if pkg is None:
-            raise HTTPException(status_code=404, detail=f"unknown package: {req.package_id}")
+            from pantry.hub import is_hf_repo_id, register_hf_repo
+
+            if is_hf_repo_id(req.package_id):
+                pkg = register_hf_repo(store, req.package_id)
+        
+        if pkg is None:
+            raise HTTPException(
+                status_code=404,
+                detail=(
+                    f"unknown package: {req.package_id}; expected a Pantry package ID or a HuggingFace repo ID (e.g. 'owner/repository id')"
+                ),
+            )
+
         target_id = pkg.id
         svc.touch_model(target_id)
         store.mark_loaded(target_id, pin=req.pin)
@@ -2072,5 +2085,15 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
     @app.exception_handler(HTTPException)
     async def http_exc_handler(_req: Any, exc: HTTPException) -> JSONResponse:
         return JSONResponse(status_code=exc.status_code, content={"error": {"message": exc.detail}})
+
+    spa_path = (
+        Path(__file__).parent.parent.parent / "pantry-app" / "dist" / "index.html"
+    )
+
+    @app.get("/{path:path}")
+    async def spa_fallback(request: Request) -> HTMLResponse:
+        if spa_path.is_file():
+            return HTMLResponse(content=spa_path.read_text(encoding="utf-8"))
+        return HTMLResponse(content="<h1>Not Found</h1>", status_code=404)
 
     return app

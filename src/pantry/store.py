@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import shutil
 import time
 from pathlib import Path
@@ -230,15 +231,10 @@ class PackageStore:
         safe = package_id.replace("/", "__")
         return self.data_root / "packages" / safe / "weights"
 
-    def find_hf_snapshot(self, repo_id: str, revision: str | None = None) -> Path | None:
-        """Locate a snapshot for repo_id in the shared Hugging Face cache.
+    def hf_cache_roots(self) -> list[Path]:
+        """Return unique Hugging Face cache roots in search order.
 
-        Search order (unique roots, first hit wins):
-        1. ``HF_HUB_CACHE`` (when set — exclusive of the default ``~/.cache`` path)
-        2. ``HF_HOME/hub`` (when set)
-        3. ``~/.cache/huggingface/hub`` (only when neither HF env override is set)
-        4. Sibling ``…/huggingface/hub`` when ``PANTRY_DATA`` is ``…/huggingface/pantry``
-        5. ``PANTRY_DATA/huggingface/hub`` when data root differs from metadata home
+        See ``find_hf_snapshot()`` for details.
         """
         import os
 
@@ -274,8 +270,39 @@ class PackageStore:
             # Even with HF_* set, also see the sibling hub next to PANTRY_DATA.
             _add(self.data_root.parent / "hub")
 
+        return cache_roots
+
+    def hf_repo_cache_dirs(self, repo_id: str) -> list[Path]:
+        """Return unique Hugging Face cache dirs for a repo_id in search order.
+
+        See ``find_hf_snapshot()`` for details.
+        """
+        if not re.fullMatch(r"[^/\s]+/[^/\s]+", repo_id):
+            return []
+
         folder_name = f"models--{repo_id.replace('/', '--')}"
-        for root in cache_roots:
+        return [root / folder_name for root in self.hf_cache_roots()]
+        
+        # out: list[Path] = []
+        # for root in self.hf_cache_roots():
+        #     snapshots_dir = root / folder_name / "snapshots"
+        #     if snapshots_dir.is_dir():
+        #         out.append(snapshots_dir)
+        # return out
+
+    def find_hf_snapshot(self, repo_id: str, revision: str | None = None) -> Path | None:
+        """Locate a snapshot for repo_id in the shared Hugging Face cache.
+
+        Search order (unique roots, first hit wins):
+        1. ``HF_HUB_CACHE`` (when set — exclusive of the default ``~/.cache`` path)
+        2. ``HF_HOME/hub`` (when set)
+        3. ``~/.cache/huggingface/hub`` (only when neither HF env override is set)
+        4. Sibling ``…/huggingface/hub`` when ``PANTRY_DATA`` is ``…/huggingface/pantry``
+        5. ``PANTRY_DATA/huggingface/hub`` when data root differs from metadata home
+        """
+
+        folder_name = f"models--{repo_id.replace('/', '--')}"
+        for root in self.hf_cache_roots():
             snapshots_dir = root / folder_name / "snapshots"
             if not snapshots_dir.is_dir():
                 continue
@@ -291,7 +318,58 @@ class PackageStore:
                 snaps.sort(key=lambda p: p.stat().st_mtime, reverse=True)
                 return snaps[0]
 
-        return None
+        # import os
+
+        # cache_roots: list[Path] = []
+        # seen: set[Path] = set()
+
+        # def _add(path: Path) -> None:
+        #     resolved = path.expanduser()
+        #     key = resolved.resolve() if resolved.exists() else resolved
+        #     if key in seen:
+        #         return
+        #     seen.add(key)
+        #     cache_roots.append(resolved)
+
+        # hub_cache = os.environ.get("HF_HUB_CACHE")
+        # hf_home = os.environ.get("HF_HOME")
+        # if hub_cache:
+        #     _add(Path(hub_cache))
+        # if hf_home:
+        #     _add(Path(hf_home) / "hub")
+        # # Honor HF override isolation: do not fall through to the user default
+        # # cache when tests / operators pin HF_HUB_CACHE or HF_HOME.
+        # if not hub_cache and not hf_home:
+        #     _add(Path.home() / ".cache" / "huggingface" / "hub")
+        #     # Common external-SSD layout: PANTRY_DATA=$SSD/huggingface/pantry
+        #     # with the shared hub at $SSD/huggingface/hub (sibling, not nested).
+        #     if self.data_root.name == "pantry":
+        #         sibling = self.data_root.parent / "hub"
+        #         _add(sibling)
+        #     if self.data_root != self.root:
+        #         _add(self.data_root / "huggingface" / "hub")
+        # elif self.data_root != self.root and self.data_root.name == "pantry":
+        #     # Even with HF_* set, also see the sibling hub next to PANTRY_DATA.
+        #     _add(self.data_root.parent / "hub")
+
+        # folder_name = f"models--{repo_id.replace('/', '--')}"
+        # for root in cache_roots:
+        #     snapshots_dir = root / folder_name / "snapshots"
+        #     if not snapshots_dir.is_dir():
+        #         continue
+
+        #     if revision:
+        #         cand = snapshots_dir / revision
+        #         if cand.is_dir():
+        #             return cand
+
+        #     # Find the most recently modified snapshot
+        #     snaps = [s for s in snapshots_dir.iterdir() if s.is_dir()]
+        #     if snaps:
+        #         snaps.sort(key=lambda p: p.stat().st_mtime, reverse=True)
+        #         return snaps[0]
+
+        # return None
 
     def _is_dir_weights_complete(self, path: Path, manifest: PackageManifest) -> bool:
         if not path.is_dir():

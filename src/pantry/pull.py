@@ -24,7 +24,12 @@ def pull_package(store: PackageStore, package_id: str) -> dict:
     if man is None:
         man = store.install_from_bundled_catalog(package_id)
     if man is None:
-        raise PullError(f"package not found: {package_id}")
+        from pantry.hub import is_hf_repo_id, register_hf_repo
+
+        if is_hf_repo_id(package_id):
+            man = register_hf_repo(store, package_id)        
+    if man is None:
+        raise PullError(f"package not found: {package_id}; expected a Pantry package/alias or Hugging Face owner/repository id")
 
     store.write_manifest(man)
     primary = (man.runtime.primary or "echo").lower()
