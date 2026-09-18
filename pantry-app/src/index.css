@@ -2206,37 +2206,98 @@ pre code.hljs {
   font-size: 12px;
 }
 
+.artifact-auto-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: rgba(234, 179, 8, 0.15);
+  border: 1px solid rgba(234, 179, 8, 0.35);
+  color: #fde047;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  animation: fadeIn 0.2s ease-out;
+}
+
 .mermaid-error-box {
   padding: 16px 20px;
   border-radius: 8px;
   background: rgba(244, 63, 94, 0.1);
   border: 1px solid rgba(244, 63, 94, 0.3);
   text-align: center;
-  max-width: 480px;
+  max-width: 520px;
+  margin: 16px auto;
 }
 
 .mermaid-error-box .error-title {
   color: var(--accent-rose);
   font-weight: 700;
   font-size: 13px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
 }
 
 .mermaid-error-box .error-msg {
   color: #fca5a5;
   font-size: 11px;
   font-family: var(--mono);
-  margin-bottom: 12px;
+  margin-bottom: 14px;
+  line-height: 1.5;
+  max-height: 100px;
+  overflow-y: auto;
+  word-break: break-all;
+}
+
+.error-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.error-repair-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 6px;
+  border: 1px solid rgba(234, 179, 8, 0.4);
+  background: rgba(234, 179, 8, 0.2);
+  color: #fef08a;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.error-repair-btn:hover {
+  background: rgba(234, 179, 8, 0.3);
+  border-color: #fde047;
+  box-shadow: 0 0 12px rgba(234, 179, 8, 0.3);
 }
 
 .error-fallback-btn {
-  padding: 6px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
   border-radius: 6px;
   border: 1px solid rgba(244, 63, 94, 0.4);
   background: rgba(244, 63, 94, 0.15);
   color: #fecdd3;
   font-size: 11px;
   cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.error-fallback-btn:hover {
+  background: rgba(244, 63, 94, 0.25);
 }
 
 .mermaid-code-view {
@@ -2281,8 +2342,8 @@ pre code.hljs {
 /* Split-screen Pantry Canvas Workbench */
 .canvas-workbench-pane {
   flex: 1 1 50%;
-  min-width: 440px;
-  max-width: 820px;
+  min-width: 460px;
+  max-width: 900px;
   height: 100%;
   border-left: 1px solid var(--border-card);
   background: #080c15;
@@ -2384,12 +2445,27 @@ pre code.hljs {
   overflow: hidden;
 }
 
+.canvas-body.split {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  overflow: hidden;
+  height: 100%;
+}
+
+@media (max-width: 1024px) {
+  .canvas-body.split {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+}
+
 .canvas-preview-container {
   flex: 1 1 0%;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: auto;
+  border-left: 1px solid #1e293b;
 }
 
 .canvas-preview-container .mermaid-viewport,
@@ -2400,7 +2476,8 @@ pre code.hljs {
 }
 
 .canvas-preview-container .live-preview-iframe {
-  height: 540px;
+  height: 100%;
+  min-height: 380px;
 }
 
 .canvas-editor-container {
@@ -2410,6 +2487,7 @@ pre code.hljs {
   flex-direction: column;
   padding: 12px 16px 16px 16px;
   gap: 8px;
+  background: #090e18;
 }
 
 .editor-info-banner {

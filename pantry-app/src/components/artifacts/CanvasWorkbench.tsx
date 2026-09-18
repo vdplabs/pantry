@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   FiX, FiMaximize2, FiMinimize2, FiDownload, FiCopy, FiCheck,
-  FiPlay, FiCode, FiEye, FiSidebar, FiRefreshCw, FiEdit3
+  FiPlay, FiCode, FiEye, FiSidebar, FiRefreshCw, FiEdit3, FiZap, FiColumns
 } from 'react-icons/fi';
 import MermaidViewer from './MermaidViewer';
 import LiveHtmlPreview from './LiveHtmlPreview';
-import hljs from 'highlight.js';
+import { sanitizeMermaidCode } from './mermaidSanitizer';
 
 export interface CanvasArtifact {
   id: string;
@@ -23,9 +23,10 @@ interface Props {
 
 export default function CanvasWorkbench({ artifact, onClose, onUpdateCode }: Props) {
   const [currentCode, setCurrentCode] = useState(artifact.code);
-  const [activeTab, setActiveTab] = useState<'preview' | 'editor'>('preview');
+  const [viewMode, setViewMode] = useState<'split' | 'preview' | 'editor'>('split');
   const [copied, setCopied] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [repairNotice, setRepairNotice] = useState(false);
 
   useEffect(() => {
     setCurrentCode(artifact.code);
@@ -34,6 +35,16 @@ export default function CanvasWorkbench({ artifact, onClose, onUpdateCode }: Pro
   const handleCodeChange = (newCode: string) => {
     setCurrentCode(newCode);
     onUpdateCode?.(newCode);
+  };
+
+  const handleAutoRepair = () => {
+    if (artifact.type === 'mermaid') {
+      const repaired = sanitizeMermaidCode(currentCode);
+      setCurrentCode(repaired);
+      onUpdateCode?.(repaired);
+      setRepairNotice(true);
+      setTimeout(() => setRepairNotice(false), 2500);
+    }
   };
 
   const handleCopy = () => {
@@ -81,18 +92,38 @@ export default function CanvasWorkbench({ artifact, onClose, onUpdateCode }: Pro
           {isPreviewable && (
             <div className="artifact-tab-group">
               <button
-                className={`artifact-tab-btn ${activeTab === 'preview' ? 'active' : ''}`}
-                onClick={() => setActiveTab('preview')}
+                className={`artifact-tab-btn ${viewMode === 'split' ? 'active' : ''}`}
+                onClick={() => setViewMode('split')}
+                title="Split screen editor & preview"
+              >
+                <FiColumns size={12} /> Split
+              </button>
+              <button
+                className={`artifact-tab-btn ${viewMode === 'preview' ? 'active' : ''}`}
+                onClick={() => setViewMode('preview')}
+                title="Preview only"
               >
                 <FiEye size={12} /> Preview
               </button>
               <button
-                className={`artifact-tab-btn ${activeTab === 'editor' ? 'active' : ''}`}
-                onClick={() => setActiveTab('editor')}
+                className={`artifact-tab-btn ${viewMode === 'editor' ? 'active' : ''}`}
+                onClick={() => setViewMode('editor')}
+                title="Code editor only"
               >
-                <FiEdit3 size={12} /> Live Editor
+                <FiEdit3 size={12} /> Code
               </button>
             </div>
+          )}
+
+          {artifact.type === 'mermaid' && (
+            <button
+              onClick={handleAutoRepair}
+              className={`artifact-tool-btn ${repairNotice ? 'highlight' : ''}`}
+              title="Auto-repair common Mermaid syntax errors"
+            >
+              <FiZap size={13} color="var(--accent-amber)" />
+              <span>{repairNotice ? 'Repaired!' : 'Auto-Fix'}</span>
+            </button>
           )}
 
           <button onClick={handleCopy} className="artifact-tool-btn" title="Copy code">
@@ -119,8 +150,23 @@ export default function CanvasWorkbench({ artifact, onClose, onUpdateCode }: Pro
       </div>
 
       {/* Workbench Content */}
-      <div className="canvas-body">
-        {activeTab === 'preview' && isPreviewable ? (
+      <div className={`canvas-body ${viewMode}`}>
+        {(viewMode === 'split' || viewMode === 'editor' || !isPreviewable) && (
+          <div className="canvas-editor-container">
+            <div className="editor-info-banner">
+              <span>💡 Live Editor: Changes compile immediately into live preview.</span>
+            </div>
+            <textarea
+              value={currentCode}
+              onChange={e => handleCodeChange(e.target.value)}
+              className="canvas-code-editor"
+              spellCheck={false}
+              placeholder="Enter diagram or code markup here..."
+            />
+          </div>
+        )}
+
+        {(viewMode === 'split' || viewMode === 'preview') && isPreviewable && (
           <div className="canvas-preview-container">
             {artifact.type === 'mermaid' && (
               <MermaidViewer code={currentCode} inline={false} />
@@ -129,20 +175,9 @@ export default function CanvasWorkbench({ artifact, onClose, onUpdateCode }: Pro
               <LiveHtmlPreview code={currentCode} language={artifact.type} inline={false} />
             )}
           </div>
-        ) : (
-          <div className="canvas-editor-container">
-            <div className="editor-info-banner">
-              <span>💡 Live Editor: Edit code below to test changes instantly in real-time.</span>
-            </div>
-            <textarea
-              value={currentCode}
-              onChange={e => handleCodeChange(e.target.value)}
-              className="canvas-code-editor"
-              spellCheck={false}
-            />
-          </div>
         )}
       </div>
     </div>
   );
 }
+

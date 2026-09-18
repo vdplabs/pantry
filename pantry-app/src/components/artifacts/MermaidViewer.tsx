@@ -2,8 +2,9 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mermaid from 'mermaid';
 import {
   FiZoomIn, FiZoomOut, FiMaximize2, FiDownload, FiCopy, FiCheck,
-  FiRefreshCw, FiCode, FiEye, FiSliders, FiSidebar
+  FiRefreshCw, FiCode, FiEye, FiSliders, FiSidebar, FiZap, FiAlertCircle
 } from 'react-icons/fi';
+import { sanitizeMermaidCode } from './mermaidSanitizer';
 
 interface Props {
   code: string;
@@ -53,6 +54,7 @@ mermaid.initialize({
 export default function MermaidViewer({ code, onOpenCanvas, inline = true }: Props) {
   const [svgContent, setSvgContent] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
+  const [isAutoRepaired, setIsAutoRepaired] = useState(false);
   const [zoom, setZoom] = useState<number>(1);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -62,16 +64,46 @@ export default function MermaidViewer({ code, onOpenCanvas, inline = true }: Pro
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  const cleanupMermaidArtifacts = () => {
+    // Remove any rogue mermaid error divs injected into body
+    document.querySelectorAll('[id^="dmermaid-render-"]').forEach(el => el.remove());
+  };
+
   const renderDiagram = useCallback(async () => {
     if (!code.trim()) return;
     setError(null);
-    try {
+    setIsAutoRepaired(false);
+
+    const tryRender = async (sourceCode: string): Promise<string> => {
       const id = `mermaid-render-${Math.random().toString(36).substring(2, 9)}`;
-      const { svg } = await mermaid.render(id, code.trim());
+      const { svg } = await mermaid.render(id, sourceCode);
+      return svg;
+    };
+
+    try {
+      // 1. First attempt: render raw code
+      const svg = await tryRender(code.trim());
       setSvgContent(svg);
     } catch (err: any) {
+      cleanupMermaidArtifacts();
+      // 2. Second attempt: auto-repair syntax
+      try {
+        const repaired = sanitizeMermaidCode(code);
+        if (repaired && repaired !== code.trim()) {
+          const svg = await tryRender(repaired);
+          setSvgContent(svg);
+          setIsAutoRepaired(true);
+          return;
+        }
+      } catch (retryErr: any) {
+        cleanupMermaidArtifacts();
+      }
+
       console.warn('[MermaidViewer] render error:', err);
-      setError(err?.message || 'Invalid Mermaid syntax');
+      // Clean up error message to be more readable
+      const rawMsg = err?.message || 'Invalid Mermaid syntax';
+      const cleanMsg = rawMsg.replace(/Parse error on line \d+:/g, (m: string) => m.trim());
+      setError(cleanMsg);
     }
   }, [code]);
 
@@ -158,6 +190,12 @@ export default function MermaidViewer({ code, onOpenCanvas, inline = true }: Pro
             <span className="badge-dot" />
             <span>Mermaid Diagram</span>
           </div>
+          {isAutoRepaired && (
+            <div className="artifact-auto-badge" title="Syntax was automatically sanitized for rendering">
+              <FiZap size={11} />
+              <span>Auto-Repaired</span>
+            </div>
+          )}
           <div className="artifact-tab-group">
             <button
               className={`artifact-tab-btn ${viewMode === 'diagram' ? 'active' : ''}`}
@@ -227,11 +265,28 @@ export default function MermaidViewer({ code, onOpenCanvas, inline = true }: Pro
         >
           {error ? (
             <div className="mermaid-error-box">
-              <div className="error-title">⚠️ Unable to render diagram</div>
+              <div className="error-title">
+                <FiAlertCircle size={16} /> Unable to render diagram
+              </div>
               <div className="error-msg">{error}</div>
-              <button onClick={() => setViewMode('code')} className="error-fallback-btn">
-                View Raw Mermaid Code
-              </button>
+              <div className="error-actions">
+                <button
+                  onClick={() => {
+                    const repaired = sanitizeMermaidCode(code);
+                    if (onOpenCanvas) {
+                      onOpenCanvas(repaired, 'mermaid');
+                    } else {
+                      setViewMode('code');
+                    }
+                  }}
+                  className="error-repair-btn"
+                >
+                  <FiZap size={13} /> Open & Fix in Canvas
+                </button>
+                <button onClick={() => setViewMode('code')} className="error-fallback-btn">
+                  <FiCode size={13} /> View Raw Code
+                </button>
+              </div>
             </div>
           ) : svgContent ? (
             <div
