@@ -5,6 +5,7 @@ import TopMenu from '@/components/TopMenu';
 import Header from '@/components/Header';
 import ConversationList from '@/components/ConversationList';
 import ChatPage from '@/pages/ChatPage';
+import GeneratePage from '@/pages/GeneratePage';
 import ModelsPage from '@/pages/ModelsPage';
 import ImagePage from '@/pages/ImagePage';
 import MusicPage from '@/pages/MusicPage';
@@ -16,6 +17,8 @@ const TAB_MAP: Record<string, string> = {
   '': 'chat',
   '/': 'chat',
   chat: 'chat',
+  code: 'code',
+  generate: 'code',
   image: 'image',
   music: 'music',
   stt: 'stt',
@@ -74,12 +77,14 @@ function AppContentInner() {
     let target: string | null = null;
     if (state.activeTab === 'chat') {
       target = activeConversationId ? `/chat/${activeConversationId}` : '/chat';
-    } else if (['image', 'music', 'stt'].includes(state.activeTab)) {
+    } else if (['code', 'image', 'music', 'stt'].includes(state.activeTab)) {
       if (params.id) {
         target = `/${state.activeTab}/${params.id}`;
       } else {
         target = `/${state.activeTab}`;
       }
+    } else if (['models', 'settings'].includes(state.activeTab)) {
+      target = `/${state.activeTab}`;
     }
     if (target && navTargetRef.current !== target) {
       navTargetRef.current = target;
@@ -90,6 +95,7 @@ function AppContentInner() {
   const renderPage = () => {
     switch (state.activeTab) {
       case 'chat': return <ChatPage />;
+      case 'code': return <GeneratePage />;
       case 'image': return <ImagePage />;
       case 'music': return <MusicPage />;
       case 'stt': return <STTPage />;
@@ -103,28 +109,20 @@ function AppContentInner() {
     <div className="app-layout">
       <div className="app-main">
         <TopMenu />
-        <div className="app-content">
+        <div className="app-content-wrapper">
           {state.activeTab === 'chat' ? (
             <div className="chat-layout">
               <div className="chat-sidebar">
                 <ConversationList />
               </div>
               <div className="chat-main">
-                {/* <Header /> */}
-                <div className="app-content">
-                  {renderPage()}
-                </div>
+                <ChatPage />
               </div>
-              <aside><ModelsPage /></aside>
-              
             </div>
           ) : (
-            <>
-              {/* <Header /> */}
-              <div className="app-content">
-                {renderPage()}
-              </div>
-            </>
+            <div className="studio-layout">
+              {renderPage()}
+            </div>
           )}
         </div>
       </div>

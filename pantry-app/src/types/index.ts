@@ -16,8 +16,19 @@ export interface ModelInfo {
 }
 
 export interface Message {
-  role: 'system' | 'user' | 'assistant';
+  role: 'system' | 'user' | 'assistant' | 'developer' | 'tool';
   content: string | MessageContent[];
+  reasoning_content?: string;
+  tool_calls?: ToolCall[];
+  tool_call_id?: string;
+  name?: string;
+  token_stats?: {
+    tps?: number;
+    duration_s?: number;
+    total_tokens?: number;
+    prompt_tokens?: number;
+    completion_tokens?: number;
+  };
 }
 
 export type MessageContent =
@@ -30,6 +41,7 @@ export interface ChatCompletionChoice {
     role: string;
     content: string | null;
     tool_calls?: ToolCall[];
+    reasoning_content?: string;
   };
   finish_reason: string;
 }
@@ -40,6 +52,34 @@ export interface ToolCall {
   function: {
     name: string;
     arguments: string;
+  };
+}
+
+export interface TextCompletionRequest {
+  model: string;
+  prompt: string;
+  suffix?: string;
+  max_tokens?: number;
+  temperature?: number;
+  stop?: string[];
+  stream?: boolean;
+}
+
+export interface TextCompletionResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  system_fingerprint?: string;
+  choices: Array<{
+    text: string;
+    index: number;
+    finish_reason: string;
+  }>;
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
   };
 }
 

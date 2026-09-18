@@ -152,12 +152,37 @@ const api = {
     });
   },
 
+  // Code & Text Completions (FIM supported)
+  complete: (opts: {
+    model: string;
+    prompt: string;
+    suffix?: string;
+    max_tokens?: number;
+    temperature?: number;
+    stop?: string[];
+    stream?: boolean;
+  }) => {
+    return fetch(`${BASE_URL}/v1/completions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: opts.model,
+        prompt: opts.prompt,
+        suffix: opts.suffix,
+        max_tokens: opts.max_tokens ?? 256,
+        temperature: opts.temperature ?? 0.2,
+        stop: opts.stop,
+        stream: opts.stream ?? true,
+      }),
+    });
+  },
+
   // Images
-  generateImage: (prompt: string, model = 'image-standard', size = '1024x1024', n = 1) =>
+  generateImage: (prompt: string, model = 'image-standard', size = '1024x1024', n = 1, steps = 4, guidance = 0.0) =>
     fetch(`${BASE_URL}/v1/images/generations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, prompt, size, n, response_format: 'b64_json' }),
+      body: JSON.stringify({ model, prompt, size, n, steps, guidance, response_format: 'b64_json' }),
     }).then(handleResponse<ImageGenerationResponse>),
 
   // Audio generation
@@ -169,12 +194,26 @@ const api = {
     }).then(handleResponse<AudioGenerationResponse>),
 
   // Transcription
-  transcribe: (file: File, model = 'whisper-1', language?: string) => {
+  transcribe: (file: File, model = 'transcribe-compact', language?: string, responseFormat = 'verbose_json') => {
     const fd = new FormData();
     fd.append('file', file);
     fd.append('model', model);
+    fd.append('response_format', responseFormat);
     if (language) fd.append('language', language);
     return fetch(`${BASE_URL}/v1/audio/transcriptions`, {
+      method: 'POST',
+      body: fd,
+    }).then(handleResponse<TranscriptionResponse>);
+  },
+
+  // Translation (to English)
+  translate: (file: File, model = 'transcribe-compact', prompt?: string, responseFormat = 'verbose_json') => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('model', model);
+    fd.append('response_format', responseFormat);
+    if (prompt) fd.append('prompt', prompt);
+    return fetch(`${BASE_URL}/v1/audio/translations`, {
       method: 'POST',
       body: fd,
     }).then(handleResponse<TranscriptionResponse>);
