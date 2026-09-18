@@ -9,8 +9,10 @@ import { sanitizeMermaidCode } from './mermaidSanitizer';
 
 interface Props {
   code: string;
+  onChangeCode?: (newCode: string) => void;
   onOpenCanvas?: (code: string, type: 'mermaid') => void;
   inline?: boolean;
+  editable?: boolean;
 }
 
 // Configure mermaid with Pantry dark neon theme
@@ -53,7 +55,7 @@ mermaid.initialize({
   },
 });
 
-function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
+function MermaidViewerComponent({ code, onChangeCode, onOpenCanvas, inline = true, editable = false }: Props) {
   const [svgContent, setSvgContent] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isAutoRepaired, setIsAutoRepaired] = useState(false);
@@ -63,14 +65,22 @@ function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
   const [dragStart, setDragStart] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [copied, setCopied] = useState(false);
   const [viewMode, setViewMode] = useState<'diagram' | 'code'>('diagram');
+  const [localCode, setLocalCode] = useState(code);
 
   const containerRef = useRef<HTMLDivElement>(null);
   const lastRenderedCodeRef = useRef<string>('');
   const renderTimeoutRef = useRef<any>(null);
   const renderSeqRef = useRef<number>(0);
 
+  const isEditable = editable || !!onChangeCode;
+
+  // Sync external code updates
+  useEffect(() => {
+    setLocalCode(code);
+  }, [code]);
+
   const renderDiagram = useCallback(async () => {
-    const trimmed = (code || '').trim();
+    const trimmed = (localCode || '').trim();
     if (!trimmed) return;
     if (trimmed === lastRenderedCodeRef.current && svgContent) return;
 
@@ -123,7 +133,7 @@ function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
       clearTimeout(renderTimeoutRef.current);
     }
     renderTimeoutRef.current = setTimeout(validateAndRender, 120);
-  }, [code, svgContent]);
+  }, [localCode, svgContent]);
 
   useEffect(() => {
     renderDiagram();
@@ -158,9 +168,44 @@ function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
   const handleMouseUp = () => setIsDragging(false);
 
   const handleCopyCode = () => {
-    navigator.clipboard.writeText(code);
+    navigator.clipboard.writeText(localCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleCodeChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value;
+    setLocalCode(val);
+    if (onChangeCode) {
+      onChangeCode(val);
+    }
+  };
+
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const target = e.currentTarget;
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      const updated = localCode.substring(0, start) + '  ' + localCode.substring(end);
+      setLocalCode(updated);
+      if (onChangeCode) onChangeCode(updated);
+      setTimeout(() => {
+        target.selectionStart = target.selectionEnd = start + 2;
+      }, 0);
+    }
+  };
+
+  const insertSnippet = (snippet: string) => {
+    const updated = localCode.trimEnd() + '\n' + snippet + '\n';
+    setLocalCode(updated);
+    if (onChangeCode) onChangeCode(updated);
+  };
+
+  const handleAutoRepair = () => {
+    const sanitized = sanitizeMermaidCode(localCode);
+    setLocalCode(sanitized);
+    if (onChangeCode) onChangeCode(sanitized);
   };
 
   const handleDownloadSvg = () => {
@@ -230,7 +275,7 @@ function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
               className={`artifact-tab-btn ${viewMode === 'code' ? 'active' : ''}`}
               onClick={() => setViewMode('code')}
             >
-              <FiCode size={12} /> Code
+              <FiCode size={12} /> {isEditable ? 'Edit Code' : 'Code'}
             </button>
           </div>
         </div>
@@ -257,6 +302,14 @@ function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
             </>
           )}
 
+          {viewMode === 'code' && isEditable && (
+            <>
+              <button onClick={handleAutoRepair} className="artifact-tool-btn" title="Sanitize / Auto-fix Mermaid syntax">
+                <FiZap size={12} color="#fde047" /> Auto-Fix
+              </button>
+            </>
+          )}
+
           <button onClick={handleCopyCode} className="artifact-tool-btn" title="Copy Mermaid code">
             {copied ? <FiCheck size={13} color="var(--accent-emerald)" /> : <FiCopy size={13} />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
@@ -264,7 +317,7 @@ function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
 
           {onOpenCanvas && (
             <button
-              onClick={() => onOpenCanvas(code, 'mermaid')}
+              onClick={() => onOpenCanvas(localCode, 'mermaid')}
               className="artifact-canvas-btn"
               title="Open in split-screen Canvas Workbench"
             >
@@ -295,19 +348,16 @@ function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
               <div className="error-actions">
                 <button
                   onClick={() => {
-                    const repaired = sanitizeMermaidCode(code);
-                    if (onOpenCanvas) {
-                      onOpenCanvas(repaired, 'mermaid');
-                    } else {
-                      setViewMode('code');
-                    }
+                    const repaired = sanitizeMermaidCode(localCode);
+                    setLocalCode(repaired);
+                    if (onChangeCode) onChangeCode(repaired);
                   }}
                   className="error-repair-btn"
                 >
-                  <FiZap size={13} /> Open & Fix in Canvas
+                  <FiZap size={13} /> Auto-Repair Diagram
                 </button>
                 <button onClick={() => setViewMode('code')} className="error-fallback-btn">
-                  <FiCode size={13} /> View Raw Code
+                  <FiCode size={13} /> Edit Mermaid Code
                 </button>
               </div>
             </div>
@@ -328,6 +378,48 @@ function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
             </div>
           )}
         </div>
+      ) : isEditable ? (
+        <div className="mermaid-editor-container">
+          <div className="mermaid-editor-snippets-bar">
+            <span className="snippets-label">Insert Snippet:</span>
+            <button
+              className="snippet-btn"
+              onClick={() => insertSnippet('  CoreApp -->|Read / Write| NewService["⚙️ New Service"]')}
+            >
+              + Flow Edge
+            </button>
+            <button
+              className="snippet-btn"
+              onClick={() => insertSnippet('  NewDB[("🗄️ Database / Cache")]')}
+            >
+              + Data Store
+            </button>
+            <button
+              className="snippet-btn"
+              onClick={() => insertSnippet('  subgraph NewZone ["Trust Zone"]\n    NewNode\n  end')}
+            >
+              + Subgraph Zone
+            </button>
+            {error && (
+              <span className="mermaid-syntax-warning" title={error}>
+                <FiAlertCircle size={12} /> Syntax error detected
+              </span>
+            )}
+            {!error && (
+              <span className="mermaid-syntax-ok">
+                <FiCheck size={12} /> Syntax OK
+              </span>
+            )}
+          </div>
+          <textarea
+            value={localCode}
+            onChange={handleCodeChange}
+            onKeyDown={handleTextareaKeyDown}
+            className="mermaid-code-editor-textarea"
+            placeholder="Enter Mermaid diagram code (e.g. graph TD...)"
+            spellCheck={false}
+          />
+        </div>
       ) : (
         <pre className="mermaid-code-view">
           <code
@@ -337,11 +429,11 @@ function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
                 try {
                   const validLang = hljs.getLanguage('mermaid') ? 'mermaid' : null;
                   if (validLang) {
-                    return hljs.highlight(code, { language: 'mermaid', ignoreIllegals: true }).value;
+                    return hljs.highlight(localCode, { language: 'mermaid', ignoreIllegals: true }).value;
                   }
-                  return hljs.highlightAuto(code).value || code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                  return hljs.highlightAuto(localCode).value || localCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 } catch {
-                  return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                  return localCode.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
                 }
               })(),
             }}
@@ -356,6 +448,8 @@ const MermaidViewer = React.memo(MermaidViewerComponent, (prev, next) => {
   return (
     prev.code === next.code &&
     prev.inline === next.inline &&
+    prev.editable === next.editable &&
+    prev.onChangeCode === next.onChangeCode &&
     prev.onOpenCanvas === next.onOpenCanvas
   );
 });

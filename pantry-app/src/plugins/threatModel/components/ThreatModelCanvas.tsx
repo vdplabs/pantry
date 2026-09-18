@@ -28,6 +28,14 @@ export default function ThreatModelCanvas({ state, framework, onChange, onSendPr
   const [newCompType, setNewCompType] = useState<ThreatComponent['type']>('process');
   const [newCompBoundary, setNewCompBoundary] = useState('Internal Trust Zone');
   const [newCompTech, setNewCompTech] = useState('');
+  const [newCompConnectInDfd, setNewCompConnectInDfd] = useState(true);
+  const [newCompConnectFrom, setNewCompConnectFrom] = useState('comp-backend');
+  const [newCompFlowLabel, setNewCompFlowLabel] = useState('Read / Write');
+
+  // Quick connect modal for existing component
+  const [connectingComp, setConnectingComp] = useState<ThreatComponent | null>(null);
+  const [quickConnectFrom, setQuickConnectFrom] = useState('comp-backend');
+  const [quickConnectLabel, setQuickConnectLabel] = useState('Data Flow');
 
   // New Threat form state
   const [newThreatTitle, setNewThreatTitle] = useState('');
@@ -79,6 +87,69 @@ export default function ThreatModelCanvas({ state, framework, onChange, onSendPr
     onChange({ ...state, threats: updatedThreats, updatedAt: new Date().toISOString() });
   };
 
+  // Helper to connect a component in Mermaid DFD
+  const insertComponentIntoMermaid = (
+    currentDfd: string,
+    targetComp: ThreatComponent,
+    sourceCompId?: string,
+    label: string = 'Data Flow'
+  ): string => {
+    const cleanSlug = targetComp.name.replace(/[^a-zA-Z0-9]/g, '') || `Comp${Date.now().toString(36)}`;
+    let icon = '⚙️';
+    let shapeOpen = '["';
+    let shapeClose = '"]';
+    if (targetComp.type === 'datastore') {
+      icon = '🗄️';
+      shapeOpen = '[("';
+      shapeClose = '")]';
+    } else if (targetComp.type === 'gateway') {
+      icon = '🛡️';
+    } else if (targetComp.type === 'actor') {
+      icon = '🌐';
+    } else if (targetComp.type === 'agent') {
+      icon = '🤖';
+    } else if (targetComp.type === 'external') {
+      icon = '☁️';
+    }
+
+    const nodeDefinition = `${cleanSlug}${shapeOpen}${icon} ${targetComp.name}${shapeClose}`;
+
+    let sourceNodeId = 'CoreApp';
+    if (sourceCompId === 'comp-client') sourceNodeId = 'Client';
+    else if (sourceCompId === 'comp-apigw') sourceNodeId = 'APIGW';
+    else if (sourceCompId === 'comp-auth') sourceNodeId = 'AuthSvc';
+    else if (sourceCompId === 'comp-backend') sourceNodeId = 'CoreApp';
+    else if (sourceCompId === 'comp-db') sourceNodeId = 'MainDB';
+    else if (sourceCompId) {
+      const src = components.find(c => c.id === sourceCompId);
+      if (src) sourceNodeId = src.name.replace(/[^a-zA-Z0-9]/g, '') || 'CoreApp';
+    }
+
+    const newEdge = `    ${sourceNodeId} -->|${label || 'Data Flow'}| ${nodeDefinition}`;
+
+    let updated = currentDfd.trim();
+    if (updated.includes(cleanSlug)) return updated;
+
+    // Insert edge into flow
+    const graphMatch = updated.match(/graph\s+(TD|LR|TB)/i);
+    if (graphMatch && graphMatch.index !== undefined) {
+      const insertPos = graphMatch.index + graphMatch[0].length;
+      updated = updated.slice(0, insertPos) + '\n' + newEdge + updated.slice(insertPos);
+    } else {
+      updated = updated + '\n' + newEdge;
+    }
+
+    // Place inside InternalMesh subgraph if exists
+    if (updated.includes('subgraph InternalMesh') && updated.includes('end')) {
+      const lastEndIdx = updated.lastIndexOf('end');
+      if (lastEndIdx !== -1) {
+        updated = updated.slice(0, lastEndIdx) + `      ${cleanSlug}\n    end` + updated.slice(lastEndIdx + 3);
+      }
+    }
+
+    return updated;
+  };
+
   const handleAddCustomComponent = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCompName.trim()) return;
@@ -86,17 +157,46 @@ export default function ThreatModelCanvas({ state, framework, onChange, onSendPr
       id: `comp-${Date.now().toString(36)}`,
       name: newCompName.trim(),
       type: newCompType,
-      trustBoundary: newCompBoundary.trim() || 'Internal Zone',
+      trustBoundary: newCompBoundary.trim() || 'Internal Trust Zone',
       techStack: newCompTech.trim() || undefined,
     };
+
+    let updatedDfd = state.dfdMermaid;
+    if (newCompConnectInDfd) {
+      updatedDfd = insertComponentIntoMermaid(
+        state.dfdMermaid,
+        newComp,
+        newCompConnectFrom,
+        newCompFlowLabel || (newComp.type === 'datastore' ? 'Cache / Query' : 'Data Flow')
+      );
+    }
+
     onChange({
       ...state,
       components: [...components, newComp],
+      dfdMermaid: updatedDfd,
       updatedAt: new Date().toISOString(),
     });
     setNewCompName('');
     setNewCompTech('');
     setShowAddCompModal(false);
+  };
+
+  const handleQuickConnect = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!connectingComp) return;
+    const updatedDfd = insertComponentIntoMermaid(
+      state.dfdMermaid,
+      connectingComp,
+      quickConnectFrom,
+      quickConnectLabel
+    );
+    onChange({
+      ...state,
+      dfdMermaid: updatedDfd,
+      updatedAt: new Date().toISOString(),
+    });
+    setConnectingComp(null);
   };
 
   const handleAddCustomThreat = (e: React.FormEvent) => {
@@ -267,11 +367,28 @@ ${threats.map(t => `### [${t.id}] ${t.category}: ${t.componentName || t.componen
           <div className="tm-dfd-view">
             <div className="tm-diagram-card">
               <div className="tm-card-header">
-                <span className="tm-card-title">Interactive Data Flow Diagram (DFD)</span>
-                <span className="tm-card-hint">Generated live from system decomposition</span>
+                <div>
+                  <span className="tm-card-title">Interactive Data Flow Diagram (DFD)</span>
+                  <span className="tm-card-hint">Edit code directly in "Edit Code" tab, or use AI sync</span>
+                </div>
+                <button
+                  className="tm-btn secondary sm"
+                  onClick={() =>
+                    onSendPrompt(
+                      `Please update and synchronize the Mermaid DFD diagram so that all registered components (${components.map(c => c.name).join(', ')}) are properly connected with realistic data flows and trust boundaries.`
+                    )
+                  }
+                  title="Ask AI to regenerate and connect all registered components in the DFD"
+                >
+                  ✨ Sync DFD with AI
+                </button>
               </div>
               <div className="tm-diagram-container">
-                <MermaidViewer code={state.dfdMermaid} />
+                <MermaidViewer
+                  code={state.dfdMermaid}
+                  editable={true}
+                  onChangeCode={(newCode) => onChange({ ...state, dfdMermaid: newCode, updatedAt: new Date().toISOString() })}
+                />
               </div>
             </div>
 
@@ -279,13 +396,18 @@ ${threats.map(t => `### [${t.id}] ${t.category}: ${t.componentName || t.componen
             <div className="tm-components-section">
               <div className="tm-section-header">
                 <h3>Registered System Components ({components.length})</h3>
-                <span className="tm-hint">Click any component to trigger targeted AI threat queries</span>
+                <span className="tm-hint">Click any component to trigger targeted AI threat queries or connect into flow</span>
               </div>
 
               <div className="tm-components-grid">
                 {components.map(comp => {
                   const compThreats = threats.filter(t => t.componentId === comp.id);
                   const isSelected = selectedCompId === comp.id;
+                  const cleanSlug = comp.name.replace(/[^a-zA-Z0-9]/g, '');
+                  const isInDfd =
+                    state.dfdMermaid.toLowerCase().includes(comp.name.toLowerCase()) ||
+                    (cleanSlug && state.dfdMermaid.includes(cleanSlug)) ||
+                    state.dfdMermaid.includes(comp.id);
 
                   return (
                     <div
@@ -298,7 +420,14 @@ ${threats.map(t => `### [${t.id}] ${t.category}: ${t.componentName || t.componen
                           {getComponentIcon(comp.type)}
                           <div className="tm-comp-name">{comp.name}</div>
                         </div>
-                        <span className="tm-comp-boundary-pill">{comp.trustBoundary}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          {!isInDfd && (
+                            <span className="tm-not-in-dfd-badge" title="Component not yet connected in Mermaid DFD flow">
+                              ⚠️ Not in Flow
+                            </span>
+                          )}
+                          <span className="tm-comp-boundary-pill">{comp.trustBoundary}</span>
+                        </div>
                       </div>
 
                       {comp.techStack && (
@@ -313,6 +442,15 @@ ${threats.map(t => `### [${t.id}] ${t.category}: ${t.componentName || t.componen
                         </span>
 
                         <div className="tm-comp-quick-actions" onClick={e => e.stopPropagation()}>
+                          {!isInDfd && (
+                            <button
+                              className="tm-comp-action-btn highlight"
+                              title={`Connect ${comp.name} to the DFD diagram flow`}
+                              onClick={() => setConnectingComp(comp)}
+                            >
+                              🔗 Connect to Flow
+                            </button>
+                          )}
                           <button
                             className="tm-comp-action-btn"
                             title={`Ask AI: Threat actors against ${comp.name}`}
@@ -592,14 +730,108 @@ ${threats.map(t => `### [${t.id}] ${t.category}: ${t.componentName || t.componen
                 <label>Tech Stack</label>
                 <input
                   type="text"
-                  placeholder="e.g. Go, Envoy, PostgreSQL, Kafka"
+                  placeholder="e.g. Go, Envoy, PostgreSQL, Kafka, Redis"
                   value={newCompTech}
                   onChange={e => setNewCompTech(e.target.value)}
                 />
               </div>
+
+              {/* DFD Diagram Flow Connection */}
+              <div className="tm-dfd-connect-box">
+                <label className="tm-checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={newCompConnectInDfd}
+                    onChange={e => setNewCompConnectInDfd(e.target.checked)}
+                  />
+                  <span>🔗 Add to Mermaid DFD diagram flow immediately</span>
+                </label>
+
+                {newCompConnectInDfd && (
+                  <div className="tm-dfd-connect-options">
+                    <div className="tm-form-field">
+                      <label>Connect from Existing Service</label>
+                      <select
+                        value={newCompConnectFrom}
+                        onChange={e => setNewCompConnectFrom(e.target.value)}
+                      >
+                        {components.map(c => (
+                          <option key={c.id} value={c.id}>
+                            {c.name} ({c.trustBoundary})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="tm-form-field">
+                      <label>Data Flow Protocol / Label</label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Cache / Query, Read / Write, HTTPS / JSON, gRPC"
+                        value={newCompFlowLabel}
+                        onChange={e => setNewCompFlowLabel(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div className="tm-modal-actions">
                 <button type="button" onClick={() => setShowAddCompModal(false)} className="tm-btn secondary">Cancel</button>
                 <button type="submit" className="tm-btn primary">Add Component</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Quick Connect Existing Component to DFD Flow */}
+      {connectingComp && (
+        <div className="tm-modal-overlay" onClick={() => setConnectingComp(null)}>
+          <div className="tm-modal" onClick={e => e.stopPropagation()}>
+            <h3>Connect "{connectingComp.name}" to Diagram Flow</h3>
+            <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '14px', lineHeight: 1.5 }}>
+              Choose an existing service to create a data flow link to this component in the Mermaid diagram.
+            </p>
+            <form onSubmit={handleQuickConnect}>
+              <div className="tm-form-field">
+                <label>Connect From Service</label>
+                <select
+                  value={quickConnectFrom}
+                  onChange={e => setQuickConnectFrom(e.target.value)}
+                >
+                  {components.filter(c => c.id !== connectingComp.id).map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name} ({c.trustBoundary})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="tm-form-field">
+                <label>Data Flow Protocol / Label</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Cache / Query, Read / Write, HTTPS / JSON, gRPC"
+                  value={quickConnectLabel}
+                  onChange={e => setQuickConnectLabel(e.target.value)}
+                />
+              </div>
+
+              <div className="tm-modal-actions">
+                <button
+                  type="button"
+                  className="tm-btn secondary"
+                  onClick={() => {
+                    const comp = connectingComp;
+                    setConnectingComp(null);
+                    onSendPrompt(`Please integrate and connect the "${comp.name}" component (${comp.trustBoundary}, ${comp.techStack || 'standard'}) into the Mermaid DFD diagram flow with appropriate protocols.`);
+                  }}
+                >
+                  ⚡ Ask AI to Connect
+                </button>
+                <button type="submit" className="tm-btn primary">
+                  Add to Diagram Flow
+                </button>
               </div>
             </form>
           </div>
