@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiCpu, FiTerminal, FiZap, FiUser, FiRefreshCw, FiPlay, FiX, FiDownload, FiMaximize2 } from 'react-icons/fi';
+import { FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiCpu, FiTerminal, FiZap, FiUser, FiRefreshCw, FiPlay, FiX, FiDownload, FiMaximize2, FiFileText } from 'react-icons/fi';
 import type { Message, MessageContent, ToolCall } from '@/types';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
@@ -20,6 +20,37 @@ interface ContentBlock {
   content: string;
   language?: string;
   isClosed?: boolean;
+}
+
+interface AttachedDoc {
+  name: string;
+  meta: string;
+  content: string;
+}
+
+function parseUserDocuments(text: string): { docs: AttachedDoc[]; promptText: string } {
+  if (!text) return { docs: [], promptText: '' };
+  const docs: AttachedDoc[] = [];
+  
+  // Match [Attached Document: ...]--- Begin Document Content --- ... --- End Document Content ---
+  const docRegex = /\[Attached Document:\s*([^\n\]]+)\]\s*\n--- Begin Document Content ---\n([\s\S]*?)\n--- End Document Content ---/g;
+  let match: RegExpExecArray | null;
+  let cleaned = text;
+
+  while ((match = docRegex.exec(text)) !== null) {
+    const fullMatch = match[0];
+    const rawHeader = match[1];
+    const docContent = match[2];
+
+    const nameMatch = rawHeader.match(/^(.*?)(?:\s*\((.*?)\))?$/);
+    const name = nameMatch ? nameMatch[1].trim() : rawHeader.trim();
+    const meta = nameMatch && nameMatch[2] ? nameMatch[2].trim() : '';
+
+    docs.push({ name, meta, content: docContent });
+    cleaned = cleaned.replace(fullMatch, '').trim();
+  }
+
+  return { docs, promptText: cleaned };
 }
 
 marked.use({
@@ -144,6 +175,7 @@ function ChatMessageComponent({ message, isStreaming, onRetry, onContinue, onOpe
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(true);
   const [activeLightboxImg, setActiveLightboxImg] = useState<string | null>(null);
+  const [expandedDocIdx, setExpandedDocIdx] = useState<number | null>(null);
 
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system' || message.role === 'developer';
@@ -162,10 +194,16 @@ function ChatMessageComponent({ message, isStreaming, onRetry, onContinue, onOpe
     }
   }
 
+  // Parse attached documents if user message
+  const { docs: userDocs, promptText: userPromptText } = useMemo(() => {
+    if (!isUser) return { docs: [], promptText: rawText };
+    return parseUserDocuments(rawText);
+  }, [rawText, isUser]);
+
   // Check reasoning content
-  const parsedThinking = useMemo(() => parseThinking(rawText), [rawText]);
+  const parsedThinking = useMemo(() => parseThinking(isUser ? userPromptText : rawText), [rawText, isUser, userPromptText]);
   const reasoningText = message.reasoning_content || parsedThinking?.thinking;
-  const mainText = parsedThinking ? parsedThinking.response : rawText;
+  const mainText = parsedThinking ? parsedThinking.response : (isUser ? userPromptText : rawText);
 
   // Split into markdown and rich interactive artifact blocks
   const contentBlocks = useMemo(() => {
@@ -239,6 +277,38 @@ function ChatMessageComponent({ message, isStreaming, onRetry, onContinue, onOpe
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {/* Document Attachments (PDF / Text / Code) */}
+        {userDocs.length > 0 && (
+          <div className="chat-user-docs-container">
+            {userDocs.map((doc, idx) => (
+              <div key={idx} className="chat-user-doc-card">
+                <div className="chat-user-doc-header">
+                  <div className="chat-user-doc-icon">
+                    <FiFileText size={18} />
+                  </div>
+                  <div className="chat-user-doc-details">
+                    <span className="chat-user-doc-name" title={doc.name}>{doc.name}</span>
+                    <span className="chat-user-doc-meta">{doc.meta || 'Document'} · Extracted Text</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setExpandedDocIdx(expandedDocIdx === idx ? null : idx)}
+                    className="chat-user-doc-toggle-btn"
+                  >
+                    {expandedDocIdx === idx ? <FiChevronUp size={13} /> : <FiChevronDown size={13} />}
+                    <span>{expandedDocIdx === idx ? 'Hide Text' : 'View Text'}</span>
+                  </button>
+                </div>
+                {expandedDocIdx === idx && (
+                  <pre className="chat-user-doc-preview">
+                    <code>{doc.content}</code>
+                  </pre>
+                )}
+              </div>
+            ))}
           </div>
         )}
 

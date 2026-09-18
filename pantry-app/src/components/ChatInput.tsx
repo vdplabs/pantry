@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { FiSend, FiPaperclip, FiX, FiSliders, FiZap, FiCode, FiLayers, FiFileText, FiFile, FiAlertCircle } from 'react-icons/fi';
 import { useApp } from '@/context/AppContext';
 import type { MessageContent } from '@/types';
+import { extractTextFromPdf } from '@/utils/pdfExtractor';
 
 interface Props {
   placeholder?: string;
@@ -15,7 +16,7 @@ export interface ChatAttachment {
   type: 'image' | 'file';
   name: string;
   size: number;
-  preview?: string; // base64 for images
+  preview?: string; // base64 for images, or page count for PDF
   content?: string; // text content for files
   file: File;
 }
@@ -42,6 +43,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
   const defaultPlaceholder = placeholder || 'Message Pantry model... (Enter to send, Shift+Enter for newline)';
 
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
+  const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [showControls, setShowControls] = useState(false);
   const [inputValue, setInputValue] = useState('');
 
@@ -79,6 +81,8 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
 
   const processFile = async (file: File): Promise<ChatAttachment> => {
     const isImage = file.type.startsWith('image/') || /\.(jpg|jpeg|png|gif|webp|svg|bmp|ico)$/i.test(file.name);
+    const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+
     if (isImage) {
       const preview = await fileToBase64(file);
       return {
@@ -89,15 +93,38 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
         preview,
         file,
       };
-    } else {
+    } else if (isPdf) {
       try {
-        const content = await file.text();
+        const extracted = await extractTextFromPdf(file);
         return {
           id: crypto.randomUUID(),
           type: 'file',
           name: file.name,
           size: file.size,
-          content,
+          preview: `${extracted.numPages} ${extracted.numPages === 1 ? 'page' : 'pages'}`,
+          content: extracted.text,
+          file,
+        };
+      } catch (err: any) {
+        return {
+          id: crypto.randomUUID(),
+          type: 'file',
+          name: file.name,
+          size: file.size,
+          content: `[Could not parse PDF text: ${err.message || 'Error reading PDF'}]`,
+          file,
+        };
+      }
+    } else {
+      try {
+        const content = await file.text();
+        const cleanContent = content.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+        return {
+          id: crypto.randomUUID(),
+          type: 'file',
+          name: file.name,
+          size: file.size,
+          content: cleanContent,
           file,
         };
       } catch {
@@ -116,32 +143,44 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
   const handlePaste = useCallback(async (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const items = e.clipboardData?.items;
     if (!items) return;
-    const newAttachments: ChatAttachment[] = [];
+    const filesToProcess: File[] = [];
     for (const item of items) {
       if (item.kind === 'file') {
         const file = item.getAsFile();
-        if (file) {
+        if (file) filesToProcess.push(file);
+      }
+    }
+    if (filesToProcess.length > 0) {
+      e.preventDefault();
+      setIsProcessingFile(true);
+      try {
+        const newAttachments: ChatAttachment[] = [];
+        for (const file of filesToProcess) {
           const att = await processFile(file);
           newAttachments.push(att);
         }
+        setAttachments(prev => [...prev, ...newAttachments]);
+      } finally {
+        setIsProcessingFile(false);
       }
-    }
-    if (newAttachments.length > 0) {
-      e.preventDefault();
-      setAttachments(prev => [...prev, ...newAttachments]);
     }
   }, []);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
-    const newAttachments: ChatAttachment[] = [];
-    for (const file of files) {
-      const att = await processFile(file);
-      newAttachments.push(att);
+    setIsProcessingFile(true);
+    try {
+      const newAttachments: ChatAttachment[] = [];
+      for (const file of files) {
+        const att = await processFile(file);
+        newAttachments.push(att);
+      }
+      setAttachments(prev => [...prev, ...newAttachments]);
+    } finally {
+      setIsProcessingFile(false);
+      if (e.target) e.target.value = '';
     }
-    setAttachments(prev => [...prev, ...newAttachments]);
-    if (e.target) e.target.value = '';
   };
 
   const removeAttachment = (id: string) => {
@@ -158,8 +197,10 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
     let combinedText = text;
     if (fileAtts.length > 0) {
       const fileBlocks = fileAtts.map(f => {
-        const ext = f.name.includes('.') ? f.name.split('.').pop() : '';
-        return `[Attached file: ${f.name} (${formatFileSize(f.size)})]\n\`\`\`${ext || ''}\n${f.content || ''}\n\`\`\``;
+        return `[Attached Document: ${f.name} (${formatFileSize(f.size)}${f.preview ? ` · ${f.preview}` : ''})]\n` +
+          `--- Begin Document Content ---\n` +
+          `${f.content || ''}\n` +
+          `--- End Document Content ---`;
       }).join('\n\n');
 
       combinedText = combinedText ? `${fileBlocks}\n\n${combinedText}` : fileBlocks;
