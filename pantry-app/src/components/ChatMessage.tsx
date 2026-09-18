@@ -82,15 +82,25 @@ function parseMarkdownBlocks(text: string, isStreaming = false): ContentBlock[] 
 }
 
 function parseThinking(text: string): { thinking: string; response: string } | null {
-  const thinkMatch = text.match(/<think>([\s\S]*?)<\/think>/i);
-  const reasoningMatch = text.match(/<reasoning>([\s\S]*?)<\/reasoning>/i);
-  const thinking = thinkMatch?.[1] || reasoningMatch?.[1];
-  if (!thinking) return null;
-  const response = text
-    .replace(/<think>[\s\S]*?<\/think>/gi, '')
-    .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
-    .trim();
-  return { thinking: thinking.trim(), response };
+  if (!text) return null;
+  // 1. Check for closed <think> or <reasoning>
+  const thinkClosed = text.match(/<think>([\s\S]*?)<\/think>/i) || text.match(/<reasoning>([\s\S]*?)<\/reasoning>/i);
+  if (thinkClosed) {
+    const thinking = thinkClosed[1];
+    const response = text
+      .replace(/<think>[\s\S]*?<\/think>/gi, '')
+      .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
+      .trim();
+    return { thinking: thinking.trim(), response };
+  }
+
+  // 2. Check for open <think> during streaming
+  const thinkOpen = text.match(/<think>([\s\S]*)$/i) || text.match(/<reasoning>([\s\S]*)$/i);
+  if (thinkOpen) {
+    return { thinking: thinkOpen[1].trim(), response: '' };
+  }
+
+  return null;
 }
 
 const MarkdownSegment = React.memo(function MarkdownSegment({ content }: { content: string }) {

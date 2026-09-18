@@ -58,16 +58,12 @@ export default function ChatPage() {
 
   const handleScroll = useCallback(() => {
     if (!scrollContainerRef.current) return;
-    if (isAutoScrollingRef.current) {
-      isAutoScrollingRef.current = false;
-      return;
-    }
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    const isAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
-    const hasScrolledUp = !isAtBottom;
-    if (userScrolledUpRef.current !== hasScrolledUp) {
-      userScrolledUpRef.current = hasScrolledUp;
-      setUserScrolledUp(hasScrolledUp);
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+    const scrolledUp = distanceFromBottom > 120;
+    if (userScrolledUpRef.current !== scrolledUp) {
+      userScrolledUpRef.current = scrolledUp;
+      setUserScrolledUp(scrolledUp);
     }
   }, []);
 
