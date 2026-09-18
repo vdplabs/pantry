@@ -56,7 +56,7 @@ export default function ConversationList() {
           <span>New Chat</span>
         </button>
 
-        <div style={{ position: 'relative' }}>
+        <div className="studio-menu-container">
           <button
             onClick={() => setShowStudioMenu(!showStudioMenu)}
             title="Start a specialized Studio session (Threat Modeling, Research, RFCs)"
