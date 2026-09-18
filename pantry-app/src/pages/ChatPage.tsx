@@ -178,7 +178,7 @@ export default function ChatPage() {
       const res = await api.chat(messagesPayload, {
         model: state.model || 'chat-compact',
         temperature: state.temperature ?? 0.7,
-        max_tokens: state.maxTokens ?? 2048,
+        max_tokens: state.maxTokens ?? 4096,
         top_p: state.topP ?? 1.0,
         stream: true,
         system_prompt: effectiveSystemPrompt,
@@ -261,7 +261,9 @@ export default function ChatPage() {
           let finalAssistantContent = result.content || currentStreamContent;
           if (plugin) {
             const baseState = currentConv?.canvas_state || plugin.getInitialState(currentConv?.plugin_framework || plugin.defaultFramework);
-            const parsed = plugin.parseModelOutput(finalAssistantContent, baseState);
+            const lastUserMsg = messagesPayload.slice().reverse().find(m => m.role === 'user');
+            const userPromptText = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
+            const parsed = plugin.parseModelOutput(finalAssistantContent, baseState, userPromptText);
             finalAssistantContent = parsed.cleanText;
             if (parsed.updatedState) {
               updateCanvasState(parsed.updatedState);

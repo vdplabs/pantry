@@ -209,7 +209,8 @@ function extractQuestionsFromText(text: string): string[] {
 
 export function parseResearchOutput(
   rawText: string,
-  currentState: ResearchState
+  currentState: ResearchState,
+  userPrompt: string = ''
 ): { cleanText: string; updatedState?: ResearchState } {
   if (!rawText) return { cleanText: rawText };
 
@@ -220,7 +221,7 @@ export function parseResearchOutput(
   let match: RegExpExecArray | null;
   while ((match = closedRegex.exec(rawText)) !== null) {
     const candidate = match[1].trim();
-    if (candidate.includes('topicTitle') || candidate.includes('addFindings') || candidate.includes('findings') || candidate.includes('hypothesis')) {
+    if (candidate.includes('topicTitle') || candidate.includes('addFindings') || candidate.includes('findings') || candidate.includes('hypothesis') || candidate.includes('updateQuestions')) {
       patchJsonStr = candidate;
     }
   }
@@ -234,11 +235,13 @@ export function parseResearchOutput(
     }
   }
 
-  // Clean out patch blocks from visible text
+  // Clean out patch blocks and trailing syntax from visible text
   cleanText = rawText
     .replace(/```(?:research_patch|json)\s*[\s\S]*?```/g, '')
     .replace(/```(?:research_patch|json)\s*[\s\S]*$/g, '')
+    .replace(/Research Patch JSON Block:?/gi, '')
     .replace(/Final Research Patch:?/gi, '')
+    .replace(/\*\*Research\s*$/gi, '')
     .trim();
 
   let patch: any = {};
@@ -263,31 +266,62 @@ export function parseResearchOutput(
       nextState.hypothesis = newHypothesis;
     }
 
-    // 2. Document Markdown:
-    // If patch provided explicit doc, use it. Otherwise, if cleanText has substantial analysis and the doc is still placeholder, synthesize!
+    // 2. Check if a specific research question is being investigated
+    let investigatedQuestionId: string | null = null;
+    let investigatedQuestionText: string | null = null;
+
+    if (userPrompt) {
+      const qMatch = userPrompt.match(/research question:\s*"([^"]+)"/i);
+      if (qMatch) {
+        investigatedQuestionText = qMatch[1].trim();
+      } else {
+        const found = nextState.questions.find(q =>
+          userPrompt.toLowerCase().includes(q.question.toLowerCase().slice(0, 30))
+        );
+        if (found) {
+          investigatedQuestionId = found.id;
+          investigatedQuestionText = found.question;
+        }
+      }
+    }
+
+    // 3. Document Markdown Synthesis & Incremental Updates:
     const explicitDoc = (patch.documentMarkdown || patch.document || patch.markdown || patch.doc || patch.content || '').trim();
     const isPlaceholderDoc = currentState.documentMarkdown.startsWith('# Technical Research Document') ||
       currentState.documentMarkdown.startsWith('# Technology & Engine') ||
       currentState.documentMarkdown.includes('*As research queries are discussed') ||
       currentState.documentMarkdown.includes('*Key synthesized findings and observations');
 
+    const isSynthesisPrompt = userPrompt.toLowerCase().includes('synthesize') || userPrompt.toLowerCase().includes('update the living research document');
+
     if (explicitDoc && explicitDoc.length > 20) {
       nextState.documentMarkdown = explicitDoc;
-    } else if (cleanText.length > 120 && isPlaceholderDoc) {
-      // Build a rich structured research document from the assistant's analysis
-      const displayTitle = nextState.topicTitle || 'Technical Research Document';
-      nextState.documentMarkdown = `# Research Report: ${displayTitle}\n\n## 1. Executive Summary & Objective\n${nextState.hypothesis || 'Comprehensive technical assessment and comparative tradeoff analysis.'}\n\n## 2. Core Analysis & Findings\n${cleanText}\n\n## 3. Next Steps & Active Investigations\n- Deep-dive into open research questions on the Studio Canvas.\n`;
+    } else if (cleanText.length > 100) {
+      if (isPlaceholderDoc || isSynthesisPrompt) {
+        const displayTitle = nextState.topicTitle || 'Technical Research Document';
+        nextState.documentMarkdown = `# Research Report: ${displayTitle}\n\n## 1. Executive Summary & Objective\n${nextState.hypothesis || 'Comprehensive technical assessment and comparative tradeoff analysis.'}\n\n## 2. Core Analysis & Findings\n${cleanText}\n\n## 3. Next Steps & Active Investigations\n- Deep-dive into open research questions on the Studio Canvas.\n`;
+      } else if (investigatedQuestionText) {
+        // Incrementally append investigation section to living doc
+        const sectionHeader = `### 🔬 Investigation: ${investigatedQuestionText}`;
+        if (!nextState.documentMarkdown.includes(sectionHeader)) {
+          nextState.documentMarkdown = `${nextState.documentMarkdown.trim()}\n\n---\n\n${sectionHeader}\n${cleanText}\n`;
+        }
+      } else if (cleanText.length > 150 && !nextState.documentMarkdown.includes(cleanText.slice(0, 50))) {
+        // Append deep dive section
+        const sectionTitle = userPrompt ? userPrompt.slice(0, 60).replace(/[^a-zA-Z0-9\s]/g, '') : 'Deep-Dive Findings';
+        nextState.documentMarkdown = `${nextState.documentMarkdown.trim()}\n\n---\n\n### 💡 ${sectionTitle}\n${cleanText}\n`;
+      }
     } else if (newTopic && isPlaceholderDoc) {
       nextState.documentMarkdown = `# Research: ${newTopic}\n\n## 1. Objective & Hypothesis\n${nextState.hypothesis || 'Investigate core architectural tradeoffs, performance profiles, and implementation complexities.'}\n\n## 2. Key Hypotheses & Constraints\n- **Target Domain**: ${newTopic}\n\n## 3. Findings & Evidence Analysis\n*Key synthesized findings and observations will be recorded here.*\n\n## 4. Architectural Tradeoffs\n| Dimension | Current Standard | Emerging Paradigm |\n|---|---|---|\n| Feasibility | High | Active Research |\n\n## 5. Synthesis & Recommended Next Steps\n- Deep dive into registered research questions.\n`;
     }
 
-    // 3. Diagram
+    // 4. Diagram
     const newDiagram = (patch.diagramMermaid || patch.diagram || patch.mermaid || patch.chart || '').trim();
     if (newDiagram && newDiagram.length > 10) {
       nextState.diagramMermaid = newDiagram;
     }
 
-    // 4. Add Findings:
+    // 5. Add Findings:
     const rawFindings = patch.addFindings || patch.findings || patch.newFindings || patch.keyFindings || patch.evidence;
     const findingsList = Array.isArray(rawFindings) ? rawFindings : (rawFindings && typeof rawFindings === 'object' ? [rawFindings] : []);
     const existingIds = new Set(nextState.findings.map(f => f.id));
@@ -331,9 +365,9 @@ export function parseResearchOutput(
       });
     }
 
-    // If no findings were in the patch JSON, auto-extract from markdown text!
+    // If no findings were in the patch JSON, auto-extract from markdown text
     if (newFindings.length === 0 && cleanText.length > 100) {
-      const extracted = extractFindingsFromText(cleanText, nextState.topicTitle);
+      const extracted = extractFindingsFromText(cleanText, investigatedQuestionText || nextState.topicTitle);
       for (const ef of extracted) {
         if (!existingIds.has(ef.id)) {
           existingIds.add(ef.id);
@@ -346,7 +380,7 @@ export function parseResearchOutput(
       nextState.findings = [...nextState.findings, ...newFindings];
     }
 
-    // 5. Update & Add Questions:
+    // 6. Update & Resolve Questions:
     if (Array.isArray(patch.updateQuestions) && patch.updateQuestions.length > 0) {
       const qMap = new Map<string, any>(patch.updateQuestions.map((q: any) => [String(q.id || '').toLowerCase(), q]));
       nextState.questions = nextState.questions.map(q => {
@@ -362,6 +396,25 @@ export function parseResearchOutput(
       });
     }
 
+    // If a question was investigated, automatically resolve it!
+    if (investigatedQuestionText || investigatedQuestionId) {
+      nextState.questions = nextState.questions.map(q => {
+        const isMatch = (investigatedQuestionId && q.id === investigatedQuestionId) ||
+          (investigatedQuestionText && q.question.toLowerCase().includes(investigatedQuestionText.toLowerCase().slice(0, 30)));
+        if (isMatch) {
+          // Extract a 1-sentence synthesis from the findings or text
+          const resolutionSummary = newFindings[0]?.insight || cleanText.slice(0, 200).replace(/[\n#\*]/g, ' ').trim() + '...';
+          return {
+            ...q,
+            status: 'resolved',
+            findings: resolutionSummary,
+          };
+        }
+        return q;
+      });
+    }
+
+    // Add new questions
     const rawQuestions = patch.addQuestions || patch.questions || patch.newQuestions || patch.openQuestions || patch.hypotheses;
     const questionsList = Array.isArray(rawQuestions) ? rawQuestions : (rawQuestions && typeof rawQuestions === 'object' ? [rawQuestions] : []);
     const existingQIds = new Set(nextState.questions.map(q => q.id));
@@ -400,23 +453,6 @@ export function parseResearchOutput(
       }
     }
 
-    // If questions list was empty, extract questions ending with ? from text
-    if (newQs.length === 0 && cleanText.length > 100) {
-      const textQuestions = extractQuestionsFromText(cleanText);
-      for (let idx = 0; idx < textQuestions.length; idx++) {
-        const tq = textQuestions[idx];
-        const id = `q-ext-${Date.now().toString(36)}-${idx}`;
-        if (!existingQIds.has(id)) {
-          existingQIds.add(id);
-          newQs.push({
-            id,
-            question: tq,
-            status: 'open',
-          });
-        }
-      }
-    }
-
     if (newQs.length > 0) {
       const hasOnlyDefaultQs = nextState.questions.length === 3 && nextState.questions.every(q => q.id.startsWith('q-') && !q.findings);
       if (hasOnlyDefaultQs && (newTopic || newQs.length >= 2)) {
@@ -426,7 +462,7 @@ export function parseResearchOutput(
       }
     }
 
-    // 6. Ensure cleanText is not empty
+    // 7. Ensure cleanText is not empty
     if (!cleanText.trim()) {
       const summaryItems: string[] = [];
       if (newTopic) summaryItems.push(`🔬 **Research Objective**: ${newTopic}`);

@@ -11,7 +11,7 @@ export interface StudioPlugin<TState = any> {
   defaultFramework?: string;
   getInitialState: (framework?: string) => TState;
   buildSystemPrompt: (canvasState: TState, framework?: string) => string;
-  parseModelOutput: (text: string, currentState: TState) => { cleanText: string; updatedState?: TState };
+  parseModelOutput: (text: string, currentState: TState, userPrompt?: string) => { cleanText: string; updatedState?: TState };
   RendererComponent: React.ComponentType<{
     state: TState;
     framework?: string;
