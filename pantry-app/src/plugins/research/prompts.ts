@@ -84,38 +84,37 @@ export function buildResearchSystemPrompt(canvasState: ResearchState, framework:
 
 CURRENT RESEARCH CANVAS:
 - **Topic**: ${canvasState.topicTitle || 'Technical Research'}
-- **Hypothesis**: ${canvasState.hypothesis || 'Exploring technical tradeoffs'}
+- **Hypothesis / Goal**: ${canvasState.hypothesis || 'Exploring technical tradeoffs'}
 - **Key Questions**:
 ${questionsSummary || 'None registered.'}
 - **Recorded Findings (${(canvasState.findings || []).length})**:
 ${findingsSummary || 'No findings recorded yet.'}
 
 RESPONSE GUIDELINES:
-1. Deliver rigorous, analytical, and well-reasoned answers grounded in systems engineering and real-world trade-offs.
-2. Structure your analysis with clear evidence, benchmark references, and actionable takeaways.
-3. Whenever you uncover a new significant insight, resolve a research question, or refine the research document, append a compact JSON block using \`\`\`research_patch.
+1. Always write a thorough, insightful, and conversational response in Markdown analyzing the user's inquiry, evidence, and practical takeaways.
+2. At the end of your response, output a compact \`\`\`research_patch JSON block to synchronize the canvas with the latest topic, hypothesis, findings, or research questions.
+3. If the user introduces a new topic (e.g. quantum computing, caching architecture, AI agents), initialize/update "topicTitle", "hypothesis", and "documentMarkdown", and generate 2-3 relevant "addQuestions" to track open investigations.
 
-COMPACT PATCH FORMAT (include only new or updated items):
+COMPACT PATCH FORMAT:
 \`\`\`research_patch
 {
+  "topicTitle": "Impact of Quantum Computing & Cryptography",
+  "hypothesis": "Evaluating post-quantum encryption algorithms and practical migration timelines.",
   "addFindings": [
     {
-      "topic": "Storage & I/O",
-      "insight": "Memory-mapped files reduce kernel context switches by 40%",
+      "topic": "Shor's Algorithm & RSA",
+      "insight": "RSA-2048 vulnerable to quantum computers with ~4,000 logical qubits.",
       "confidence": "High",
-      "takeaway": "Adopt mmap for local index files"
+      "takeaway": "Plan migration to NIST post-quantum standards (ML-KEM / Dilithium)"
     }
   ],
-  "updateQuestions": [
-    {
-      "id": "q-1",
-      "status": "resolved",
-      "findings": "Bottleneck identified at SQLite write lock serialization."
-    }
+  "addQuestions": [
+    { "question": "What are the performance overheads of Kyber/ML-KEM in TLS handshakes?" },
+    { "question": "What is the timeline for fault-tolerant commercial quantum hardware?" }
   ]
 }
 \`\`\`
-Keep the JSON patch concise (1 to 2 items) so responses remain fast and complete.`;
+Always provide your written analysis in normal markdown before the patch.`;
 }
 
 function tryRepairJson(jsonStr: string): any {
@@ -157,8 +156,8 @@ export function parseResearchOutput(
 ): { cleanText: string; updatedState?: ResearchState } {
   if (!rawText) return { cleanText: rawText };
 
-  const closedRegex = /```research_patch\s*([\s\S]*?)\s*```/;
-  const openRegex = /```research_patch\s*([\s\S]*)$/;
+  const closedRegex = /```(?:research_patch|json)\s*([\s\S]*?)\s*```/;
+  const openRegex = /```(?:research_patch|json)\s*([\s\S]*)$/;
 
   let patchJsonStr = '';
   let cleanText = rawText;
@@ -179,7 +178,7 @@ export function parseResearchOutput(
 
   try {
     const patch = tryRepairJson(patchJsonStr);
-    if (!patch) {
+    if (!patch || typeof patch !== 'object') {
       console.warn('[parseResearchOutput] Failed to parse JSON patch');
       return { cleanText };
     }
@@ -189,77 +188,166 @@ export function parseResearchOutput(
       updatedAt: new Date().toISOString(),
     };
 
-    if (patch.topicTitle) nextState.topicTitle = patch.topicTitle;
-    if (patch.hypothesis) nextState.hypothesis = patch.hypothesis;
-    if (patch.documentMarkdown) nextState.documentMarkdown = patch.documentMarkdown;
-    if (patch.diagramMermaid) nextState.diagramMermaid = patch.diagramMermaid;
-
-    // Add findings
-    if (Array.isArray(patch.addFindings) && patch.addFindings.length > 0) {
-      const existingIds = new Set(nextState.findings.map(f => f.id));
-      const newFindings: ResearchFinding[] = [];
-
-      for (const f of patch.addFindings) {
-        if (!f || typeof f !== 'object') continue;
-        let id = f.id;
-        if (!id || existingIds.has(id)) {
-          id = `RF-${String(nextState.findings.length + newFindings.length + 1).padStart(2, '0')}`;
-        }
-        existingIds.add(id);
-
-        newFindings.push({
-          id,
-          topic: f.topic || 'General Analysis',
-          insight: f.insight || f.finding || 'Key research observation',
-          confidence: f.confidence || 'High',
-          evidence: f.evidence || '',
-          takeaway: f.takeaway || '',
-          source: f.source || '',
-        });
-      }
-
-      if (newFindings.length > 0) {
-        nextState.findings = [...nextState.findings, ...newFindings];
-      }
+    // Topic & Hypothesis (supports flexible keys)
+    const newTopic = patch.topicTitle || patch.topic || patch.title || patch.subject || patch.name;
+    if (newTopic && typeof newTopic === 'string') {
+      nextState.topicTitle = newTopic;
     }
 
-    // Update questions
+    const newHypothesis = patch.hypothesis || patch.goal || patch.objective || patch.abstract || patch.summary;
+    if (newHypothesis && typeof newHypothesis === 'string') {
+      nextState.hypothesis = newHypothesis;
+    }
+
+    const newDoc = patch.documentMarkdown || patch.document || patch.markdown || patch.doc || patch.content || patch.researchDocument;
+    if (newDoc && typeof newDoc === 'string') {
+      nextState.documentMarkdown = newDoc;
+    } else if (newTopic && currentState.documentMarkdown.startsWith('# Technical Research Document')) {
+      // Auto-update document header if using default template
+      nextState.documentMarkdown = `# Research: ${newTopic}\n\n## 1. Objective & Hypothesis\n${nextState.hypothesis || 'Investigate core principles, tradeoffs, and domain impact.'}\n\n## 2. Key Hypotheses & Constraints\n- **Target Domain**: ${newTopic}\n\n## 3. Findings & Evidence Analysis\n*Key synthesized findings and observations will be recorded here.*\n\n## 4. Architectural Tradeoffs\n| Dimension | Current Standard | Emerging Paradigm |\n|---|---|---|\n| Feasibility | High | Active Research |\n\n## 5. Synthesis & Recommended Next Steps\n- Deep dive into registered research questions.\n`;
+    }
+
+    const newDiagram = patch.diagramMermaid || patch.diagram || patch.mermaid || patch.chart;
+    if (newDiagram && typeof newDiagram === 'string') {
+      nextState.diagramMermaid = newDiagram;
+    }
+
+    // Add findings (flexible aliases)
+    const rawFindings = patch.addFindings || patch.findings || patch.newFindings || patch.keyFindings || patch.evidence;
+    const findingsList = Array.isArray(rawFindings) ? rawFindings : (rawFindings && typeof rawFindings === 'object' ? [rawFindings] : []);
+    const existingIds = new Set(nextState.findings.map(f => f.id));
+    const newFindings: ResearchFinding[] = [];
+
+    for (const f of findingsList) {
+      if (!f) continue;
+      if (typeof f === 'string') {
+        const id = `RF-${String(nextState.findings.length + newFindings.length + 1).padStart(2, '0')}`;
+        existingIds.add(id);
+        newFindings.push({
+          id,
+          topic: newTopic || 'General Finding',
+          insight: f,
+          confidence: 'High',
+          evidence: '',
+          takeaway: '',
+          source: '',
+        });
+        continue;
+      }
+      if (typeof f !== 'object') continue;
+
+      let id = f.id;
+      if (!id || existingIds.has(id)) {
+        id = `RF-${String(nextState.findings.length + newFindings.length + 1).padStart(2, '0')}`;
+      }
+      existingIds.add(id);
+
+      newFindings.push({
+        id,
+        topic: f.topic || f.title || f.category || f.area || f.name || 'Research Insight',
+        insight: f.insight || f.finding || f.description || f.text || f.summary || f.observation || 'Key observation',
+        confidence: f.confidence || (f.certainty ? String(f.certainty) : 'High'),
+        evidence: f.evidence || f.proof || f.data || '',
+        takeaway: f.takeaway || f.conclusion || f.recommendation || f.action || '',
+        source: f.source || f.citation || f.reference || '',
+      });
+    }
+
+    if (newFindings.length > 0) {
+      nextState.findings = [...nextState.findings, ...newFindings];
+    }
+
+    // Update existing questions
     if (Array.isArray(patch.updateQuestions) && patch.updateQuestions.length > 0) {
-      const qMap = new Map<string, any>(patch.updateQuestions.map((q: any) => [String(q.id), q]));
+      const qMap = new Map<string, any>(patch.updateQuestions.map((q: any) => [String(q.id || '').toLowerCase(), q]));
       nextState.questions = nextState.questions.map(q => {
-        const u = qMap.get(String(q.id));
+        const u = qMap.get(String(q.id).toLowerCase());
         if (u) {
           return {
             ...q,
             status: u.status || q.status,
-            findings: u.findings || q.findings,
+            findings: u.findings || u.answer || q.findings,
           };
         }
         return q;
       });
     }
 
-    // Add new questions
-    if (Array.isArray(patch.addQuestions) && patch.addQuestions.length > 0) {
-      const existingQIds = new Set(nextState.questions.map(q => q.id));
-      const newQs: ResearchQuestion[] = patch.addQuestions
-        .filter((q: any) => q && q.question)
-        .map((q: any, idx: number) => ({
-          id: q.id || `q-${Date.now().toString(36)}-${idx}`,
-          question: q.question,
-          status: q.status || 'open',
-          findings: q.findings,
-        }))
-        .filter((q: ResearchQuestion) => !existingQIds.has(q.id));
+    // Add new questions (flexible aliases & string arrays)
+    const rawQuestions = patch.addQuestions || patch.questions || patch.newQuestions || patch.openQuestions || patch.hypotheses;
+    const questionsList = Array.isArray(rawQuestions) ? rawQuestions : (rawQuestions && typeof rawQuestions === 'object' ? [rawQuestions] : []);
+    const existingQIds = new Set(nextState.questions.map(q => q.id));
+    const newQs: ResearchQuestion[] = [];
 
-      if (newQs.length > 0) {
+    for (let idx = 0; idx < questionsList.length; idx++) {
+      const q = questionsList[idx];
+      if (!q) continue;
+
+      if (typeof q === 'string') {
+        const id = `q-${Date.now().toString(36)}-${idx}`;
+        if (!existingQIds.has(id)) {
+          existingQIds.add(id);
+          newQs.push({
+            id,
+            question: q,
+            status: 'open',
+          });
+        }
+        continue;
+      }
+
+      if (typeof q === 'object' && (q.question || q.title || q.text)) {
+        const qText = q.question || q.title || q.text;
+        const id = q.id || `q-${Date.now().toString(36)}-${idx}`;
+        if (!existingQIds.has(id)) {
+          existingQIds.add(id);
+          newQs.push({
+            id,
+            question: qText,
+            status: q.status || 'open',
+            findings: q.findings || q.answer,
+          });
+        }
+      }
+    }
+
+    if (newQs.length > 0) {
+      // If we are replacing the default starter questions with new topic-specific questions:
+      const hasOnlyDefaultQs = nextState.questions.length === 3 && nextState.questions.every(q => q.id.startsWith('q-') && !q.findings);
+      if (hasOnlyDefaultQs && (newTopic || newQs.length >= 2)) {
+        nextState.questions = newQs;
+      } else {
         nextState.questions = [...nextState.questions, ...newQs];
       }
+    }
+
+    // Ensure cleanText is never empty
+    if (!cleanText.trim()) {
+      const summaryItems: string[] = [];
+      if (newTopic) {
+        summaryItems.push(`🔬 **Research Objective**: ${newTopic}`);
+      }
+      if (newHypothesis) {
+        summaryItems.push(`💡 **Hypothesis**: ${newHypothesis}`);
+      }
+      if (newFindings.length > 0) {
+        summaryItems.push(`📌 **Recorded Findings (${newFindings.length})**:\n` + newFindings.map(f => `- **${f.topic}**: ${f.insight}`).join('\n'));
+      }
+      if (newQs.length > 0) {
+        summaryItems.push(`❓ **Registered Research Questions (${newQs.length})**:\n` + newQs.map(q => `- ${q.question}`).join('\n'));
+      }
+
+      cleanText = summaryItems.length > 0
+        ? `I have updated the **Research Studio Canvas** with your topic and structured investigation:\n\n${summaryItems.join('\n\n')}\n\n*You can click **"⚡ Investigate with AI"** on any research question on the canvas or ask questions here in chat to continue exploring.*`
+        : `✨ *Research Studio Canvas synchronized with your latest inputs.*`;
     }
 
     return { cleanText, updatedState: nextState };
   } catch (err) {
     console.warn('[parseResearchOutput] Error merging patch:', err);
+    if (!cleanText.trim()) {
+      cleanText = `✨ *Research Studio Canvas updated.*`;
+    }
     return { cleanText };
   }
 }

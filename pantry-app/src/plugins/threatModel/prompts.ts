@@ -207,20 +207,30 @@ export function parseThreatModelOutput(
     if (patch.scope) nextState.scope = patch.scope;
     if (patch.dfdMermaid) nextState.dfdMermaid = patch.dfdMermaid;
 
-    // Add components
-    if (Array.isArray(patch.addComponents) && patch.addComponents.length > 0) {
-      const existingIds = new Set(nextState.components.map(c => c.id));
-      const newComps: ThreatComponent[] = patch.addComponents
-        .filter((c: any) => c && (c.name || c.id))
-        .map((c: any, idx: number) => ({
-          id: c.id || `comp-${Date.now()}-${idx}`,
-          name: c.name || 'New Component',
-          type: c.type || 'process',
-          trustBoundary: c.trustBoundary || 'Internal Trust Zone',
-          techStack: c.techStack || 'Standard',
-          description: c.description || '',
-        }))
-        .filter((c: ThreatComponent) => !existingIds.has(c.id));
+    // Add components (flexible aliases)
+    const rawComponents = patch.addComponents || patch.components || patch.newComponents;
+    const compsList = Array.isArray(rawComponents) ? rawComponents : (rawComponents && typeof rawComponents === 'object' ? [rawComponents] : []);
+    const existingIds = new Set(nextState.components.map(c => c.id));
+    const newComps: ThreatComponent[] = [];
+
+    for (let idx = 0; idx < compsList.length; idx++) {
+      const c = compsList[idx];
+      if (!c) continue;
+      const compName = typeof c === 'string' ? c : (c.name || c.title || 'New Component');
+      const id = (typeof c === 'object' && c.id) ? c.id : `comp-${Date.now()}-${idx}`;
+      if (!existingIds.has(id)) {
+        existingIds.add(id);
+        newComps.push({
+          id,
+          name: compName,
+          type: (typeof c === 'object' && c.type) ? c.type : 'process',
+          trustBoundary: (typeof c === 'object' && c.trustBoundary) ? c.trustBoundary : 'Internal Trust Zone',
+          techStack: (typeof c === 'object' && (c.techStack || c.tech || c.technology)) ? (c.techStack || c.tech || c.technology) : 'Standard',
+          description: (typeof c === 'object' && c.description) ? c.description : '',
+        });
+      }
+    }
+    if (newComps.length > 0) {
       nextState.components = [...nextState.components, ...newComps];
     }
 
@@ -233,47 +243,47 @@ export function parseThreatModelOutput(
       });
     }
 
-    // Add threats
-    if (Array.isArray(patch.addThreats) && patch.addThreats.length > 0) {
-      const existingThreatIds = new Set(nextState.threats.map(t => t.id));
-      const formattedThreats: ThreatItem[] = [];
+    // Add threats (flexible aliases)
+    const rawThreats = patch.addThreats || patch.threats || patch.newThreats;
+    const threatsList = Array.isArray(rawThreats) ? rawThreats : (rawThreats && typeof rawThreats === 'object' ? [rawThreats] : []);
+    const existingThreatIds = new Set(nextState.threats.map(t => t.id));
+    const formattedThreats: ThreatItem[] = [];
 
-      for (const t of patch.addThreats) {
-        if (!t || typeof t !== 'object') continue;
-        let id = t.id;
-        if (!id || existingThreatIds.has(id)) {
-          id = `TM-${String(nextState.threats.length + formattedThreats.length + 1).padStart(2, '0')}`;
+    for (const t of threatsList) {
+      if (!t || typeof t !== 'object') continue;
+      let id = t.id;
+      if (!id || existingThreatIds.has(id)) {
+        id = `TM-${String(nextState.threats.length + formattedThreats.length + 1).padStart(2, '0')}`;
+      }
+      existingThreatIds.add(id);
+
+      let compId = t.componentId || t.component_id || t.component || 'system';
+      let componentName = t.componentName || t.component_name;
+      if (!componentName && compId) {
+        const comp = nextState.components.find(c => c.id === compId || c.name.toLowerCase() === compId.toLowerCase());
+        if (comp) {
+          componentName = comp.name;
+          compId = comp.id;
         }
-        existingThreatIds.add(id);
-
-        let compId = t.componentId || 'system';
-        let componentName = t.componentName;
-        if (!componentName && compId) {
-          const comp = nextState.components.find(c => c.id === compId || c.name.toLowerCase() === compId.toLowerCase());
-          if (comp) {
-            componentName = comp.name;
-            compId = comp.id;
-          }
-        }
-
-        formattedThreats.push({
-          id,
-          componentId: compId,
-          componentName: componentName || 'General Architecture',
-          category: t.category || 'Threat Analysis',
-          threatActor: t.threatActor || 'Adversary / Threat Actor',
-          attackVector: t.attackVector || t.vector || 'Targeted Exploitation',
-          description: t.description || `${t.threatActor || 'Adversary'} targeting ${componentName || compId}`,
-          impact: t.impact || 'Service disruption or data exposure',
-          severity: t.severity || 'High',
-          mitigation: t.mitigation || 'Implement defense-in-depth controls',
-          status: t.status || 'Open',
-        });
       }
 
-      if (formattedThreats.length > 0) {
-        nextState.threats = [...nextState.threats, ...formattedThreats];
-      }
+      formattedThreats.push({
+        id,
+        componentId: compId,
+        componentName: componentName || 'General Architecture',
+        category: t.category || t.strideCategory || 'Threat Analysis',
+        threatActor: t.threatActor || t.threat_actor || t.actor || 'Adversary / Threat Actor',
+        attackVector: t.attackVector || t.attack_vector || t.vector || t.title || 'Targeted Exploitation',
+        description: t.description || `${t.threatActor || 'Adversary'} targeting ${componentName || compId}`,
+        impact: t.impact || 'Service disruption or unauthorized data access',
+        severity: t.severity || 'High',
+        mitigation: t.mitigation || t.countermeasure || t.remediation || 'Implement defense-in-depth controls',
+        status: t.status || 'Open',
+      });
+    }
+
+    if (formattedThreats.length > 0) {
+      nextState.threats = [...nextState.threats, ...formattedThreats];
     }
 
     // Update stages
@@ -292,9 +302,26 @@ export function parseThreatModelOutput(
       });
     }
 
+    // Ensure cleanText is never empty
+    if (!cleanText.trim()) {
+      const summaryItems: string[] = [];
+      if (formattedThreats.length > 0) {
+        summaryItems.push(`🛡️ **Security Findings Identified (${formattedThreats.length})**:\n` + formattedThreats.map(t => `- **[${t.severity}] ${t.threatActor}**: ${t.attackVector} -> *${t.mitigation}*`).join('\n'));
+      }
+      if (newComps.length > 0) {
+        summaryItems.push(`⚙️ **Registered Components (${newComps.length})**:\n` + newComps.map(c => `- **${c.name}** (${c.type} • ${c.techStack})`).join('\n'));
+      }
+      cleanText = summaryItems.length > 0
+        ? `I have updated the **Threat Model Studio Canvas** with security analysis:\n\n${summaryItems.join('\n\n')}`
+        : `✨ *Threat Model Canvas synchronized with your latest inputs.*`;
+    }
+
     return { cleanText, updatedState: nextState };
   } catch (err) {
     console.warn('[parseThreatModelOutput] Failed to process patch JSON:', err);
+    if (!cleanText.trim()) {
+      cleanText = `✨ *Threat Model Canvas updated.*`;
+    }
     return { cleanText };
   }
 }

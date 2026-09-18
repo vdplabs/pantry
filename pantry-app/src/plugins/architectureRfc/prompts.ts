@@ -110,36 +110,38 @@ We adopt **RocksDB / LevelDB LSM-Tree** architecture with memory-mapped cache bl
 }
 
 export function buildRfcSystemPrompt(canvasState: RfcState, framework: string = 'rfc'): string {
-  const decisionsSummary = (canvasState.decisions || []).map(d =>
-    `- [${d.id}] "${d.title}" (${d.status}): Chosen: ${d.chosenOption} | Rationale: ${d.rationale}`
+  const decisionsSummary = (canvasState.decisions || []).slice(0, 10).map(d =>
+    `- [${d.id}] ${d.title} (${d.status}): Chosen -> ${d.chosenOption} | Tradeoffs: ${d.tradeoffs || 'None specified'}`
   ).join('\n');
 
   const invariantsSummary = (canvasState.invariants || []).map(i =>
-    `- [${i.id}] [${i.category}] ${i.statement} (${i.status})`
+    `- [${i.id}] [${i.category}] (${i.status}): ${i.statement}`
   ).join('\n');
 
-  return `You are a Principal Software Architect collaborating with the user in Pantry's **Architecture RFC & Design Doc Studio**.
+  return `You are a Principal Enterprise Architect and Systems Designer collaborating with the user in Pantry's **Architecture RFC Studio**.
 
-CURRENT RFC DESIGN CANVAS:
-- **RFC Title**: ${canvasState.title || 'Architecture RFC'}
+CURRENT RFC DESIGN STATE:
+- **Title**: ${canvasState.title || 'System Architecture RFC'}
 - **Status**: ${canvasState.status || 'Draft'}
-- **Scope**: ${canvasState.scope || 'System Architecture'}
-- **Key Architecture Decisions (${(canvasState.decisions || []).length})**:
+- **Scope**: ${canvasState.scope || 'Platform Architecture'}
+- **Key Decisions (ADRs)**:
 ${decisionsSummary || 'None registered.'}
-- **System Invariants (${(canvasState.invariants || []).length})**:
+- **System Invariants & Non-negotiables**:
 ${invariantsSummary || 'None recorded.'}
 
 RESPONSE GUIDELINES:
 1. Provide deep, professional software architecture reasoning (tradeoffs, failure modes, data invariants, and operational patterns).
 2. Challenge weak assumptions constructively and suggest concrete alternative designs.
-3. Whenever you formulate a new architecture decision, identify a critical system invariant, or update the RFC document or diagrams, append a compact JSON block using \`\`\`rfc_patch.
+3. Always write your detailed architectural analysis in Markdown first.
+4. At the end of your response, output a compact \`\`\`rfc_patch JSON block to synchronize the canvas with the latest RFC title, decisions, or system invariants.
 
-COMPACT PATCH FORMAT (include only new or updated items):
+COMPACT PATCH FORMAT:
 \`\`\`rfc_patch
 {
+  "title": "Distributed Task Queue & Event Pipeline",
+  "scope": "High-throughput asynchronous processing with exactly-once delivery guarantees",
   "addDecisions": [
     {
-      "id": "ADR-02",
       "title": "Idempotency Key Strategy",
       "status": "Approved",
       "chosenOption": "Client-generated UUIDv7 with Redis deduplication window",
@@ -148,13 +150,13 @@ COMPACT PATCH FORMAT (include only new or updated items):
   ],
   "addInvariants": [
     {
-      "statement": "State machine transitions must be strictly linear and validated against the schema.",
+      "statement": "State machine transitions must be strictly linear and validated against schema.",
       "category": "Correctness"
     }
   ]
 }
 \`\`\`
-Keep the JSON patch concise (1 to 2 items) so responses remain fast and complete.`;
+Always provide your written analysis in normal markdown before the patch.`;
 }
 
 function tryRepairJson(jsonStr: string): any {
@@ -196,8 +198,8 @@ export function parseRfcOutput(
 ): { cleanText: string; updatedState?: RfcState } {
   if (!rawText) return { cleanText: rawText };
 
-  const closedRegex = /```rfc_patch\s*([\s\S]*?)\s*```/;
-  const openRegex = /```rfc_patch\s*([\s\S]*)$/;
+  const closedRegex = /```(?:rfc_patch|json)\s*([\s\S]*?)\s*```/;
+  const openRegex = /```(?:rfc_patch|json)\s*([\s\S]*)$/;
 
   let patchJsonStr = '';
   let cleanText = rawText;
@@ -218,7 +220,7 @@ export function parseRfcOutput(
 
   try {
     const patch = tryRepairJson(patchJsonStr);
-    if (!patch) {
+    if (!patch || typeof patch !== 'object') {
       console.warn('[parseRfcOutput] Failed to parse RFC patch JSON');
       return { cleanText };
     }
@@ -228,71 +230,144 @@ export function parseRfcOutput(
       updatedAt: new Date().toISOString(),
     };
 
-    if (patch.title) nextState.title = patch.title;
-    if (patch.status) nextState.status = patch.status;
-    if (patch.scope) nextState.scope = patch.scope;
-    if (patch.rfcMarkdown) nextState.rfcMarkdown = patch.rfcMarkdown;
-    if (patch.diagramMermaid) nextState.diagramMermaid = patch.diagramMermaid;
+    const newTitle = patch.title || patch.topicTitle || patch.name || patch.topic || patch.subject;
+    if (newTitle && typeof newTitle === 'string') {
+      nextState.title = newTitle;
+    }
+
+    if (patch.status && typeof patch.status === 'string') {
+      nextState.status = patch.status as any;
+    }
+
+    const newScope = patch.scope || patch.hypothesis || patch.summary || patch.context || patch.objective;
+    if (newScope && typeof newScope === 'string') {
+      nextState.scope = newScope;
+    }
+
+    const newDoc = patch.rfcMarkdown || patch.documentMarkdown || patch.document || patch.doc || patch.markdown || patch.content;
+    if (newDoc && typeof newDoc === 'string') {
+      nextState.rfcMarkdown = newDoc;
+    } else if (newTitle && currentState.rfcMarkdown.startsWith('# RFC:')) {
+      nextState.rfcMarkdown = `# RFC: ${newTitle}\n\n## 1. Context and Problem Statement\n${nextState.scope || 'Define the architectural motivation and objectives.'}\n\n## 2. Goals & Non-Goals\n- **Goals**: Deliver robust, scalable architecture with clear invariants.\n- **Non-Goals**: Scope creep outside core system requirements.\n\n## 3. Proposed Architecture & System Boundaries\n*Refer to C4 Topology diagram in Studio Canvas.*\n\n## 4. Key Architectural Decisions (ADRs)\n*Refer to ADR register table in Studio Canvas.*\n\n## 5. System Invariants & SLIs\n*Refer to Invariants tracker.*\n\n## 6. Migration, Rollout & Rollback Strategy\n- Phase 1: Canary verification\n- Phase 2: Production traffic rollout\n`;
+    }
+
+    const newDiagram = patch.diagramMermaid || patch.diagram || patch.mermaid || patch.c4Diagram;
+    if (newDiagram && typeof newDiagram === 'string') {
+      nextState.diagramMermaid = newDiagram;
+    }
 
     // Add decisions
-    if (Array.isArray(patch.addDecisions) && patch.addDecisions.length > 0) {
-      const existingIds = new Set(nextState.decisions.map(d => d.id));
-      const newDecisions: RfcDecision[] = [];
+    const rawDecisions = patch.addDecisions || patch.decisions || patch.newDecisions || patch.adrs;
+    const decisionsList = Array.isArray(rawDecisions) ? rawDecisions : (rawDecisions && typeof rawDecisions === 'object' ? [rawDecisions] : []);
+    const existingIds = new Set(nextState.decisions.map(d => d.id));
+    const newDecisions: RfcDecision[] = [];
 
-      for (const d of patch.addDecisions) {
-        if (!d || typeof d !== 'object') continue;
-        let id = d.id;
-        if (!id || existingIds.has(id)) {
-          id = `ADR-${String(nextState.decisions.length + newDecisions.length + 1).padStart(2, '0')}`;
-        }
+    for (const d of decisionsList) {
+      if (!d) continue;
+      if (typeof d === 'string') {
+        const id = `ADR-${String(nextState.decisions.length + newDecisions.length + 1).padStart(2, '0')}`;
         existingIds.add(id);
-
         newDecisions.push({
           id,
-          title: d.title || 'Architecture Decision',
-          status: d.status || 'Approved',
-          context: d.context || 'Decision context',
-          chosenOption: d.chosenOption || d.decision || 'Adopted approach',
-          alternativesConsidered: d.alternativesConsidered || d.alternatives,
-          rationale: d.rationale || 'Architectural rationale',
-          tradeoffs: d.tradeoffs || '',
+          title: d,
+          status: 'Approved',
+          context: 'Architectural requirement',
+          chosenOption: d,
+          rationale: 'Standard pattern for target requirements',
+          tradeoffs: '',
         });
+        continue;
       }
+      if (typeof d !== 'object') continue;
 
-      if (newDecisions.length > 0) {
-        nextState.decisions = [...nextState.decisions, ...newDecisions];
+      let id = d.id;
+      if (!id || existingIds.has(id)) {
+        id = `ADR-${String(nextState.decisions.length + newDecisions.length + 1).padStart(2, '0')}`;
       }
+      existingIds.add(id);
+
+      newDecisions.push({
+        id,
+        title: d.title || d.name || d.decision || 'Architecture Decision',
+        status: d.status || 'Approved',
+        context: d.context || d.description || d.background || 'Decision context',
+        chosenOption: d.chosenOption || d.decision || d.approach || 'Adopted approach',
+        alternativesConsidered: d.alternativesConsidered || d.alternatives,
+        rationale: d.rationale || d.reason || 'Architectural rationale',
+        tradeoffs: d.tradeoffs || d.consequences || '',
+      });
+    }
+
+    if (newDecisions.length > 0) {
+      nextState.decisions = [...nextState.decisions, ...newDecisions];
     }
 
     // Add invariants
-    if (Array.isArray(patch.addInvariants) && patch.addInvariants.length > 0) {
-      const existingInvIds = new Set(nextState.invariants.map(i => i.id));
-      const newInvariants: RfcInvariant[] = [];
+    const rawInvariants = patch.addInvariants || patch.invariants || patch.rules || patch.constraints;
+    const invariantsList = Array.isArray(rawInvariants) ? rawInvariants : (rawInvariants && typeof rawInvariants === 'object' ? [rawInvariants] : []);
+    const existingInvIds = new Set(nextState.invariants.map(i => i.id));
+    const newInvariants: RfcInvariant[] = [];
 
-      for (const inv of patch.addInvariants) {
-        if (!inv || typeof inv !== 'object') continue;
-        let id = inv.id;
-        if (!id || existingInvIds.has(id)) {
-          id = `INV-${String(nextState.invariants.length + newInvariants.length + 1).padStart(2, '0')}`;
-        }
+    for (const inv of invariantsList) {
+      if (!inv) continue;
+      if (typeof inv === 'string') {
+        const id = `INV-${String(nextState.invariants.length + newInvariants.length + 1).padStart(2, '0')}`;
         existingInvIds.add(id);
-
         newInvariants.push({
           id,
-          statement: inv.statement || inv.text || 'System Invariant requirement',
-          category: inv.category || 'Correctness',
-          status: inv.status || 'Enforced',
+          statement: inv,
+          category: 'Correctness',
+          status: 'Enforced',
         });
+        continue;
+      }
+      if (typeof inv !== 'object') continue;
+
+      let id = inv.id;
+      if (!id || existingInvIds.has(id)) {
+        id = `INV-${String(nextState.invariants.length + newInvariants.length + 1).padStart(2, '0')}`;
+      }
+      existingInvIds.add(id);
+
+      newInvariants.push({
+        id,
+        statement: inv.statement || inv.text || inv.rule || inv.constraint || 'System Invariant requirement',
+        category: inv.category || inv.type || 'Correctness',
+        status: inv.status || 'Enforced',
+      });
+    }
+
+    if (newInvariants.length > 0) {
+      nextState.invariants = [...nextState.invariants, ...newInvariants];
+    }
+
+    // Ensure cleanText is never empty
+    if (!cleanText.trim()) {
+      const summaryItems: string[] = [];
+      if (newTitle) {
+        summaryItems.push(`📐 **RFC Title**: ${newTitle}`);
+      }
+      if (newScope) {
+        summaryItems.push(`🎯 **Scope**: ${newScope}`);
+      }
+      if (newDecisions.length > 0) {
+        summaryItems.push(`⚖️ **Architectural Decisions (${newDecisions.length})**:\n` + newDecisions.map(d => `- **${d.title}** (${d.status}): ${d.chosenOption}`).join('\n'));
+      }
+      if (newInvariants.length > 0) {
+        summaryItems.push(`🛡️ **System Invariants (${newInvariants.length})**:\n` + newInvariants.map(i => `- [${i.category}] ${i.statement}`).join('\n'));
       }
 
-      if (newInvariants.length > 0) {
-        nextState.invariants = [...nextState.invariants, ...newInvariants];
-      }
+      cleanText = summaryItems.length > 0
+        ? `I have updated the **Architecture RFC Canvas** with your specifications:\n\n${summaryItems.join('\n\n')}\n\n*Review the decisions and invariants on the canvas or ask questions to refine the design.*`
+        : `✨ *Architecture RFC Canvas synchronized with your latest inputs.*`;
     }
 
     return { cleanText, updatedState: nextState };
   } catch (err) {
     console.warn('[parseRfcOutput] Failed to process RFC patch:', err);
+    if (!cleanText.trim()) {
+      cleanText = `✨ *Architecture RFC Canvas updated.*`;
+    }
     return { cleanText };
   }
 }

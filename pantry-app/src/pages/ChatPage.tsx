@@ -259,8 +259,9 @@ export default function ChatPage() {
           const tps = completionTokens > 0 ? completionTokens / duration_s : undefined;
 
           let finalAssistantContent = result.content || currentStreamContent;
-          if (plugin && currentConv?.canvas_state) {
-            const parsed = plugin.parseModelOutput(finalAssistantContent, currentConv.canvas_state);
+          if (plugin) {
+            const baseState = currentConv?.canvas_state || plugin.getInitialState(currentConv?.plugin_framework || plugin.defaultFramework);
+            const parsed = plugin.parseModelOutput(finalAssistantContent, baseState);
             finalAssistantContent = parsed.cleanText;
             if (parsed.updatedState) {
               updateCanvasState(parsed.updatedState);
