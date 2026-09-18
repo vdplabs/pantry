@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import mermaid from 'mermaid';
+import hljs from 'highlight.js';
 import {
   FiZoomIn, FiZoomOut, FiMaximize2, FiDownload, FiCopy, FiCheck,
   FiRefreshCw, FiCode, FiEye, FiSliders, FiSidebar, FiZap, FiAlertCircle
@@ -329,7 +330,22 @@ function MermaidViewerComponent({ code, onOpenCanvas, inline = true }: Props) {
         </div>
       ) : (
         <pre className="mermaid-code-view">
-          <code>{code}</code>
+          <code
+            className="hljs language-mermaid"
+            dangerouslySetInnerHTML={{
+              __html: (() => {
+                try {
+                  const validLang = hljs.getLanguage('mermaid') ? 'mermaid' : null;
+                  if (validLang) {
+                    return hljs.highlight(code, { language: 'mermaid', ignoreIllegals: true }).value;
+                  }
+                  return hljs.highlightAuto(code).value || code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                } catch {
+                  return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                }
+              })(),
+            }}
+          />
         </pre>
       )}
     </div>

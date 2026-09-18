@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import hljs from 'highlight.js';
 import {
   FiMonitor, FiTablet, FiSmartphone, FiRefreshCw, FiCopy,
   FiCheck, FiCode, FiEye, FiDownload, FiSidebar, FiMaximize2
@@ -215,7 +216,23 @@ export default function LiveHtmlPreview({ code, language = 'html', onOpenCanvas,
         </div>
       ) : (
         <pre className="mermaid-code-view">
-          <code>{code}</code>
+          <code
+            className={`hljs language-${language || 'html'}`}
+            dangerouslySetInnerHTML={{
+              __html: (() => {
+                try {
+                  const targetLang = isSvg ? 'xml' : 'html';
+                  const validLang = hljs.getLanguage(targetLang) ? targetLang : null;
+                  if (validLang) {
+                    return hljs.highlight(code, { language: validLang, ignoreIllegals: true }).value;
+                  }
+                  return hljs.highlightAuto(code).value || code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                } catch {
+                  return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                }
+              })(),
+            }}
+          />
         </pre>
       )}
     </div>

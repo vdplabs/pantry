@@ -21,10 +21,32 @@ interface ContentBlock {
   isClosed?: boolean;
 }
 
+marked.use({
+  gfm: true,
+  breaks: true,
+  renderer: {
+    code({ text, lang }: { text: string; lang?: string }) {
+      const cleanLang = (lang || '').trim().toLowerCase();
+      const validLang = cleanLang && hljs.getLanguage(cleanLang) ? cleanLang : null;
+      let highlighted = '';
+      try {
+        if (validLang) {
+          highlighted = hljs.highlight(text, { language: validLang, ignoreIllegals: true }).value;
+        } else {
+          highlighted = hljs.highlightAuto(text).value || text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        }
+      } catch {
+        highlighted = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      }
+      return `<div class="code-block-wrapper"><div class="code-block-header"><span class="code-lang">${cleanLang || 'code'}</span></div><pre><code class="hljs language-${validLang || 'plaintext'}">${highlighted}</code></pre></div>`;
+    }
+  }
+});
+
 function parseMarkdownBlocks(text: string, isStreaming = false): ContentBlock[] {
   if (!text) return [];
   const blocks: ContentBlock[] = [];
-  const regex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+  const regex = /```([a-zA-Z0-9_#+.-]*)[^\n\r]*[\r\n]+([\s\S]*?)```/g;
   let lastIndex = 0;
   let match: RegExpExecArray | null;
   let blockIdx = 0;
@@ -52,23 +74,19 @@ function parseMarkdownBlocks(text: string, isStreaming = false): ContentBlock[] 
 
   if (lastIndex < text.length) {
     const remaining = text.slice(lastIndex);
-    if (isStreaming) {
-      const openCodeMatch = remaining.match(/```([a-zA-Z0-9_-]*)\n([\s\S]*)$/);
-      if (openCodeMatch && openCodeMatch.index !== undefined) {
-        const pre = remaining.slice(0, openCodeMatch.index);
-        if (pre) {
-          blocks.push({ id: `md-${blockIdx++}`, type: 'markdown', content: pre });
-        }
-        blocks.push({
-          id: `streaming-code-${blockIdx++}`,
-          type: 'code',
-          language: (openCodeMatch[1] || '').trim().toLowerCase(),
-          content: openCodeMatch[2] || '',
-          isClosed: false,
-        });
-      } else {
-        blocks.push({ id: `md-${blockIdx++}`, type: 'markdown', content: remaining });
+    const openCodeMatch = remaining.match(/```([a-zA-Z0-9_#+.-]*)[^\n\r]*[\r\n]+([\s\S]*)$/);
+    if (openCodeMatch && openCodeMatch.index !== undefined) {
+      const pre = remaining.slice(0, openCodeMatch.index);
+      if (pre) {
+        blocks.push({ id: `md-${blockIdx++}`, type: 'markdown', content: pre });
       }
+      blocks.push({
+        id: `code-${blockIdx++}`,
+        type: 'code',
+        language: (openCodeMatch[1] || '').trim().toLowerCase(),
+        content: openCodeMatch[2] || '',
+        isClosed: !isStreaming,
+      });
     } else {
       blocks.push({ id: `md-${blockIdx++}`, type: 'markdown', content: remaining });
     }
