@@ -1,5 +1,36 @@
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap');
 
+@font-face {
+font-family: 'Myriad Web Pro';
+font-style: normal;
+font-weight: normal;
+src: local('Myriad Web Pro'), url('assets/fonts/Myriad Web Pro.woff') format('woff');
+}
+
+
+@font-face {
+font-family: 'Myriad Web Pro';
+font-style: normal;
+font-weight: normal;
+src: local('Myriad Web Pro'), url('assets/fonts/myriad-web-pro.woff') format('woff');
+}
+
+
+@font-face {
+font-family: 'MyriadWebPro-Bold';
+font-style: normal;
+font-weight: normal;
+src: local('MyriadWebPro-Bold'), url('assets/fonts/myriadwebpro-bold.woff') format('woff');
+}
+
+
+@font-face {
+font-family: 'MyriadWebPro-CondensedItalic';
+font-style: normal;
+font-weight: normal;
+src: local('MyriadWebPro-CondensedItalic'), url('assets/fonts/myriadwebpro-condenseditalic.woff') format('woff');
+}
+
 :root {
   --bg-app: #080c14;
   --bg-sidebar: #0d121f;
@@ -49,7 +80,7 @@
   --radius-sm: 6px;
   --radius-full: 9999px;
 
-  --font: 'Myriad Pro', 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font: 'Myriad Web Pro', 'Outfit', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --mono: 'JetBrains Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
@@ -4098,6 +4129,174 @@ pre code.hljs {
   gap: 10px;
   padding-top: 6px;
   border-top: 1px dashed rgba(99, 102, 241, 0.2);
+}
+
+/* Research & RFC Living Document Editor & Rendered View */
+.research-doc-content-wrap {
+  display: flex;
+  flex-direction: column;
+  min-height: 480px;
+  background: #060911;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  overflow: hidden;
+}
+
+.research-doc-editor {
+  width: 100%;
+  min-height: 520px;
+  padding: 20px;
+  background: #060911;
+  color: #f1f5f9;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  border: none;
+  outline: none;
+  resize: vertical;
+  tab-size: 2;
+  box-sizing: border-box;
+}
+
+.research-doc-rendered {
+  padding: 24px 28px;
+  color: #e2e8f0;
+  font-size: 14px;
+  line-height: 1.7;
+  overflow-y: auto;
+  max-height: 700px;
+}
+
+.research-doc-rendered h1,
+.research-doc-rendered h2,
+.research-doc-rendered h3 {
+  color: #ffffff;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 6px;
+  margin-top: 24px;
+  margin-bottom: 12px;
+}
+
+.research-doc-rendered table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0;
+}
+
+.research-doc-rendered th,
+.research-doc-rendered td {
+  border: 1px solid #1e293b;
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.research-doc-rendered th {
+  background: #0f172a;
+  color: #38bdf8;
+  font-weight: 700;
+}
+
+/* Research Questions & Topics Cards */
+.research-questions-view {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.research-questions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.research-q-card {
+  background: #0c1220;
+  border: 1px solid #1e293b;
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: all 0.15s ease;
+}
+
+.research-q-card.resolved {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: rgba(16, 185, 129, 0.03);
+}
+
+.research-q-card.investigating {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: rgba(245, 158, 11, 0.03);
+}
+
+.research-q-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.research-q-num {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-full);
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  font-weight: 800;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.research-q-text {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.research-q-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.research-q-findings {
+  background: rgba(56, 189, 248, 0.06);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: var(--radius-md);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: #e2e8f0;
+}
+
+.research-q-findings .findings-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #38bdf8;
+  margin-bottom: 4px;
+}
+
+.research-q-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.studio-menu-plugin-group {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+
+.studio-menu-plugin-group:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
 }
 
 

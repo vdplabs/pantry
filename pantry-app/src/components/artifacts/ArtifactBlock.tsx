@@ -15,7 +15,13 @@ function ArtifactBlockComponent({ code, language = '', isClosed = true, onOpenCa
   const [copied, setCopied] = useState(false);
   const cleanLang = (language || '').trim().toLowerCase();
 
-  if (cleanLang === 'threat_model_patch') {
+  if (cleanLang === 'threat_model_patch' || cleanLang === 'research_patch' || cleanLang === 'rfc_patch') {
+    const isResearch = cleanLang === 'research_patch';
+    const isRfc = cleanLang === 'rfc_patch';
+    const icon = isResearch ? '🔬' : isRfc ? '📐' : '🛡️';
+    const title = isResearch ? 'Research Studio Canvas Synchronized' : isRfc ? 'Architecture RFC Canvas Synchronized' : 'Threat Model Studio Canvas Synchronized';
+    const accentColor = isResearch ? '#38bdf8' : isRfc ? '#c084fc' : '#60a5fa';
+
     return (
       <div
         className="threat-patch-badge-wrapper"
@@ -23,17 +29,17 @@ function ArtifactBlockComponent({ code, language = '', isClosed = true, onOpenCa
           display: 'inline-flex',
           alignItems: 'center',
           gap: '8px',
-          background: 'rgba(59, 130, 246, 0.1)',
-          border: '1px solid rgba(59, 130, 246, 0.25)',
+          background: isResearch ? 'rgba(56, 189, 248, 0.1)' : isRfc ? 'rgba(192, 132, 252, 0.1)' : 'rgba(59, 130, 246, 0.1)',
+          border: `1px solid ${isResearch ? 'rgba(56, 189, 248, 0.25)' : isRfc ? 'rgba(192, 132, 252, 0.25)' : 'rgba(59, 130, 246, 0.25)'}`,
           borderRadius: '8px',
           padding: '6px 12px',
           margin: '6px 0',
           fontSize: '12px',
-          color: '#60a5fa',
+          color: accentColor,
           fontWeight: 500,
         }}
       >
-        <span>🛡️ Threat Model Studio Canvas Synchronized</span>
+        <span>{icon} {title}</span>
       </div>
     );
   }

@@ -202,8 +202,14 @@ export default function ChatPage() {
           if (activeStreamingConvIdRef.current !== currentTargetConvId) return;
 
           let displayContent = currentStreamContent;
-          if (plugin && displayContent.includes('```threat_model_patch')) {
-            displayContent = displayContent.replace(/```threat_model_patch[\s\S]*$/, '✨ *Updating Threat Model Canvas...*');
+          if (plugin) {
+            if (displayContent.includes('```threat_model_patch')) {
+              displayContent = displayContent.replace(/```threat_model_patch[\s\S]*$/, '✨ *Updating Threat Model Canvas...*');
+            } else if (displayContent.includes('```research_patch')) {
+              displayContent = displayContent.replace(/```research_patch[\s\S]*$/, '✨ *Updating Research Canvas...*');
+            } else if (displayContent.includes('```rfc_patch')) {
+              displayContent = displayContent.replace(/```rfc_patch[\s\S]*$/, '✨ *Updating RFC Design Canvas...*');
+            }
           }
 
           setMessages(prev => {

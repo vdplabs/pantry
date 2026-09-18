@@ -3,6 +3,7 @@ import { FiPlus, FiMessageSquare, FiTrash2, FiEdit3, FiSearch, FiCheck, FiX, FiS
 import { useApp } from '@/context/AppContext';
 import type { Conversation } from '@/types';
 import { formatTime, getGroupLabel, getConversationTimestamp, sortConversations } from '@/utils/conversationUtils';
+import { STUDIO_PLUGINS } from '@/plugins/registry';
 
 export default function ConversationList() {
   const { conversations, activeConversationId, selectConversation, createConversation, deleteConversation, renameConversation } = useApp();
@@ -29,23 +30,23 @@ export default function ConversationList() {
       { label: 'Older', items: [] },
     ];
 
-    for (const conv of filtered) {
-      const g = getGroupLabel(getConversationTimestamp(conv));
-      const target = groups.find(grp => grp.label === g) || groups[3];
-      target.items.push(conv);
-    }
-
-    // Ensure items within each group are strictly ordered newest to oldest
-    for (const grp of groups) {
-      grp.items = sortConversations(grp.items);
-    }
+    filtered.forEach(conv => {
+      const ts = getConversationTimestamp(conv);
+      const label = getGroupLabel(ts);
+      const targetGroup = groups.find(g => g.label === label);
+      if (targetGroup) {
+        targetGroup.items.push(conv);
+      } else {
+        groups[3].items.push(conv);
+      }
+    });
 
     return groups.filter(g => g.items.length > 0);
   }, [filtered]);
 
   return (
-    <div className="conversation-list">
-      <div className="conversation-list-header">
+    <div className="conversation-list-pane">
+      <div className="conversation-pane-header">
         <button
           onClick={() => createConversation()}
           title="Start a new standard chat"
@@ -58,7 +59,7 @@ export default function ConversationList() {
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setShowStudioMenu(!showStudioMenu)}
-            title="Start a specialized Studio session (Threat Modeling, etc.)"
+            title="Start a specialized Studio session (Threat Modeling, Research, RFCs)"
             className="new-studio-btn"
           >
             <FiShield size={14} />
@@ -69,45 +70,26 @@ export default function ConversationList() {
           {showStudioMenu && (
             <div className="studio-menu-dropdown">
               <div className="studio-menu-header">Specialized Studio Canvases</div>
-              <button
-                className="studio-menu-item"
-                onClick={() => {
-                  createConversation('Threat Model (PASTA)', 'threat-model', 'PASTA');
-                  setShowStudioMenu(false);
-                }}
-              >
-                <div className="menu-item-icon">🛡️</div>
-                <div className="menu-item-info">
-                  <div className="menu-item-title">PASTA Threat Modeling</div>
-                  <div className="menu-item-desc">Risk-centric 7-stage architecture analysis</div>
+              {STUDIO_PLUGINS.map(plugin => (
+                <div key={plugin.id} className="studio-menu-plugin-group">
+                  {(plugin.frameworks || [{ id: plugin.defaultFramework || 'default', name: plugin.name, description: plugin.description }]).map(fw => (
+                    <button
+                      key={fw.id}
+                      className="studio-menu-item"
+                      onClick={() => {
+                        createConversation(`${plugin.shortName || plugin.name} (${fw.name})`, plugin.id, fw.id);
+                        setShowStudioMenu(false);
+                      }}
+                    >
+                      <div className="menu-item-icon">{plugin.icon}</div>
+                      <div className="menu-item-info">
+                        <div className="menu-item-title">{fw.name}</div>
+                        <div className="menu-item-desc">{fw.description}</div>
+                      </div>
+                    </button>
+                  ))}
                 </div>
-              </button>
-              <button
-                className="studio-menu-item"
-                onClick={() => {
-                  createConversation('Threat Model (STRIDE)', 'threat-model', 'STRIDE');
-                  setShowStudioMenu(false);
-                }}
-              >
-                <div className="menu-item-icon">🔍</div>
-                <div className="menu-item-info">
-                  <div className="menu-item-title">STRIDE Matrix Studio</div>
-                  <div className="menu-item-desc">Asset & trust boundary threat breakdown</div>
-                </div>
-              </button>
-              <button
-                className="studio-menu-item"
-                onClick={() => {
-                  createConversation('Threat Model (MAESTRO)', 'threat-model', 'MAESTRO');
-                  setShowStudioMenu(false);
-                }}
-              >
-                <div className="menu-item-icon">🤖</div>
-                <div className="menu-item-info">
-                  <div className="menu-item-title">MAESTRO Agentic Security</div>
-                  <div className="menu-item-desc">LLM agent, prompt injection & tool analysis</div>
-                </div>
-              </button>
+              ))}
             </div>
           )}
         </div>
