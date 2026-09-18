@@ -347,6 +347,10 @@ export default function ChatPage() {
     }
   };
 
+  const handleContinue = () => {
+    sendMessage('Please continue generating from exactly where you stopped.');
+  };
+
   return (
     <div className={`chat-page-container ${activeArtifact ? 'with-canvas-workbench' : ''}`}>
       <div className="chat-main-area">
@@ -496,6 +500,7 @@ export default function ChatPage() {
                 message={msg}
                 isStreaming={state.isStreaming && idx === state.messages.length - 1}
                 onRetry={idx === state.messages.length - 1 ? handleRetry : undefined}
+                onContinue={idx === state.messages.length - 1 ? handleContinue : undefined}
                 onOpenCanvas={(code, type) => {
                   setActiveArtifact({
                     id: Date.now().toString(),

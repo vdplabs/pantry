@@ -79,7 +79,7 @@ const defaultState: AppState = {
   modality: 'chat',
   models: [],
   temperature: 0.7,
-  maxTokens: 1024,
+  maxTokens: 2048,
   topP: 1.0,
   systemPrompt: 'You are a helpful and concise AI assistant powered by Pantry, a local model host.',
   streamEnabled: true,

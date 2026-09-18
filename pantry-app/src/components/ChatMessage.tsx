@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiCpu, FiTerminal, FiZap, FiUser, FiRefreshCw } from 'react-icons/fi';
+import { FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiCpu, FiTerminal, FiZap, FiUser, FiRefreshCw, FiPlay } from 'react-icons/fi';
 import type { Message, MessageContent, ToolCall } from '@/types';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
@@ -10,6 +10,7 @@ interface Props {
   message: Message;
   isStreaming?: boolean;
   onRetry?: () => void;
+  onContinue?: () => void;
   onOpenCanvas?: (code: string, type: string) => void;
 }
 
@@ -138,7 +139,7 @@ const MarkdownSegment = React.memo(function MarkdownSegment({ content }: { conte
   );
 });
 
-function ChatMessageComponent({ message, isStreaming, onRetry, onOpenCanvas }: Props) {
+function ChatMessageComponent({ message, isStreaming, onRetry, onContinue, onOpenCanvas }: Props) {
   const [copied, setCopied] = useState(false);
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(true);
@@ -146,6 +147,7 @@ function ChatMessageComponent({ message, isStreaming, onRetry, onOpenCanvas }: P
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system' || message.role === 'developer';
   const isTool = message.role === 'tool';
+  const isTruncated = message.meta?.finish_reason === 'length';
 
   let rawText = '';
   let images: string[] = [];
@@ -294,6 +296,14 @@ function ChatMessageComponent({ message, isStreaming, onRetry, onOpenCanvas }: P
               {copied ? <FiCheck size={12} className="copied" /> : <FiCopy size={12} />}
               <span>{copied ? 'Copied' : 'Copy'}</span>
             </button>
+
+            {onContinue && isTruncated && (
+              <button onClick={onContinue} className="chat-action-btn continue-btn" title="Continue generation from where it stopped">
+                <FiPlay size={12} />
+                <span>Continue</span>
+              </button>
+            )}
+
             {onRetry && (
               <button onClick={onRetry} className="chat-action-btn" title="Retry generation">
                 <FiRefreshCw size={12} />
@@ -302,8 +312,13 @@ function ChatMessageComponent({ message, isStreaming, onRetry, onOpenCanvas }: P
             )}
 
             {/* Response Metadata Badges */}
-            {(message.token_stats || message.meta || message.model) && (
+            {(message.token_stats || message.meta || message.model || isTruncated) && (
               <div className="chat-meta-group">
+                {isTruncated && (
+                  <span className="chat-meta-pill warning" title="Response was cut off because token limit (max_tokens) was reached">
+                    ⚠️ Truncated (max tokens)
+                  </span>
+                )}
                 {message.token_stats?.tps && (
                   <span className="chat-meta-pill highlight" title="Generation Speed">
                     ⚡ {message.token_stats.tps.toFixed(1)} tok/s
@@ -365,6 +380,7 @@ const ChatMessage = React.memo(ChatMessageComponent, (prev, next) => {
     prev.message === next.message &&
     prev.isStreaming === next.isStreaming &&
     prev.onRetry === next.onRetry &&
+    prev.onContinue === next.onContinue &&
     prev.onOpenCanvas === next.onOpenCanvas
   );
 });

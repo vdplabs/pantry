@@ -105,7 +105,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
     }
   }, [autoFocus]);
 
-  const maxTokens = state.maxTokens || 1024;
+  const maxTokens = state.maxTokens || 2048;
   const temperature = state.temperature ?? 0.7;
 
   return (
