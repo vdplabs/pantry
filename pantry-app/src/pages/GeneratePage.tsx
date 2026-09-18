@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useMemo } from 'react';
 import { FiCode, FiPlay, FiCopy, FiCheck, FiSliders, FiZap, FiRefreshCw } from 'react-icons/fi';
 import { useApp } from '@/context/AppContext';
 import { streamTextCompletion } from '@/services/streaming';
@@ -60,9 +60,36 @@ func worker(ctx context.Context, id int, jobs <-chan Job, wg *sync.WaitGroup) {
   },
 ];
 
+const CODE_LANGUAGES = [
+  { id: 'python', label: 'Python' },
+  { id: 'typescript', label: 'TypeScript' },
+  { id: 'javascript', label: 'JavaScript' },
+  { id: 'go', label: 'Go' },
+  { id: 'rust', label: 'Rust' },
+  { id: 'cpp', label: 'C++' },
+  { id: 'json', label: 'JSON' },
+  { id: 'sql', label: 'SQL' },
+  { id: 'bash', label: 'Bash' },
+];
+
+function highlightCodeSnippet(code: string, lang: string): string {
+  if (!code) return '';
+  const cleanLang = (lang || '').trim().toLowerCase();
+  const validLang = cleanLang && hljs.getLanguage(cleanLang) ? cleanLang : null;
+  try {
+    if (validLang) {
+      return hljs.highlight(code, { language: validLang, ignoreIllegals: true }).value;
+    }
+    return hljs.highlightAuto(code).value || code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  } catch {
+    return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+}
+
 export default function GeneratePage() {
   const { state } = useApp();
   const [mode, setMode] = useState<'fim' | 'raw'>('fim');
+  const [language, setLanguage] = useState<string>('python');
   const [prefix, setPrefix] = useState(CODE_PRESETS[0].prefix);
   const [suffix, setSuffix] = useState(CODE_PRESETS[0].suffix);
   const [rawPrompt, setRawPrompt] = useState('def quicksort(arr):\n    if len(arr) <= 1:\n        return arr\n');
@@ -82,6 +109,7 @@ export default function GeneratePage() {
   );
 
   const handleApplyPreset = (preset: typeof CODE_PRESETS[0]) => {
+    setLanguage(preset.language);
     setPrefix(preset.prefix);
     setSuffix(preset.suffix);
     setGeneratedText('');
@@ -144,6 +172,11 @@ export default function GeneratePage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const highlightedPrefix = useMemo(() => highlightCodeSnippet(prefix, language), [prefix, language]);
+  const highlightedSuffix = useMemo(() => highlightCodeSnippet(suffix, language), [suffix, language]);
+  const highlightedGenerated = useMemo(() => highlightCodeSnippet(generatedText, language), [generatedText, language]);
+  const highlightedRaw = useMemo(() => highlightCodeSnippet(rawPrompt, language), [rawPrompt, language]);
+
   return (
     <div className="studio-layout">
       <div className="studio-header">
@@ -188,6 +221,21 @@ export default function GeneratePage() {
               {codeModels.map(m => (
                 <option key={m.id} value={m.id}>
                   {m.id} ({m.quality_tier || 'compact'})
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-field">
+            <label className="form-label">Programming Language</label>
+            <select
+              value={language}
+              onChange={e => setLanguage(e.target.value)}
+              className="form-select"
+            >
+              {CODE_LANGUAGES.map(lang => (
+                <option key={lang.id} value={lang.id}>
+                  {lang.label}
                 </option>
               ))}
             </select>
@@ -311,6 +359,7 @@ export default function GeneratePage() {
             <div className="code-block-header" style={{ padding: '10px 16px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <span style={{ fontWeight: 700, color: 'var(--text-title)' }}>Generated Code Output</span>
+                <span className="code-lang">{language}</span>
                 {tps && (
                   <span className="chat-tps-badge">
                     ⚡ {tps.toFixed(1)} tok/s
@@ -323,21 +372,33 @@ export default function GeneratePage() {
               </button>
             </div>
 
-            <pre style={{ margin: 0, padding: '16px', background: '#090d16', color: '#f8fafc', overflowX: 'auto', fontFamily: 'var(--mono)', fontSize: '13px', lineHeight: 1.6, minHeight: '180px' }}>
-              {mode === 'fim' ? (
-                <>
-                  <span style={{ color: '#94a3b8' }}>{prefix}</span>
-                  <span style={{ color: '#38bdf8', background: 'rgba(56, 189, 248, 0.1)', fontWeight: 600 }}>
-                    {generatedText || (isGenerating ? ' ▌' : '')}
-                  </span>
-                  <span style={{ color: '#94a3b8' }}>{suffix}</span>
-                </>
-              ) : (
-                <>
-                  <span style={{ color: '#94a3b8' }}>{rawPrompt}</span>
-                  <span style={{ color: '#38bdf8' }}>{generatedText}</span>
-                </>
-              )}
+            <pre style={{ margin: 0, padding: '16px', background: '#090e18', overflowX: 'auto', fontFamily: 'var(--mono)', fontSize: '13px', lineHeight: 1.6, minHeight: '180px' }}>
+              <code className={`hljs language-${language}`} style={{ background: 'transparent' }}>
+                {mode === 'fim' ? (
+                  <>
+                    <span dangerouslySetInnerHTML={{ __html: highlightedPrefix }} />
+                    {generatedText ? (
+                      <span className="fim-insertion">
+                        <span dangerouslySetInnerHTML={{ __html: highlightedGenerated }} />
+                      </span>
+                    ) : isGenerating ? (
+                      <span className="fim-cursor" />
+                    ) : null}
+                    <span dangerouslySetInnerHTML={{ __html: highlightedSuffix }} />
+                  </>
+                ) : (
+                  <>
+                    <span dangerouslySetInnerHTML={{ __html: highlightedRaw }} />
+                    {generatedText ? (
+                      <span className="fim-insertion">
+                        <span dangerouslySetInnerHTML={{ __html: highlightedGenerated }} />
+                      </span>
+                    ) : isGenerating ? (
+                      <span className="fim-cursor" />
+                    ) : null}
+                  </>
+                )}
+              </code>
             </pre>
           </div>
         </div>
