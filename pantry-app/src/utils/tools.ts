@@ -116,9 +116,12 @@ export function executeMockTool(name: string, args: Record<string, any>): Record
       AAPL: 232.45,
       MSFT: 448.20,
       GOOG: 182.15,
+      META: 586.30,
       TSLA: 248.80,
       NVDA: 128.90,
       AMZN: 186.50,
+      BTC: 64200.0,
+      ETH: 2540.0,
     };
     const price = mockPrices[symbol] || 150.0;
     return {
@@ -126,9 +129,10 @@ export function executeMockTool(name: string, args: Record<string, any>): Record
       symbol,
       price,
       currency: 'USD',
-      change_percent: '+1.45%',
-      volume: '42.8M',
-      market_state: 'Regular Trading',
+      change_percent: '+1.85%',
+      market_state: 'Market Closed',
+      high_today: (price * 1.02).toFixed(2),
+      low_today: (price * 0.98).toFixed(2),
       timestamp: new Date().toISOString(),
     };
   }

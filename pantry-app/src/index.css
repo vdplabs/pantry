@@ -1447,6 +1447,52 @@ pre code.hljs {
   overflow-x: auto;
 }
 
+.chat-tool-result-container {
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: var(--radius-md);
+  background: rgba(16, 185, 129, 0.03);
+  overflow: hidden;
+  margin-top: 4px;
+}
+
+.chat-tool-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: rgba(16, 185, 129, 0.06);
+  border-bottom: 1px solid rgba(16, 185, 129, 0.15);
+}
+
+.tool-name-badge code {
+  color: var(--accent-emerald);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.tool-status-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+
+.tool-status-badge.success {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent-emerald);
+}
+
+.chat-tool-result-body {
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #cbd5e1;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
 /* Chat Message Action Buttons */
 .chat-message-actions {
   display: flex;

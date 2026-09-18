@@ -11,7 +11,7 @@ import type { Message, ModelInfo, MessageContent, ToolCall } from '@/types';
 import { streamChat } from '@/services/streaming';
 import api from '@/services/api';
 import { getPluginById } from '@/plugins/registry';
-import { PRESET_TOOLS } from '@/utils/tools';
+import { PRESET_TOOLS, executeMockTool } from '@/utils/tools';
 
 const SYSTEM_PROMPTS = [
   { id: 'default', label: 'Default Assistant', prompt: 'You are a helpful, accurate, and concise AI assistant.' },
@@ -298,6 +298,169 @@ export default function ChatPage() {
             if (parsed.updatedState) {
               updateCanvasState(parsed.updatedState);
             }
+          }
+
+          // If tool calls were generated and we are in regular chat, automatically execute tools & run follow-up completion!
+          if (result.toolCalls && result.toolCalls.length > 0 && !plugin) {
+            const toolAssistantMsg: Message = {
+              role: 'assistant',
+              content: finalAssistantContent,
+              reasoning_content: result.reasoningContent || currentReasoning || undefined,
+              tool_calls: result.toolCalls,
+              model: result.model || state.model,
+              meta: {
+                id: result.id,
+                model: result.model || state.model,
+                finish_reason: result.finishReason,
+                speculative: result.speculative,
+                draft_package_id: result.draftPackageId,
+                created: result.created ? (result.created < 1e11 ? result.created * 1000 : result.created) : Date.now(),
+              },
+              token_stats: {
+                tps,
+                duration_s,
+                total_tokens: totalTokens,
+                prompt_tokens: promptTokens,
+                completion_tokens: completionTokens,
+                cached_tokens: cachedTokens,
+              },
+            };
+
+            // Execute mock tools
+            const toolResultMessages: Message[] = result.toolCalls.map(tc => {
+              let parsedArgs: any = {};
+              try {
+                parsedArgs = JSON.parse(tc.function.arguments);
+              } catch {
+                parsedArgs = {};
+              }
+              const output = executeMockTool(tc.function.name, parsedArgs);
+              return {
+                role: 'tool',
+                name: tc.function.name,
+                tool_call_id: tc.id,
+                content: JSON.stringify(output, null, 2),
+                meta: { created: Date.now() },
+              };
+            });
+
+            setMessages(prev => {
+              const copy = [...prev];
+              copy[copy.length - 1] = toolAssistantMsg;
+              return [...copy, ...toolResultMessages, { role: 'assistant', content: '', reasoning_content: '' }];
+            });
+
+            // Follow-up completion with tool responses
+            const followUpPayload: Message[] = [...effectiveMessages, toolAssistantMsg, ...toolResultMessages];
+
+            (async () => {
+              try {
+                const followUpRes = await api.chat(followUpPayload, {
+                  model: state.model || 'chat-compact',
+                  temperature: state.temperature ?? 0.7,
+                  max_tokens: state.maxTokens ?? 4096,
+                  top_p: state.topP ?? 1.0,
+                  stream: true,
+                  system_prompt: effectiveSystemPrompt,
+                  prefer_speculative: state.preferSpeculative,
+                });
+
+                if (!followUpRes.ok) {
+                  const errData = await followUpRes.json().catch(() => ({}));
+                  throw new Error(errData.detail || errData.error?.message || `API error (${followUpRes.status})`);
+                }
+
+                let followUpContent = '';
+                let followUpReasoning = '';
+                const followUpT0 = performance.now();
+                let followUpTokens = 0;
+
+                const followUpController = streamChat(
+                  followUpRes,
+                  (token) => {
+                    followUpTokens++;
+                    followUpContent += token;
+                    setMessages(prev => {
+                      const copy = [...prev];
+                      const idx = copy.length - 1;
+                      if (copy[idx]?.role === 'assistant') {
+                        copy[idx] = {
+                          ...copy[idx],
+                          content: followUpContent,
+                          reasoning_content: followUpReasoning || undefined,
+                        };
+                      }
+                      return copy;
+                    });
+                    if (!userScrolledUpRef.current && scrollContainerRef.current) {
+                      isAutoScrollingRef.current = true;
+                      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+                    }
+                  },
+                  (finalRes) => {
+                    setIsStreaming(false);
+                    const fDur = Math.max(0.01, (performance.now() - followUpT0) / 1000);
+                    const fComp = finalRes.usage?.completion_tokens ?? followUpTokens;
+                    setMessages(prev => {
+                      const copy = [...prev];
+                      const idx = copy.length - 1;
+                      if (copy[idx]?.role === 'assistant') {
+                        copy[idx] = {
+                          ...copy[idx],
+                          content: finalRes.content || followUpContent,
+                          reasoning_content: finalRes.reasoningContent || followUpReasoning || undefined,
+                          model: finalRes.model || state.model,
+                          meta: {
+                            id: finalRes.id,
+                            model: finalRes.model || state.model,
+                            finish_reason: finalRes.finishReason,
+                            speculative: finalRes.speculative,
+                            created: Date.now(),
+                          },
+                          token_stats: {
+                            tps: fComp > 0 ? fComp / fDur : undefined,
+                            duration_s: fDur,
+                            total_tokens: finalRes.usage?.total_tokens,
+                            prompt_tokens: finalRes.usage?.prompt_tokens,
+                            completion_tokens: fComp,
+                          },
+                        };
+                      }
+                      return copy;
+                    });
+                  },
+                  (err) => {
+                    setIsStreaming(false);
+                    setMessages(prev => {
+                      const copy = [...prev];
+                      const idx = copy.length - 1;
+                      if (copy[idx]?.role === 'assistant') {
+                        copy[idx] = {
+                          ...copy[idx],
+                          content: `⚠️ Error in tool follow-up: ${err.message || String(err)}`,
+                        };
+                      }
+                      return copy;
+                    });
+                  }
+                );
+                streamAbortRef.current = followUpController;
+              } catch (err: any) {
+                setIsStreaming(false);
+                setMessages(prev => {
+                  const copy = [...prev];
+                  const idx = copy.length - 1;
+                  if (copy[idx]?.role === 'assistant') {
+                    copy[idx] = {
+                      ...copy[idx],
+                      content: `⚠️ Error executing tool follow-up: ${err.message || String(err)}`,
+                    };
+                  }
+                  return copy;
+                });
+              }
+            })();
+            return;
           }
 
           setIsStreaming(false);

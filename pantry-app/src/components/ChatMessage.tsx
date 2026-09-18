@@ -330,8 +330,18 @@ function ChatMessageComponent({ message, isStreaming, onRetry, onContinue, onOpe
           </div>
         )}
 
-        {/* Main Message Content */}
-        {contentBlocks.length > 0 ? (
+        {/* Main Message Content / Tool Output */}
+        {isTool ? (
+          <div className="chat-tool-result-container">
+            <div className="chat-tool-result-header">
+              <span className="tool-name-badge"><code>{message.name || 'tool'}</code></span>
+              <span className="tool-status-badge success">✓ Execution Output</span>
+            </div>
+            <pre className="chat-tool-result-body">
+              <code>{rawText}</code>
+            </pre>
+          </div>
+        ) : contentBlocks.length > 0 ? (
           <div className="chat-markdown-content-wrapper">
             <div className="chat-markdown-content">
               {contentBlocks.map(block => {
