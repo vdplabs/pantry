@@ -132,8 +132,9 @@ ${invariantsSummary || 'None recorded.'}
 RESPONSE GUIDELINES:
 1. Provide deep, professional software architecture reasoning (tradeoffs, failure modes, data invariants, and operational patterns).
 2. Challenge weak assumptions constructively and suggest concrete alternative designs.
-3. Always write your detailed architectural analysis in Markdown first.
-4. At the end of your response, output a compact \`\`\`rfc_patch JSON block to synchronize the canvas with the latest RFC title, decisions, or system invariants.
+3. Write your detailed architectural analysis in Markdown first.
+4. At the end of your response, output a compact \`\`\`rfc_patch JSON block to synchronize decisions and invariants.
+5. NEVER output empty strings like "" or empty template placeholders in the patch.
 
 COMPACT PATCH FORMAT:
 \`\`\`rfc_patch
@@ -156,7 +157,7 @@ COMPACT PATCH FORMAT:
   ]
 }
 \`\`\`
-Always provide your written analysis in normal markdown before the patch.`;
+Always write your full architectural analysis in normal Markdown before the patch.`;
 }
 
 function tryRepairJson(jsonStr: string): any {
@@ -198,61 +199,72 @@ export function parseRfcOutput(
 ): { cleanText: string; updatedState?: RfcState } {
   if (!rawText) return { cleanText: rawText };
 
-  const closedRegex = /```(?:rfc_patch|json)\s*([\s\S]*?)\s*```/;
-  const openRegex = /```(?:rfc_patch|json)\s*([\s\S]*)$/;
-
+  const closedRegex = /```(?:rfc_patch|json)\s*([\s\S]*?)\s*```/g;
   let patchJsonStr = '';
   let cleanText = rawText;
 
-  const closedMatch = rawText.match(closedRegex);
-  if (closedMatch) {
-    patchJsonStr = closedMatch[1].trim();
-    cleanText = rawText.replace(closedRegex, '').trim();
-  } else {
-    const openMatch = rawText.match(openRegex);
-    if (openMatch) {
-      patchJsonStr = openMatch[1].trim();
-      cleanText = rawText.replace(openRegex, '').trim();
+  let match: RegExpExecArray | null;
+  while ((match = closedRegex.exec(rawText)) !== null) {
+    const candidate = match[1].trim();
+    if (candidate.includes('addDecisions') || candidate.includes('decisions') || candidate.includes('invariants') || candidate.includes('title')) {
+      patchJsonStr = candidate;
     }
   }
 
-  if (!patchJsonStr) return { cleanText };
+  if (!patchJsonStr) {
+    const openRegex = /```(?:rfc_patch|json)\s*([\s\S]*)$/;
+    const openMatch = rawText.match(openRegex);
+    if (openMatch) {
+      patchJsonStr = openMatch[1].trim();
+    }
+  }
+
+  cleanText = rawText
+    .replace(/```(?:rfc_patch|json)\s*[\s\S]*?```/g, '')
+    .replace(/```(?:rfc_patch|json)\s*[\s\S]*$/g, '')
+    .replace(/Final RFC Patch:?/gi, '')
+    .trim();
+
+  let patch: any = {};
+  if (patchJsonStr) {
+    patch = tryRepairJson(patchJsonStr) || {};
+  }
 
   try {
-    const patch = tryRepairJson(patchJsonStr);
-    if (!patch || typeof patch !== 'object') {
-      console.warn('[parseRfcOutput] Failed to parse RFC patch JSON');
-      return { cleanText };
-    }
-
     const nextState: RfcState = {
       ...currentState,
       updatedAt: new Date().toISOString(),
     };
 
-    const newTitle = patch.title || patch.topicTitle || patch.name || patch.topic || patch.subject;
-    if (newTitle && typeof newTitle === 'string') {
+    const newTitle = (patch.title || patch.topicTitle || patch.name || patch.topic || patch.subject || '').trim();
+    if (newTitle && newTitle.length > 1) {
       nextState.title = newTitle;
     }
 
-    if (patch.status && typeof patch.status === 'string') {
+    if (patch.status && typeof patch.status === 'string' && patch.status.trim()) {
       nextState.status = patch.status as any;
     }
 
-    const newScope = patch.scope || patch.hypothesis || patch.summary || patch.context || patch.objective;
-    if (newScope && typeof newScope === 'string') {
+    const newScope = (patch.scope || patch.hypothesis || patch.summary || patch.context || patch.objective || '').trim();
+    if (newScope && newScope.length > 3) {
       nextState.scope = newScope;
     }
 
-    const newDoc = patch.rfcMarkdown || patch.documentMarkdown || patch.document || patch.doc || patch.markdown || patch.content;
-    if (newDoc && typeof newDoc === 'string') {
-      nextState.rfcMarkdown = newDoc;
-    } else if (newTitle && currentState.rfcMarkdown.startsWith('# RFC:')) {
+    const explicitDoc = (patch.rfcMarkdown || patch.documentMarkdown || patch.document || patch.doc || patch.markdown || patch.content || '').trim();
+    const isPlaceholderDoc = currentState.rfcMarkdown.includes('## 1. Context and Problem Statement\nDefine the architectural') ||
+      currentState.rfcMarkdown.startsWith('# RFC: System Architecture') ||
+      currentState.rfcMarkdown.startsWith('# Architecture Decision Record:');
+
+    if (explicitDoc && explicitDoc.length > 20) {
+      nextState.rfcMarkdown = explicitDoc;
+    } else if (cleanText.length > 120 && isPlaceholderDoc) {
+      nextState.rfcMarkdown = `# RFC: ${nextState.title || 'System Architecture Design'}\n\n## 1. Context & Scope\n${nextState.scope || 'Architectural specification and design documentation.'}\n\n## 2. System Architecture & Decisions\n${cleanText}\n\n## 3. Rollout & Invariants\n- Review registered ADRs and invariants on the Studio Canvas.\n`;
+    } else if (newTitle && isPlaceholderDoc) {
       nextState.rfcMarkdown = `# RFC: ${newTitle}\n\n## 1. Context and Problem Statement\n${nextState.scope || 'Define the architectural motivation and objectives.'}\n\n## 2. Goals & Non-Goals\n- **Goals**: Deliver robust, scalable architecture with clear invariants.\n- **Non-Goals**: Scope creep outside core system requirements.\n\n## 3. Proposed Architecture & System Boundaries\n*Refer to C4 Topology diagram in Studio Canvas.*\n\n## 4. Key Architectural Decisions (ADRs)\n*Refer to ADR register table in Studio Canvas.*\n\n## 5. System Invariants & SLIs\n*Refer to Invariants tracker.*\n\n## 6. Migration, Rollout & Rollback Strategy\n- Phase 1: Canary verification\n- Phase 2: Production traffic rollout\n`;
     }
 
-    const newDiagram = patch.diagramMermaid || patch.diagram || patch.mermaid || patch.c4Diagram;
-    if (newDiagram && typeof newDiagram === 'string') {
+    const newDiagram = (patch.diagramMermaid || patch.diagram || patch.mermaid || patch.c4Diagram || '').trim();
+    if (newDiagram && newDiagram.length > 10) {
       nextState.diagramMermaid = newDiagram;
     }
 
@@ -264,15 +276,15 @@ export function parseRfcOutput(
 
     for (const d of decisionsList) {
       if (!d) continue;
-      if (typeof d === 'string') {
+      if (typeof d === 'string' && d.trim()) {
         const id = `ADR-${String(nextState.decisions.length + newDecisions.length + 1).padStart(2, '0')}`;
         existingIds.add(id);
         newDecisions.push({
           id,
-          title: d,
+          title: d.trim(),
           status: 'Approved',
           context: 'Architectural requirement',
-          chosenOption: d,
+          chosenOption: d.trim(),
           rationale: 'Standard pattern for target requirements',
           tradeoffs: '',
         });
@@ -286,9 +298,12 @@ export function parseRfcOutput(
       }
       existingIds.add(id);
 
+      const title = (d.title || d.name || d.decision || '').trim();
+      if (!title) continue;
+
       newDecisions.push({
         id,
-        title: d.title || d.name || d.decision || 'Architecture Decision',
+        title,
         status: d.status || 'Approved',
         context: d.context || d.description || d.background || 'Decision context',
         chosenOption: d.chosenOption || d.decision || d.approach || 'Adopted approach',
@@ -310,12 +325,12 @@ export function parseRfcOutput(
 
     for (const inv of invariantsList) {
       if (!inv) continue;
-      if (typeof inv === 'string') {
+      if (typeof inv === 'string' && inv.trim()) {
         const id = `INV-${String(nextState.invariants.length + newInvariants.length + 1).padStart(2, '0')}`;
         existingInvIds.add(id);
         newInvariants.push({
           id,
-          statement: inv,
+          statement: inv.trim(),
           category: 'Correctness',
           status: 'Enforced',
         });
@@ -329,9 +344,12 @@ export function parseRfcOutput(
       }
       existingInvIds.add(id);
 
+      const statement = (inv.statement || inv.text || inv.rule || inv.constraint || '').trim();
+      if (!statement) continue;
+
       newInvariants.push({
         id,
-        statement: inv.statement || inv.text || inv.rule || inv.constraint || 'System Invariant requirement',
+        statement,
         category: inv.category || inv.type || 'Correctness',
         status: inv.status || 'Enforced',
       });
@@ -344,12 +362,8 @@ export function parseRfcOutput(
     // Ensure cleanText is never empty
     if (!cleanText.trim()) {
       const summaryItems: string[] = [];
-      if (newTitle) {
-        summaryItems.push(`📐 **RFC Title**: ${newTitle}`);
-      }
-      if (newScope) {
-        summaryItems.push(`🎯 **Scope**: ${newScope}`);
-      }
+      if (newTitle) summaryItems.push(`📐 **RFC Title**: ${newTitle}`);
+      if (newScope) summaryItems.push(`🎯 **Scope**: ${newScope}`);
       if (newDecisions.length > 0) {
         summaryItems.push(`⚖️ **Architectural Decisions (${newDecisions.length})**:\n` + newDecisions.map(d => `- **${d.title}** (${d.status}): ${d.chosenOption}`).join('\n'));
       }

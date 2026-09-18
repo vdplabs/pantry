@@ -224,7 +224,7 @@ ${questions.map(q => `- [${q.status === 'resolved' ? 'x' : ' '}] **${q.question}
             <div className="tm-diagram-card">
               <div className="tm-card-header">
                 <div>
-                  <span className="tm-card-title">Living Research Document</span>
+                  <span className="tm-card-title">Living Research Document</span>&nbsp;
                   <span className="tm-card-hint">Updated automatically by AI as questions are investigated</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>

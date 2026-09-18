@@ -91,30 +91,29 @@ ${questionsSummary || 'None registered.'}
 ${findingsSummary || 'No findings recorded yet.'}
 
 RESPONSE GUIDELINES:
-1. Always write a thorough, insightful, and conversational response in Markdown analyzing the user's inquiry, evidence, and practical takeaways.
-2. At the end of your response, output a compact \`\`\`research_patch JSON block to synchronize the canvas with the latest topic, hypothesis, findings, or research questions.
-3. If the user introduces a new topic (e.g. quantum computing, caching architecture, AI agents), initialize/update "topicTitle", "hypothesis", and "documentMarkdown", and generate 2-3 relevant "addQuestions" to track open investigations.
+1. Write a thorough, insightful, and well-structured response in Markdown with clear sections, comparative tables, and actionable conclusions.
+2. At the end of your response, output a compact \`\`\`research_patch JSON block to synchronize the canvas findings and questions.
+3. CRITICAL: Fill in realistic values in the patch. NEVER output empty strings like "" or empty template placeholders.
 
 COMPACT PATCH FORMAT:
 \`\`\`research_patch
 {
-  "topicTitle": "Impact of Quantum Computing & Cryptography",
-  "hypothesis": "Evaluating post-quantum encryption algorithms and practical migration timelines.",
+  "topicTitle": "Saviynt vs SailPoint IGA Evaluation",
+  "hypothesis": "Comparing cloud-native IGA architecture against enterprise legacy identity governance.",
   "addFindings": [
     {
-      "topic": "Shor's Algorithm & RSA",
-      "insight": "RSA-2048 vulnerable to quantum computers with ~4,000 logical qubits.",
+      "topic": "SLA & Cost Efficiency",
+      "insight": "SailPoint's SLA pricing favors massive enterprises, whereas Saviynt's SaaS delivers lower TCO for agile deployments.",
       "confidence": "High",
-      "takeaway": "Plan migration to NIST post-quantum standards (ML-KEM / Dilithium)"
+      "takeaway": "Adopt Saviynt for cloud-first infrastructure and SailPoint for deep legacy on-prem directories."
     }
   ],
   "addQuestions": [
-    { "question": "What are the performance overheads of Kyber/ML-KEM in TLS handshakes?" },
-    { "question": "What is the timeline for fault-tolerant commercial quantum hardware?" }
+    { "question": "How do Saviynt and SailPoint handle automated role mining and AI access certifications?" }
   ]
 }
 \`\`\`
-Always provide your written analysis in normal markdown before the patch.`;
+Always write your full research analysis in normal Markdown before the patch.`;
 }
 
 function tryRepairJson(jsonStr: string): any {
@@ -150,69 +149,145 @@ function tryRepairJson(jsonStr: string): any {
   return null;
 }
 
+/**
+ * Automatically extracts bulleted or numbered findings from markdown text
+ */
+function extractFindingsFromText(text: string, defaultTopic: string = 'Key Insight'): ResearchFinding[] {
+  const findings: ResearchFinding[] = [];
+  if (!text) return findings;
+
+  // Match numbered items like: 1. **Title**: Description or 1. Title: Description
+  const numberedRegex = /(?:^|\n)\s*(?:\d+[\.\)]|\-|\*)\s+(?:\*\*(.+?)\*\*|([A-Za-z0-9\s\-_/&]+):)\s*([^\n]+(?:\n(?!\s*(?:\d+[\.\)]|\-|\*|\#))[^\n]+)*)/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = numberedRegex.exec(text)) !== null && findings.length < 5) {
+    const rawTopic = (match[1] || match[2] || '').trim();
+    let body = (match[3] || '').trim();
+    if (!body || body.length < 15) continue;
+    if (rawTopic.toLowerCase().includes('step') || rawTopic.toLowerCase().includes('section')) continue;
+
+    const topic = rawTopic ? rawTopic.replace(/[:\-]/g, '').trim() : defaultTopic;
+    let takeaway = '';
+    const takeawayMatch = body.match(/(?:takeaway|recommendation|next step|action)[\s:]+([^\.\n]+)/i);
+    if (takeawayMatch) {
+      takeaway = takeawayMatch[1].trim();
+    }
+
+    findings.push({
+      id: `RF-${Date.now().toString(36).slice(-4)}-${findings.length + 1}`,
+      topic: topic.slice(0, 40),
+      insight: body.slice(0, 300),
+      confidence: 'High',
+      takeaway: takeaway || 'Evaluate during architectural review',
+      evidence: '',
+      source: 'AI Research Synthesis',
+    });
+  }
+
+  return findings;
+}
+
+/**
+ * Extracts questions from text
+ */
+function extractQuestionsFromText(text: string): string[] {
+  const questions: string[] = [];
+  if (!text) return questions;
+
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.endsWith('?') && trimmed.length > 20 && trimmed.length < 180) {
+      const clean = trimmed.replace(/^[\d\.\-\*\#\s]+/, '').replace(/^\*\*|\*\*$/g, '').trim();
+      if (clean && !questions.includes(clean)) {
+        questions.push(clean);
+      }
+    }
+  }
+  return questions.slice(0, 4);
+}
+
 export function parseResearchOutput(
   rawText: string,
   currentState: ResearchState
 ): { cleanText: string; updatedState?: ResearchState } {
   if (!rawText) return { cleanText: rawText };
 
-  const closedRegex = /```(?:research_patch|json)\s*([\s\S]*?)\s*```/;
-  const openRegex = /```(?:research_patch|json)\s*([\s\S]*)$/;
-
+  const closedRegex = /```(?:research_patch|json)\s*([\s\S]*?)\s*```/g;
   let patchJsonStr = '';
   let cleanText = rawText;
 
-  const closedMatch = rawText.match(closedRegex);
-  if (closedMatch) {
-    patchJsonStr = closedMatch[1].trim();
-    cleanText = rawText.replace(closedRegex, '').trim();
-  } else {
-    const openMatch = rawText.match(openRegex);
-    if (openMatch) {
-      patchJsonStr = openMatch[1].trim();
-      cleanText = rawText.replace(openRegex, '').trim();
+  let match: RegExpExecArray | null;
+  while ((match = closedRegex.exec(rawText)) !== null) {
+    const candidate = match[1].trim();
+    if (candidate.includes('topicTitle') || candidate.includes('addFindings') || candidate.includes('findings') || candidate.includes('hypothesis')) {
+      patchJsonStr = candidate;
     }
   }
 
-  if (!patchJsonStr) return { cleanText };
+  // If not matched via closed loop, try open unclosed block
+  if (!patchJsonStr) {
+    const openRegex = /```(?:research_patch|json)\s*([\s\S]*)$/;
+    const openMatch = rawText.match(openRegex);
+    if (openMatch) {
+      patchJsonStr = openMatch[1].trim();
+    }
+  }
+
+  // Clean out patch blocks from visible text
+  cleanText = rawText
+    .replace(/```(?:research_patch|json)\s*[\s\S]*?```/g, '')
+    .replace(/```(?:research_patch|json)\s*[\s\S]*$/g, '')
+    .replace(/Final Research Patch:?/gi, '')
+    .trim();
+
+  let patch: any = {};
+  if (patchJsonStr) {
+    patch = tryRepairJson(patchJsonStr) || {};
+  }
 
   try {
-    const patch = tryRepairJson(patchJsonStr);
-    if (!patch || typeof patch !== 'object') {
-      console.warn('[parseResearchOutput] Failed to parse JSON patch');
-      return { cleanText };
-    }
-
     const nextState: ResearchState = {
       ...currentState,
       updatedAt: new Date().toISOString(),
     };
 
-    // Topic & Hypothesis (supports flexible keys)
-    const newTopic = patch.topicTitle || patch.topic || patch.title || patch.subject || patch.name;
-    if (newTopic && typeof newTopic === 'string') {
+    // 1. Topic & Hypothesis
+    const newTopic = (patch.topicTitle || patch.topic || patch.title || patch.subject || patch.name || '').trim();
+    if (newTopic && newTopic.length > 1) {
       nextState.topicTitle = newTopic;
     }
 
-    const newHypothesis = patch.hypothesis || patch.goal || patch.objective || patch.abstract || patch.summary;
-    if (newHypothesis && typeof newHypothesis === 'string') {
+    const newHypothesis = (patch.hypothesis || patch.goal || patch.objective || patch.abstract || patch.summary || '').trim();
+    if (newHypothesis && newHypothesis.length > 3) {
       nextState.hypothesis = newHypothesis;
     }
 
-    const newDoc = patch.documentMarkdown || patch.document || patch.markdown || patch.doc || patch.content || patch.researchDocument;
-    if (newDoc && typeof newDoc === 'string') {
-      nextState.documentMarkdown = newDoc;
-    } else if (newTopic && currentState.documentMarkdown.startsWith('# Technical Research Document')) {
-      // Auto-update document header if using default template
-      nextState.documentMarkdown = `# Research: ${newTopic}\n\n## 1. Objective & Hypothesis\n${nextState.hypothesis || 'Investigate core principles, tradeoffs, and domain impact.'}\n\n## 2. Key Hypotheses & Constraints\n- **Target Domain**: ${newTopic}\n\n## 3. Findings & Evidence Analysis\n*Key synthesized findings and observations will be recorded here.*\n\n## 4. Architectural Tradeoffs\n| Dimension | Current Standard | Emerging Paradigm |\n|---|---|---|\n| Feasibility | High | Active Research |\n\n## 5. Synthesis & Recommended Next Steps\n- Deep dive into registered research questions.\n`;
+    // 2. Document Markdown:
+    // If patch provided explicit doc, use it. Otherwise, if cleanText has substantial analysis and the doc is still placeholder, synthesize!
+    const explicitDoc = (patch.documentMarkdown || patch.document || patch.markdown || patch.doc || patch.content || '').trim();
+    const isPlaceholderDoc = currentState.documentMarkdown.startsWith('# Technical Research Document') ||
+      currentState.documentMarkdown.startsWith('# Technology & Engine') ||
+      currentState.documentMarkdown.includes('*As research queries are discussed') ||
+      currentState.documentMarkdown.includes('*Key synthesized findings and observations');
+
+    if (explicitDoc && explicitDoc.length > 20) {
+      nextState.documentMarkdown = explicitDoc;
+    } else if (cleanText.length > 120 && isPlaceholderDoc) {
+      // Build a rich structured research document from the assistant's analysis
+      const displayTitle = nextState.topicTitle || 'Technical Research Document';
+      nextState.documentMarkdown = `# Research Report: ${displayTitle}\n\n## 1. Executive Summary & Objective\n${nextState.hypothesis || 'Comprehensive technical assessment and comparative tradeoff analysis.'}\n\n## 2. Core Analysis & Findings\n${cleanText}\n\n## 3. Next Steps & Active Investigations\n- Deep-dive into open research questions on the Studio Canvas.\n`;
+    } else if (newTopic && isPlaceholderDoc) {
+      nextState.documentMarkdown = `# Research: ${newTopic}\n\n## 1. Objective & Hypothesis\n${nextState.hypothesis || 'Investigate core architectural tradeoffs, performance profiles, and implementation complexities.'}\n\n## 2. Key Hypotheses & Constraints\n- **Target Domain**: ${newTopic}\n\n## 3. Findings & Evidence Analysis\n*Key synthesized findings and observations will be recorded here.*\n\n## 4. Architectural Tradeoffs\n| Dimension | Current Standard | Emerging Paradigm |\n|---|---|---|\n| Feasibility | High | Active Research |\n\n## 5. Synthesis & Recommended Next Steps\n- Deep dive into registered research questions.\n`;
     }
 
-    const newDiagram = patch.diagramMermaid || patch.diagram || patch.mermaid || patch.chart;
-    if (newDiagram && typeof newDiagram === 'string') {
+    // 3. Diagram
+    const newDiagram = (patch.diagramMermaid || patch.diagram || patch.mermaid || patch.chart || '').trim();
+    if (newDiagram && newDiagram.length > 10) {
       nextState.diagramMermaid = newDiagram;
     }
 
-    // Add findings (flexible aliases)
+    // 4. Add Findings:
     const rawFindings = patch.addFindings || patch.findings || patch.newFindings || patch.keyFindings || patch.evidence;
     const findingsList = Array.isArray(rawFindings) ? rawFindings : (rawFindings && typeof rawFindings === 'object' ? [rawFindings] : []);
     const existingIds = new Set(nextState.findings.map(f => f.id));
@@ -220,13 +295,13 @@ export function parseResearchOutput(
 
     for (const f of findingsList) {
       if (!f) continue;
-      if (typeof f === 'string') {
+      if (typeof f === 'string' && f.trim()) {
         const id = `RF-${String(nextState.findings.length + newFindings.length + 1).padStart(2, '0')}`;
         existingIds.add(id);
         newFindings.push({
           id,
-          topic: newTopic || 'General Finding',
-          insight: f,
+          topic: nextState.topicTitle || 'General Finding',
+          insight: f.trim(),
           confidence: 'High',
           evidence: '',
           takeaway: '',
@@ -242,10 +317,13 @@ export function parseResearchOutput(
       }
       existingIds.add(id);
 
+      const insight = (f.insight || f.finding || f.description || f.text || f.summary || f.observation || '').trim();
+      if (!insight) continue;
+
       newFindings.push({
         id,
-        topic: f.topic || f.title || f.category || f.area || f.name || 'Research Insight',
-        insight: f.insight || f.finding || f.description || f.text || f.summary || f.observation || 'Key observation',
+        topic: (f.topic || f.title || f.category || f.area || f.name || 'Research Insight').trim(),
+        insight,
         confidence: f.confidence || (f.certainty ? String(f.certainty) : 'High'),
         evidence: f.evidence || f.proof || f.data || '',
         takeaway: f.takeaway || f.conclusion || f.recommendation || f.action || '',
@@ -253,11 +331,22 @@ export function parseResearchOutput(
       });
     }
 
+    // If no findings were in the patch JSON, auto-extract from markdown text!
+    if (newFindings.length === 0 && cleanText.length > 100) {
+      const extracted = extractFindingsFromText(cleanText, nextState.topicTitle);
+      for (const ef of extracted) {
+        if (!existingIds.has(ef.id)) {
+          existingIds.add(ef.id);
+          newFindings.push(ef);
+        }
+      }
+    }
+
     if (newFindings.length > 0) {
       nextState.findings = [...nextState.findings, ...newFindings];
     }
 
-    // Update existing questions
+    // 5. Update & Add Questions:
     if (Array.isArray(patch.updateQuestions) && patch.updateQuestions.length > 0) {
       const qMap = new Map<string, any>(patch.updateQuestions.map((q: any) => [String(q.id || '').toLowerCase(), q]));
       nextState.questions = nextState.questions.map(q => {
@@ -273,7 +362,6 @@ export function parseResearchOutput(
       });
     }
 
-    // Add new questions (flexible aliases & string arrays)
     const rawQuestions = patch.addQuestions || patch.questions || patch.newQuestions || patch.openQuestions || patch.hypotheses;
     const questionsList = Array.isArray(rawQuestions) ? rawQuestions : (rawQuestions && typeof rawQuestions === 'object' ? [rawQuestions] : []);
     const existingQIds = new Set(nextState.questions.map(q => q.id));
@@ -283,13 +371,13 @@ export function parseResearchOutput(
       const q = questionsList[idx];
       if (!q) continue;
 
-      if (typeof q === 'string') {
+      if (typeof q === 'string' && q.trim()) {
         const id = `q-${Date.now().toString(36)}-${idx}`;
         if (!existingQIds.has(id)) {
           existingQIds.add(id);
           newQs.push({
             id,
-            question: q,
+            question: q.trim(),
             status: 'open',
           });
         }
@@ -297,7 +385,8 @@ export function parseResearchOutput(
       }
 
       if (typeof q === 'object' && (q.question || q.title || q.text)) {
-        const qText = q.question || q.title || q.text;
+        const qText = (q.question || q.title || q.text || '').trim();
+        if (!qText) continue;
         const id = q.id || `q-${Date.now().toString(36)}-${idx}`;
         if (!existingQIds.has(id)) {
           existingQIds.add(id);
@@ -311,8 +400,24 @@ export function parseResearchOutput(
       }
     }
 
+    // If questions list was empty, extract questions ending with ? from text
+    if (newQs.length === 0 && cleanText.length > 100) {
+      const textQuestions = extractQuestionsFromText(cleanText);
+      for (let idx = 0; idx < textQuestions.length; idx++) {
+        const tq = textQuestions[idx];
+        const id = `q-ext-${Date.now().toString(36)}-${idx}`;
+        if (!existingQIds.has(id)) {
+          existingQIds.add(id);
+          newQs.push({
+            id,
+            question: tq,
+            status: 'open',
+          });
+        }
+      }
+    }
+
     if (newQs.length > 0) {
-      // If we are replacing the default starter questions with new topic-specific questions:
       const hasOnlyDefaultQs = nextState.questions.length === 3 && nextState.questions.every(q => q.id.startsWith('q-') && !q.findings);
       if (hasOnlyDefaultQs && (newTopic || newQs.length >= 2)) {
         nextState.questions = newQs;
@@ -321,15 +426,11 @@ export function parseResearchOutput(
       }
     }
 
-    // Ensure cleanText is never empty
+    // 6. Ensure cleanText is not empty
     if (!cleanText.trim()) {
       const summaryItems: string[] = [];
-      if (newTopic) {
-        summaryItems.push(`🔬 **Research Objective**: ${newTopic}`);
-      }
-      if (newHypothesis) {
-        summaryItems.push(`💡 **Hypothesis**: ${newHypothesis}`);
-      }
+      if (newTopic) summaryItems.push(`🔬 **Research Objective**: ${newTopic}`);
+      if (newHypothesis) summaryItems.push(`💡 **Hypothesis**: ${newHypothesis}`);
       if (newFindings.length > 0) {
         summaryItems.push(`📌 **Recorded Findings (${newFindings.length})**:\n` + newFindings.map(f => `- **${f.topic}**: ${f.insight}`).join('\n'));
       }
