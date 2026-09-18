@@ -127,7 +127,7 @@ const api = {
         ? [{ role: 'system', content: opts.system_prompt }, ...messages]
         : messages) as any,
       temperature: opts?.temperature ?? 0.7,
-      max_tokens: opts?.max_tokens ?? 1024,
+      max_tokens: opts?.max_tokens ?? 2048,
       stream: opts?.stream ?? true,
     };
     if (opts?.top_p !== undefined) body.top_p = opts.top_p;

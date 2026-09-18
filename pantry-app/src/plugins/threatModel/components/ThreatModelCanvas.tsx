@@ -316,14 +316,14 @@ ${threats.map(t => `### [${t.id}] ${t.category}: ${t.componentName || t.componen
                           <button
                             className="tm-comp-action-btn"
                             title={`Ask AI: Threat actors against ${comp.name}`}
-                            onClick={() => onSendPrompt(`What are the realistic threat actors, motivations, and attack vectors targeted against the "${comp.name}" component (${comp.trustBoundary})?`)}
+                            onClick={() => onSendPrompt(`Analyze realistic threat actors and attack vectors against "${comp.name}" (${comp.trustBoundary}). Identify 1-2 key threats with mitigations.`)}
                           >
                             ⚡ Threat Actors
                           </button>
                           <button
                             className="tm-comp-action-btn"
                             title={`Ask AI: STRIDE analysis for ${comp.name}`}
-                            onClick={() => onSendPrompt(`Perform a deep-dive STRIDE threat analysis specifically for the "${comp.name}" component (${comp.trustBoundary}, ${comp.techStack || 'generic'}). Provide mitigations.`)}
+                            onClick={() => onSendPrompt(`Perform a concise STRIDE analysis for "${comp.name}" (${comp.trustBoundary}, ${comp.techStack || 'Standard'}). Suggest 1-2 key mitigations.`)}
                           >
                             🛡️ STRIDE
                           </button>

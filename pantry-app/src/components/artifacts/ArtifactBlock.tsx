@@ -15,6 +15,29 @@ function ArtifactBlockComponent({ code, language = '', isClosed = true, onOpenCa
   const [copied, setCopied] = useState(false);
   const cleanLang = (language || '').trim().toLowerCase();
 
+  if (cleanLang === 'threat_model_patch') {
+    return (
+      <div
+        className="threat-patch-badge-wrapper"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '8px',
+          background: 'rgba(59, 130, 246, 0.1)',
+          border: '1px solid rgba(59, 130, 246, 0.25)',
+          borderRadius: '8px',
+          padding: '6px 12px',
+          margin: '6px 0',
+          fontSize: '12px',
+          color: '#60a5fa',
+          fontWeight: 500,
+        }}
+      >
+        <span>🛡️ Threat Model Studio Canvas Synchronized</span>
+      </div>
+    );
+  }
+
   // If the block is currently streaming and not yet closed, keep in lightweight code mode
   if (isClosed) {
     // 1. Mermaid Diagram

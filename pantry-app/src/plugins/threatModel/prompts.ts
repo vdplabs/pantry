@@ -77,88 +77,89 @@ export function getInitialThreatModelState(framework: string = 'PASTA'): ThreatM
 
 export function buildThreatModelSystemPrompt(canvasState: ThreatModelState, framework: string = 'PASTA'): string {
   const compSummary = (canvasState.components || []).map(c => 
-    `- Component ID: "${c.id}" | Name: "${c.name}" | Type: ${c.type} | Trust Boundary: "${c.trustBoundary}" | Tech: "${c.techStack || 'Unknown'}"`
+    `- ID: "${c.id}" | Name: "${c.name}" (${c.type}) | Boundary: "${c.trustBoundary}" | Tech: "${c.techStack || 'Standard'}"`
   ).join('\n');
 
-  const threatSummary = (canvasState.threats || []).map(t =>
-    `- [${t.id}] Target: "${t.componentName || t.componentId}" | Category: ${t.category} | Threat Actor: ${t.threatActor} | Severity: ${t.severity} | Status: ${t.status}\n  Description: ${t.description}\n  Mitigation: ${t.mitigation}`
+  const threatSummary = (canvasState.threats || []).slice(0, 15).map(t =>
+    `- [${t.id}] Target: "${t.componentName || t.componentId}" | Threat Actor: ${t.threatActor} | Severity: ${t.severity}`
   ).join('\n');
 
   const activeFramework = canvasState.framework || framework || 'PASTA';
 
-  return `You are a Principal Security Architect and Threat Modeling Expert specialized in the ${activeFramework} framework.
-You are collaborating with the user in Pantry's **Threat Modeling Studio**.
+  return `You are a Principal Security Architect specializing in ${activeFramework} threat modeling in Pantry Studio.
 
-### CURRENT CANVAS STATE (Context-Aware Architecture):
-- **Target Application**: ${canvasState.appName || 'Target System'}
-- **Scope**: ${canvasState.scope || 'General Architecture'}
-- **Framework**: ${activeFramework}
-- **Registered Architecture Components**:
+CURRENT SYSTEM ARCHITECTURE:
+- Target Application: ${canvasState.appName || 'Target System'}
+- Scope: ${canvasState.scope || 'Core Services'}
+- Framework: ${activeFramework}
+- Components:
 ${compSummary || 'No components registered yet.'}
+- Recorded Threats (${(canvasState.threats || []).length}):
+${threatSummary || 'No threats recorded yet.'}
 
-- **Current Threat Register (${(canvasState.threats || []).length} threats)**:
-${threatSummary || 'No threats recorded in register yet.'}
+RESPONSE GUIDELINES:
+1. Provide a direct, concise security analysis for the target component or question.
+2. Clearly identify realistic threat actors (e.g. Credential Stuffers, Malicious Insiders, Automated Botnets), attack vectors, and practical mitigations.
+3. If new threats or architecture changes are discovered, append a compact JSON block at the very end using \`\`\`threat_model_patch.
 
----
-
-### INSTRUCTIONS:
-1. **Context Awareness**:
-   - When the user asks about specific components (e.g. "What are the threat actors to the API", "Analyze vulnerabilities in the database", "What if Redis is compromised?"), ALWAYS anchor your analysis directly to the registered components, technologies, and trust boundaries shown in the CURRENT CANVAS STATE above.
-   - If the user asks about threat actors, break down who the realistic adversaries are for that exact object (e.g. Credential Stuffers, Compromised Internal Services, Script Kiddies, Nation-State Actors, Rogue Insiders).
-
-2. **Dual-Channel Output (Chat + Canvas Patch)**:
-   - Deliver clear, insightful, professional security reasoning in the conversational chat.
-   - Whenever you identify new components, update diagrams, discover threats, or advance a framework stage, you MUST include a \`\`\`threat_model_patch codeblock containing a valid JSON patch object.
-
-### FORMAT FOR threat_model_patch BLOCK:
+COMPACT PATCH FORMAT (include only new or updated items):
 \`\`\`threat_model_patch
 {
-  "appName": "Updated App Name (optional)",
-  "scope": "Updated Scope (optional)",
-  "addComponents": [
-    {
-      "id": "unique-slug-id",
-      "name": "Component Name",
-      "type": "actor" | "process" | "datastore" | "gateway" | "external" | "agent",
-      "trustBoundary": "Name of Trust Boundary",
-      "techStack": "Technologies used (e.g. Envoy, PostgreSQL, Kafka)",
-      "description": "Brief description"
-    }
-  ],
-  "updateComponents": [
-    {
-      "id": "existing-comp-id",
-      "name": "Updated Name",
-      "trustBoundary": "New Boundary"
-    }
-  ],
   "addThreats": [
     {
-      "id": "TM-01",
-      "componentId": "comp-apigw",
-      "componentName": "API Gateway",
-      "category": "Spoofing" | "Tampering" | "Repudiation" | "InfoDisclosure" | "DoS" | "Elevation" | "AgenticLoop" | "PromptInjection" | "BusinessLogic",
-      "threatActor": "External Botnet / Malicious User",
-      "attackVector": "Credential stuffing & token replay over HTTP",
-      "description": "Adversary automates stolen credentials against public /login endpoint.",
-      "impact": "Account takeover and unauthorized session creation.",
-      "severity": "High" | "Critical" | "Medium" | "Low",
-      "mitigation": "Enforce mTLS, rate limiting, and adaptive MFA with JWT signature validation.",
-      "status": "Open"
-    }
-  ],
-  "dfdMermaid": "graph TD ... (Updated full Mermaid diagram if architecture changed)",
-  "updateStages": [
-    {
-      "id": 1,
-      "status": "completed" | "in_progress",
-      "findings": "Brief summary of stage completion"
+      "componentId": "comp-id",
+      "threatActor": "Adversary name",
+      "attackVector": "Vector description",
+      "severity": "High",
+      "mitigation": "Mitigation steps"
     }
   ]
 }
 \`\`\`
+Keep the JSON patch concise (1 to 2 threats) so responses are fast and never cut off.`;
+}
 
-Always prioritize actionable, high-quality mitigations with realistic security engineering standards.`;
+function tryRepairJson(jsonStr: string): any {
+  // 1. Direct parse attempt
+  try {
+    return JSON.parse(jsonStr);
+  } catch {}
+
+  // 2. Trim trailing dangling commas, quotes, keys
+  let repaired = jsonStr.trim();
+  repaired = repaired.replace(/,\s*([\}\]])/g, '$1');
+
+  // Attempt closing unbalanced quotes, braces and brackets
+  for (let i = 0; i < 5; i++) {
+    try {
+      return JSON.parse(repaired);
+    } catch {}
+
+    // Check if open quote
+    const quoteCount = (repaired.match(/(?<!\\)"/g) || []).length;
+    if (quoteCount % 2 !== 0) {
+      repaired += '"';
+    }
+
+    const openBraces = (repaired.match(/\{/g) || []).length;
+    const closeBraces = (repaired.match(/\}/g) || []).length;
+    const openBrackets = (repaired.match(/\[/g) || []).length;
+    const closeBrackets = (repaired.match(/\]/g) || []).length;
+
+    if (openBrackets > closeBrackets) {
+      repaired += ']';
+    } else if (openBraces > closeBraces) {
+      repaired += '}';
+    } else {
+      break;
+    }
+  }
+
+  try {
+    return JSON.parse(repaired);
+  } catch {}
+
+  return null;
 }
 
 export function parseThreatModelOutput(
@@ -167,18 +168,36 @@ export function parseThreatModelOutput(
 ): { cleanText: string; updatedState?: ThreatModelState } {
   if (!rawText) return { cleanText: rawText };
 
-  const patchRegex = /```threat_model_patch\s*([\s\S]*?)\s*```/;
-  const match = rawText.match(patchRegex);
+  // Match either closed or unclosed/truncated threat_model_patch block
+  const closedRegex = /```threat_model_patch\s*([\s\S]*?)\s*```/;
+  const openRegex = /```threat_model_patch\s*([\s\S]*)$/;
 
-  if (!match) {
-    return { cleanText: rawText };
+  let patchJsonStr = '';
+  let cleanText = rawText;
+
+  const closedMatch = rawText.match(closedRegex);
+  if (closedMatch) {
+    patchJsonStr = closedMatch[1].trim();
+    cleanText = rawText.replace(closedRegex, '').trim();
+  } else {
+    const openMatch = rawText.match(openRegex);
+    if (openMatch) {
+      patchJsonStr = openMatch[1].trim();
+      cleanText = rawText.replace(openRegex, '').trim();
+    }
   }
 
-  const patchJsonStr = match[1].trim();
-  const cleanText = rawText.replace(patchRegex, '').trim();
+  if (!patchJsonStr) {
+    return { cleanText };
+  }
 
   try {
-    const patch = JSON.parse(patchJsonStr);
+    const patch = tryRepairJson(patchJsonStr);
+    if (!patch) {
+      console.warn('[parseThreatModelOutput] Could not repair patch JSON:', patchJsonStr);
+      return { cleanText };
+    }
+
     const nextState: ThreatModelState = {
       ...currentState,
       updatedAt: new Date().toISOString(),
@@ -191,7 +210,17 @@ export function parseThreatModelOutput(
     // Add components
     if (Array.isArray(patch.addComponents) && patch.addComponents.length > 0) {
       const existingIds = new Set(nextState.components.map(c => c.id));
-      const newComps: ThreatComponent[] = patch.addComponents.filter((c: any) => c && c.id && !existingIds.has(c.id));
+      const newComps: ThreatComponent[] = patch.addComponents
+        .filter((c: any) => c && (c.name || c.id))
+        .map((c: any, idx: number) => ({
+          id: c.id || `comp-${Date.now()}-${idx}`,
+          name: c.name || 'New Component',
+          type: c.type || 'process',
+          trustBoundary: c.trustBoundary || 'Internal Trust Zone',
+          techStack: c.techStack || 'Standard',
+          description: c.description || '',
+        }))
+        .filter((c: ThreatComponent) => !existingIds.has(c.id));
       nextState.components = [...nextState.components, ...newComps];
     }
 
@@ -210,35 +239,41 @@ export function parseThreatModelOutput(
       const formattedThreats: ThreatItem[] = [];
 
       for (const t of patch.addThreats) {
-        if (!t) continue;
+        if (!t || typeof t !== 'object') continue;
         let id = t.id;
         if (!id || existingThreatIds.has(id)) {
           id = `TM-${String(nextState.threats.length + formattedThreats.length + 1).padStart(2, '0')}`;
         }
         existingThreatIds.add(id);
 
+        let compId = t.componentId || 'system';
         let componentName = t.componentName;
-        if (!componentName && t.componentId) {
-          const comp = nextState.components.find(c => c.id === t.componentId);
-          if (comp) componentName = comp.name;
+        if (!componentName && compId) {
+          const comp = nextState.components.find(c => c.id === compId || c.name.toLowerCase() === compId.toLowerCase());
+          if (comp) {
+            componentName = comp.name;
+            compId = comp.id;
+          }
         }
 
         formattedThreats.push({
           id,
-          componentId: t.componentId || 'system',
+          componentId: compId,
           componentName: componentName || 'General Architecture',
-          category: t.category || 'General',
-          threatActor: t.threatActor || 'External Attacker',
-          attackVector: t.attackVector || 'Network Exploitation',
-          description: t.description || 'Threat description',
-          impact: t.impact || 'System compromise',
-          severity: t.severity || 'Medium',
+          category: t.category || 'Threat Analysis',
+          threatActor: t.threatActor || 'Adversary / Threat Actor',
+          attackVector: t.attackVector || t.vector || 'Targeted Exploitation',
+          description: t.description || `${t.threatActor || 'Adversary'} targeting ${componentName || compId}`,
+          impact: t.impact || 'Service disruption or data exposure',
+          severity: t.severity || 'High',
           mitigation: t.mitigation || 'Implement defense-in-depth controls',
           status: t.status || 'Open',
         });
       }
 
-      nextState.threats = [...nextState.threats, ...formattedThreats];
+      if (formattedThreats.length > 0) {
+        nextState.threats = [...nextState.threats, ...formattedThreats];
+      }
     }
 
     // Update stages
@@ -259,7 +294,7 @@ export function parseThreatModelOutput(
 
     return { cleanText, updatedState: nextState };
   } catch (err) {
-    console.warn('[parseThreatModelOutput] Failed to parse patch JSON:', err);
+    console.warn('[parseThreatModelOutput] Failed to process patch JSON:', err);
     return { cleanText };
   }
 }
