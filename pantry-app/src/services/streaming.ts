@@ -37,6 +37,11 @@ export function streamChat(
   }
 
   const reader = response.body.getReader();
+  controller.signal.addEventListener('abort', () => {
+    try {
+      reader.cancel();
+    } catch { }
+  });
   const decoder = new TextDecoder();
   let fullText = '';
   let fullReasoning = '';

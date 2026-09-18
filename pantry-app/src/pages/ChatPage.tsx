@@ -47,6 +47,7 @@ export default function ChatPage() {
   const userScrolledUpRef = useRef(false);
   const isAutoScrollingRef = useRef(false);
   const streamAbortRef = useRef<AbortController | null>(null);
+  const activeStreamingConvIdRef = useRef<string | null>(null);
 
   const chatModels = state.models.filter(m =>
     (m.modalities || []).some(mod => mod.toLowerCase().includes('text') || mod.toLowerCase().includes('chat')) ||
@@ -58,6 +59,10 @@ export default function ChatPage() {
 
   const handleScroll = useCallback(() => {
     if (!scrollContainerRef.current) return;
+    if (isAutoScrollingRef.current) {
+      isAutoScrollingRef.current = false;
+      return;
+    }
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
     const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
     const scrolledUp = distanceFromBottom > 120;
@@ -82,14 +87,23 @@ export default function ChatPage() {
     }
   }, []);
 
-  // On conversation switch or initial load, jump to bottom
+  // On conversation switch or initial load, jump to bottom and abort ongoing stream if switching to a different chat
   useEffect(() => {
+    if (activeStreamingConvIdRef.current && activeStreamingConvIdRef.current !== activeConversationId) {
+      if (streamAbortRef.current) {
+        streamAbortRef.current.abort();
+        streamAbortRef.current = null;
+      }
+      activeStreamingConvIdRef.current = null;
+      setIsStreaming(false);
+    }
+
     if (activeConversationId) {
       userScrolledUpRef.current = false;
       setUserScrolledUp(false);
       setTimeout(() => scrollToBottom(false), 50);
     }
-  }, [activeConversationId, scrollToBottom]);
+  }, [activeConversationId, scrollToBottom, setIsStreaming]);
 
   const handleSelectSystemPrompt = (preset: typeof SYSTEM_PROMPTS[0]) => {
     setActivePromptId(preset.id);
@@ -133,6 +147,8 @@ export default function ChatPage() {
     setTimeout(() => scrollToBottom(false), 10);
 
     setIsStreaming(true);
+    activeStreamingConvIdRef.current = convId;
+    const currentTargetConvId = convId;
     const t0 = performance.now();
     let tokenCount = 0;
 
@@ -163,6 +179,8 @@ export default function ChatPage() {
         if (rafId !== null) return;
         rafId = requestAnimationFrame(() => {
           rafId = null;
+          if (activeStreamingConvIdRef.current !== currentTargetConvId) return;
+
           setMessages(prev => {
             const copy = [...prev];
             const idx = copy.length - 1;
@@ -187,6 +205,7 @@ export default function ChatPage() {
       const controller = streamChat(
         res,
         (token) => {
+          if (activeStreamingConvIdRef.current !== currentTargetConvId) return;
           tokenCount++;
           currentStreamContent += token;
           scheduleFlush();
@@ -196,6 +215,11 @@ export default function ChatPage() {
             cancelAnimationFrame(rafId);
             rafId = null;
           }
+          if (activeStreamingConvIdRef.current !== currentTargetConvId) return;
+
+          activeStreamingConvIdRef.current = null;
+          streamAbortRef.current = null;
+
           const duration_s = Math.max(0.01, (performance.now() - t0) / 1000);
           const completionTokens = result.usage?.completion_tokens ?? tokenCount;
           const promptTokens = result.usage?.prompt_tokens;
@@ -245,7 +269,12 @@ export default function ChatPage() {
             cancelAnimationFrame(rafId);
             rafId = null;
           }
+          if (activeStreamingConvIdRef.current !== currentTargetConvId) return;
+
+          activeStreamingConvIdRef.current = null;
+          streamAbortRef.current = null;
           setIsStreaming(false);
+
           setMessages(prev => {
             const copy = [...prev];
             const idx = copy.length - 1;
@@ -259,10 +288,12 @@ export default function ChatPage() {
           });
         },
         (reasoningChunk) => {
+          if (activeStreamingConvIdRef.current !== currentTargetConvId) return;
           currentReasoning += reasoningChunk;
           scheduleFlush();
         },
         (tools) => {
+          if (activeStreamingConvIdRef.current !== currentTargetConvId) return;
           currentTools = tools;
           scheduleFlush();
         }
@@ -270,6 +301,8 @@ export default function ChatPage() {
 
       streamAbortRef.current = controller;
     } catch (err: any) {
+      activeStreamingConvIdRef.current = null;
+      streamAbortRef.current = null;
       setIsStreaming(false);
       setMessages(prev => {
         const copy = [...prev];

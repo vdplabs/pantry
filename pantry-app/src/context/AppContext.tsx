@@ -140,6 +140,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setGenerations(loadedGens);
         if (activeId) {
           setActiveConversationId(activeId);
+          const activeConv = loadedConvs.find(c => c.id === activeId);
+          if (activeConv && activeConv.messages) {
+            setMessages(activeConv.messages);
+          }
         }
         if (model) updateState({ model });
         if (modality) updateState({ modality: modality as any });
@@ -196,6 +200,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       initialLoadRef.current = true;
       return;
     }
+    // Avoid hammering DB and triggering re-renders on every token during active streaming
+    if (state.isStreaming) return;
+
     if (activeConversationId) {
       setConversations(prev => {
         const updated = prev.map(c => {
@@ -235,15 +242,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         return updated;
       });
     }
-  }, [messages, activeConversationId]);
-
-  useEffect(() => {
-    if (!dbReady || !activeConversationId) return;
-    const conv = conversations.find(c => c.id === activeConversationId);
-    if (conv && conv.messages.length > 0) {
-      setMessages(conv.messages);
-    }
-  }, [dbReady, activeConversationId, conversations]);
+  }, [messages, activeConversationId, state.isStreaming]);
 
   const updateState = useCallback((partial: Partial<AppState>) => {
     setState(prev => ({ ...prev, ...partial }));
