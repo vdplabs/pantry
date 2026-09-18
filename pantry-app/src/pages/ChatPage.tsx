@@ -393,11 +393,11 @@ export default function ChatPage() {
   };
 
   return (
-    <div className={`chat-page-container ${activePlugin && !canvasCollapsed ? 'with-studio-layout' : ''}`}>
+    <div className={`chat-page-container ${activeArtifact ? 'with-canvas-workbench' : ''} ${activePlugin && !canvasCollapsed ? 'with-studio-layout' : ''}`}>
       {/* Left Chat Pane */}
-      <div className="chat-layout">
+      <div className="chat-main-area">
         {/* Model Bar */}
-        <div className="chat-header">
+        <div className="chat-header-bar">
           <div style={{ position: 'relative' }}>
             <button
               className="chat-model-selector-btn"

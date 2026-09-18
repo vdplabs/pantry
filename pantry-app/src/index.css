@@ -315,16 +315,19 @@ button, select, textarea {
 }
 
 .conversation-list-header {
-  padding: 14px 14px 8px 14px;
+  padding: 12px 14px 6px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .new-chat-btn {
+  flex: 1 1 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 16px;
+  gap: 6px;
+  padding: 8px 12px;
   border-radius: var(--radius-md);
   border: 1px dashed var(--accent-primary-border);
   background: var(--accent-primary-subtle);
@@ -2981,24 +2984,37 @@ pre code.hljs {
 }
 
 /* Dual Pane Studio Layout */
+.chat-page-container {
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
 .chat-page-container.with-studio-layout {
-  display: grid;
-  grid-template-columns: minmax(380px, 42%) 1fr;
+  display: flex;
+  flex-direction: row;
   width: 100%;
   height: 100%;
   overflow: hidden;
 }
 
+.chat-page-container.with-studio-layout .chat-main-area {
+  flex: 1 1 42%;
+  min-width: 360px;
+}
+
 @media (max-width: 1100px) {
   .chat-page-container.with-studio-layout {
-    grid-template-columns: 1fr;
-    grid-template-rows: 1fr 1fr;
+    flex-direction: column;
   }
 }
 
 .studio-canvas-column {
-  flex: 1 1 0%;
-  min-width: 0;
+  flex: 1 1 58%;
+  min-width: 380px;
   height: 100%;
   background: #090e18;
   border-left: 1px solid var(--border-card);
