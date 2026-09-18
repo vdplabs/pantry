@@ -33,6 +33,7 @@ export default function ChatPage() {
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
+  const isAutoScrollingRef = useRef(false);
   const streamAbortRef = useRef<AbortController | null>(null);
 
   const chatModels = state.models.filter(m =>
@@ -45,17 +46,24 @@ export default function ChatPage() {
 
   const handleScroll = useCallback(() => {
     if (!scrollContainerRef.current) return;
+    if (isAutoScrollingRef.current) {
+      isAutoScrollingRef.current = false;
+      return;
+    }
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
     const isAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
     const hasScrolledUp = !isAtBottom;
-    userScrolledUpRef.current = hasScrolledUp;
-    setUserScrolledUp(hasScrolledUp);
+    if (userScrolledUpRef.current !== hasScrolledUp) {
+      userScrolledUpRef.current = hasScrolledUp;
+      setUserScrolledUp(hasScrolledUp);
+    }
   }, []);
 
   const scrollToBottom = useCallback((smooth = false) => {
     if (!scrollContainerRef.current) return;
     userScrolledUpRef.current = false;
     setUserScrolledUp(false);
+    isAutoScrollingRef.current = true;
     if (smooth) {
       scrollContainerRef.current.scrollTo({
         top: scrollContainerRef.current.scrollHeight,
@@ -119,12 +127,12 @@ export default function ChatPage() {
       let currentStreamContent = '';
       let currentReasoning = '';
       let currentTools: ToolCall[] = [];
+      let rafId: number | null = null;
 
-      const controller = streamChat(
-        res,
-        (token) => {
-          tokenCount++;
-          currentStreamContent += token;
+      const scheduleFlush = () => {
+        if (rafId !== null) return;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
           setMessages(prev => {
             const copy = [...prev];
             const idx = copy.length - 1;
@@ -139,12 +147,25 @@ export default function ChatPage() {
             return copy;
           });
 
-          // Only auto-scroll if the user hasn't scrolled up to read previous messages
           if (!userScrolledUpRef.current && scrollContainerRef.current) {
+            isAutoScrollingRef.current = true;
             scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
           }
+        });
+      };
+
+      const controller = streamChat(
+        res,
+        (token) => {
+          tokenCount++;
+          currentStreamContent += token;
+          scheduleFlush();
         },
         (result) => {
+          if (rafId !== null) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+          }
           const duration_s = Math.max(0.01, (performance.now() - t0) / 1000);
           const tps = tokenCount > 0 ? tokenCount / duration_s : undefined;
 
@@ -169,10 +190,15 @@ export default function ChatPage() {
           });
 
           if (!userScrolledUpRef.current && scrollContainerRef.current) {
+            isAutoScrollingRef.current = true;
             scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
           }
         },
         (err) => {
+          if (rafId !== null) {
+            cancelAnimationFrame(rafId);
+            rafId = null;
+          }
           setIsStreaming(false);
           setMessages(prev => {
             const copy = [...prev];
@@ -188,35 +214,11 @@ export default function ChatPage() {
         },
         (reasoningChunk) => {
           currentReasoning += reasoningChunk;
-          setMessages(prev => {
-            const copy = [...prev];
-            const idx = copy.length - 1;
-            if (copy[idx]?.role === 'assistant') {
-              copy[idx] = {
-                ...copy[idx],
-                reasoning_content: currentReasoning,
-              };
-            }
-            return copy;
-          });
-
-          if (!userScrolledUpRef.current && scrollContainerRef.current) {
-            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
-          }
+          scheduleFlush();
         },
         (tools) => {
           currentTools = tools;
-          setMessages(prev => {
-            const copy = [...prev];
-            const idx = copy.length - 1;
-            if (copy[idx]?.role === 'assistant') {
-              copy[idx] = {
-                ...copy[idx],
-                tool_calls: currentTools,
-              };
-            }
-            return copy;
-          });
+          scheduleFlush();
         }
       );
 

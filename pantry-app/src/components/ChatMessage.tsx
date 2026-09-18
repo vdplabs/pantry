@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiCpu, FiTerminal, FiZap, FiUser, FiRefreshCw } from 'react-icons/fi';
 import type { Message, MessageContent, ToolCall } from '@/types';
 import { marked } from 'marked';
@@ -13,10 +13,16 @@ interface Props {
 const renderer = new marked.Renderer();
 renderer.code = ({ text, lang }: { text: string; lang?: string; escaped?: boolean }) => {
   const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext';
-  const highlighted =
-    lang && hljs.getLanguage(lang)
-      ? hljs.highlight(text, { language: lang }).value
-      : hljs.highlightAuto(text).value;
+  let highlighted = '';
+  try {
+    if (lang && hljs.getLanguage(lang)) {
+      highlighted = hljs.highlight(text, { language: lang, ignoreIllegals: true }).value;
+    } else {
+      highlighted = hljs.highlightAuto(text).value;
+    }
+  } catch {
+    highlighted = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
   return `<div class="code-block-wrapper"><div class="code-block-header"><span class="code-lang">${language}</span><button class="code-copy-btn" onclick="(function(btn){navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(text)}')).then(function(){btn.innerHTML='<svg width=\\'12\\' height=\\'12\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2.5\\'><polyline points=\\'20 6 9 17 4 12\\'/></svg> Copied';setTimeout(function(){btn.innerHTML='<svg width=\\'12\\' height=\\'12\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><rect x=\\'9\\' y=\\'9\\' width=\\'13\\' height=\\'13\\' rx=\\'2\\' ry=\\'2\\'/><path d=\\'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\\'/></svg> Copy';},2000);});})(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button></div><pre><code class="hljs language-${language}">${highlighted}</code></pre></div>`;
 };
 
@@ -34,7 +40,7 @@ function parseThinking(text: string): { thinking: string; response: string } | n
   return { thinking: thinking.trim(), response };
 }
 
-export default function ChatMessage({ message, isStreaming, onRetry }: Props) {
+function ChatMessageComponent({ message, isStreaming, onRetry }: Props) {
   const [copied, setCopied] = useState(false);
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(true);
@@ -56,9 +62,18 @@ export default function ChatMessage({ message, isStreaming, onRetry }: Props) {
   }
 
   // Check reasoning content
-  const parsedThinking = parseThinking(rawText);
+  const parsedThinking = useMemo(() => parseThinking(rawText), [rawText]);
   const reasoningText = message.reasoning_content || parsedThinking?.thinking;
   const mainText = parsedThinking ? parsedThinking.response : rawText;
+
+  const parsedHtml = useMemo(() => {
+    if (!mainText) return '';
+    try {
+      return marked.parse(mainText) as string;
+    } catch {
+      return mainText;
+    }
+  }, [mainText]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(mainText || rawText);
@@ -151,10 +166,10 @@ export default function ChatMessage({ message, isStreaming, onRetry }: Props) {
         )}
 
         {/* Main Message Content */}
-        {mainText ? (
+        {parsedHtml ? (
           <div
             className="chat-markdown-content"
-            dangerouslySetInnerHTML={{ __html: marked.parse(mainText) as string }}
+            dangerouslySetInnerHTML={{ __html: parsedHtml }}
           />
         ) : isStreaming && !reasoningText && !message.tool_calls?.length ? (
           <div className="chat-streaming-placeholder">
@@ -185,3 +200,13 @@ export default function ChatMessage({ message, isStreaming, onRetry }: Props) {
     </div>
   );
 }
+
+const ChatMessage = React.memo(ChatMessageComponent, (prev, next) => {
+  return (
+    prev.message === next.message &&
+    prev.isStreaming === next.isStreaming &&
+    prev.onRetry === next.onRetry
+  );
+});
+
+export default ChatMessage;
