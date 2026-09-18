@@ -455,7 +455,7 @@ class MLXRuntime(Runtime):
         draft_model: str | None = None,
         num_draft_tokens: int | None = None,
         prefer_prefix_cache: bool = True,
-        prefill_step_size: int = 2048,
+        prefill_step_size: int = 512,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
@@ -502,7 +502,7 @@ class MLXRuntime(Runtime):
         draft_model: str | None = None,
         num_draft_tokens: int | None = None,
         prefer_prefix_cache: bool = True,
-        prefill_step_size: int = 2048,
+        prefill_step_size: int = 512,
         usage: dict[str, Any] | None = None,
         tools: list[dict] | None = None,
         tool_choice: str | dict[str, Any] | None = None,
@@ -821,8 +821,10 @@ class MLXRuntime(Runtime):
 
         def _produce() -> None:
             try:
+                from mlx_lm.models.cache import make_prompt_cache
                 from mlx_lm.sample_utils import make_logits_processors, make_sampler
 
+                prompt_cache = make_prompt_cache(model)
                 sampler = make_sampler(temp=temp)
                 processors = make_logits_processors(repetition_penalty=1.05)
                 gen = stream_generate(
@@ -832,6 +834,8 @@ class MLXRuntime(Runtime):
                     max_tokens=max_toks,
                     sampler=sampler,
                     logits_processors=processors,
+                    prompt_cache=prompt_cache,
+                    prefill_step_size=512,
                 )
                 for item in gen:
                     if cancel.is_set():
