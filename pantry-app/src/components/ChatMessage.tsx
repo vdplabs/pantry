@@ -4,32 +4,75 @@ import type { Message, MessageContent, ToolCall } from '@/types';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
 
+import ArtifactBlock from './artifacts/ArtifactBlock';
+
 interface Props {
   message: Message;
   isStreaming?: boolean;
   onRetry?: () => void;
+  onOpenCanvas?: (code: string, type: string) => void;
 }
 
-const renderer = new marked.Renderer();
-renderer.code = ({ text, lang }: { text: string; lang?: string; escaped?: boolean }) => {
-  const cleanLang = (lang || '').trim().toLowerCase();
-  const validLang = cleanLang && hljs.getLanguage(cleanLang) ? cleanLang : null;
-  const displayLang = cleanLang || 'code';
-  let highlighted = '';
-  try {
-    if (validLang) {
-      highlighted = hljs.highlight(text, { language: validLang, ignoreIllegals: true }).value;
-    } else {
-      const autoRes = hljs.highlightAuto(text);
-      highlighted = autoRes.value || text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    }
-  } catch {
-    highlighted = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-  return `<div class="code-block-wrapper"><div class="code-block-header"><span class="code-lang">${displayLang}</span><button class="code-copy-btn" onclick="(function(btn){navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(text)}')).then(function(){btn.innerHTML='<svg width=\\'12\\' height=\\'12\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2.5\\'><polyline points=\\'20 6 9 17 4 12\\'/></svg> Copied';setTimeout(function(){btn.innerHTML='<svg width=\\'12\\' height=\\'12\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><rect x=\\'9\\' y=\\'9\\' width=\\'13\\' height=\\'13\\' rx=\\'2\\' ry=\\'2\\'/><path d=\\'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\\'/></svg> Copy';},2000);});})(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button></div><pre><code class="hljs language-${validLang || 'plaintext'}">${highlighted}</code></pre></div>`;
-};
+interface ContentBlock {
+  type: 'markdown' | 'code';
+  content: string;
+  language?: string;
+}
 
-marked.setOptions({ renderer, gfm: true, breaks: true });
+function parseMarkdownBlocks(text: string, isStreaming = false): ContentBlock[] {
+  if (!text) return [];
+  const blocks: ContentBlock[] = [];
+  const regex = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const chunk = text.slice(lastIndex, match.index);
+      if (chunk.trim()) {
+        blocks.push({ type: 'markdown', content: chunk });
+      }
+    }
+    blocks.push({
+      type: 'code',
+      language: match[1] || '',
+      content: match[2] || '',
+    });
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    const remaining = text.slice(lastIndex);
+    if (isStreaming) {
+      const openCodeMatch = remaining.match(/```([a-zA-Z0-9_-]*)\n([\s\S]*)$/);
+      if (openCodeMatch && openCodeMatch.index !== undefined) {
+        const pre = remaining.slice(0, openCodeMatch.index);
+        if (pre.trim()) {
+          blocks.push({ type: 'markdown', content: pre });
+        }
+        blocks.push({
+          type: 'code',
+          language: openCodeMatch[1] || '',
+          content: openCodeMatch[2] || '',
+        });
+      } else {
+        if (remaining.trim()) {
+          blocks.push({ type: 'markdown', content: remaining });
+        }
+      }
+    } else {
+      if (remaining.trim()) {
+        blocks.push({ type: 'markdown', content: remaining });
+      }
+    }
+  }
+
+  if (blocks.length === 0 && text.trim()) {
+    blocks.push({ type: 'markdown', content: text });
+  }
+
+  return blocks;
+}
 
 function parseThinking(text: string): { thinking: string; response: string } | null {
   const thinkMatch = text.match(/<think>([\s\S]*?)<\/think>/i);
@@ -43,7 +86,7 @@ function parseThinking(text: string): { thinking: string; response: string } | n
   return { thinking: thinking.trim(), response };
 }
 
-function ChatMessageComponent({ message, isStreaming, onRetry }: Props) {
+function ChatMessageComponent({ message, isStreaming, onRetry, onOpenCanvas }: Props) {
   const [copied, setCopied] = useState(false);
   const [thinkingOpen, setThinkingOpen] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(true);
@@ -69,14 +112,10 @@ function ChatMessageComponent({ message, isStreaming, onRetry }: Props) {
   const reasoningText = message.reasoning_content || parsedThinking?.thinking;
   const mainText = parsedThinking ? parsedThinking.response : rawText;
 
-  const parsedHtml = useMemo(() => {
-    if (!mainText) return '';
-    try {
-      return marked.parse(mainText) as string;
-    } catch {
-      return mainText;
-    }
-  }, [mainText]);
+  // Split into markdown and rich interactive artifact blocks
+  const contentBlocks = useMemo(() => {
+    return parseMarkdownBlocks(mainText, isStreaming);
+  }, [mainText, isStreaming]);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(mainText || rawText);
@@ -164,12 +203,35 @@ function ChatMessageComponent({ message, isStreaming, onRetry }: Props) {
         )}
 
         {/* Main Message Content */}
-        {parsedHtml ? (
+        {contentBlocks.length > 0 ? (
           <div className="chat-markdown-content-wrapper">
-            <div
-              className="chat-markdown-content"
-              dangerouslySetInnerHTML={{ __html: parsedHtml }}
-            />
+            <div className="chat-markdown-content">
+              {contentBlocks.map((block, idx) => {
+                if (block.type === 'code') {
+                  return (
+                    <ArtifactBlock
+                      key={idx}
+                      code={block.content}
+                      language={block.language}
+                      onOpenCanvas={onOpenCanvas}
+                    />
+                  );
+                }
+                let renderedHtml = '';
+                try {
+                  renderedHtml = marked.parse(block.content) as string;
+                } catch {
+                  renderedHtml = block.content;
+                }
+                return (
+                  <div
+                    key={idx}
+                    className="chat-markdown-segment"
+                    dangerouslySetInnerHTML={{ __html: renderedHtml }}
+                  />
+                );
+              })}
+            </div>
             {isStreaming && <span className="chat-streaming-cursor">▌</span>}
           </div>
         ) : isStreaming && !reasoningText && !message.tool_calls?.length ? (
@@ -256,7 +318,8 @@ const ChatMessage = React.memo(ChatMessageComponent, (prev, next) => {
   return (
     prev.message === next.message &&
     prev.isStreaming === next.isStreaming &&
-    prev.onRetry === next.onRetry
+    prev.onRetry === next.onRetry &&
+    prev.onOpenCanvas === next.onOpenCanvas
   );
 });
 

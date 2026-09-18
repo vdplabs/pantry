@@ -6,6 +6,7 @@ import {
 import { useApp, generateAutoTitle } from '@/context/AppContext';
 import ChatInput from '@/components/ChatInput';
 import ChatMessage from '@/components/ChatMessage';
+import CanvasWorkbench, { CanvasArtifact } from '@/components/artifacts/CanvasWorkbench';
 import type { Message, ModelInfo, MessageContent, ToolCall } from '@/types';
 import { streamChat } from '@/services/streaming';
 import api from '@/services/api';
@@ -40,6 +41,7 @@ export default function ChatPage() {
   const [showSystemPromptDrawer, setShowSystemPromptDrawer] = useState(false);
   const [activePromptId, setActivePromptId] = useState('default');
   const [userScrolledUp, setUserScrolledUp] = useState(false);
+  const [activeArtifact, setActiveArtifact] = useState<CanvasArtifact | null>(null);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
@@ -317,175 +319,196 @@ export default function ChatPage() {
   };
 
   return (
-    <div className="chat-page-container">
-      {/* Top Header Controls */}
-      <div className="chat-header-bar">
-        <div style={{ position: 'relative' }}>
-          <button
-            className="chat-model-selector-btn"
-            onClick={() => setShowModelDropdown(!showModelDropdown)}
-          >
-            <span className="model-ready-dot" />
-            <span>{currentModel?.id || state.model || 'Select Model'}</span>
-            {currentModel?.quality_tier && (
-              <span className="spec-badge">{currentModel.quality_tier}</span>
-            )}
-            <FiChevronDown size={14} />
-          </button>
-
-          {showModelDropdown && (
-            <div
-              style={{
-                position: 'absolute',
-                top: '100%',
-                left: 0,
-                marginTop: '6px',
-                width: '320px',
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border-card)',
-                borderRadius: 'var(--radius-lg)',
-                boxShadow: 'var(--shadow-card)',
-                zIndex: 50,
-                padding: '6px',
-                maxHeight: '340px',
-                overflowY: 'auto',
-              }}
+    <div className={`chat-page-container ${activeArtifact ? 'with-canvas-workbench' : ''}`}>
+      <div className="chat-main-area">
+        {/* Top Header Controls */}
+        <div className="chat-header-bar">
+          <div style={{ position: 'relative' }}>
+            <button
+              className="chat-model-selector-btn"
+              onClick={() => setShowModelDropdown(!showModelDropdown)}
             >
-              <div style={{ padding: '6px 8px', fontSize: '11px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
-                Available Chat Models
-              </div>
-              {chatModels.map(m => (
-                <div
-                  key={m.id}
-                  onClick={() => { setModel(m.id); setShowModelDropdown(false); }}
-                  style={{
-                    padding: '8px 10px',
-                    borderRadius: 'var(--radius-md)',
-                    cursor: 'pointer',
-                    background: (m.id === state.model || (m.aliases || []).includes(state.model)) ? 'var(--bg-card-hover)' : 'transparent',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '2px',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-title)' }}>{m.id}</span>
-                    <span className="spec-badge">{m.quality_tier || 'standard'}</span>
-                  </div>
-                  <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
-                    Context: {m.context_max || 4096} tokens • Family: {m.family || 'general'}
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+              <span className="model-ready-dot" />
+              <span>{currentModel?.id || state.model || 'Select Model'}</span>
+              {currentModel?.quality_tier && (
+                <span className="spec-badge">{currentModel.quality_tier}</span>
+              )}
+              <FiChevronDown size={14} />
+            </button>
 
-        <div className="chat-header-controls">
-          <button
-            className={`chat-control-pill ${showSystemPromptDrawer ? 'active' : ''}`}
-            onClick={() => setShowSystemPromptDrawer(!showSystemPromptDrawer)}
-            title="System Persona & Instructions"
-          >
-            <FiSliders size={13} />
-            <span>Persona</span>
-          </button>
-
-          {state.preferSpeculative && (
-            <span className="chat-control-pill active" title="Speculative Decoding Enabled">
-              ⚡ Speculative
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* System Prompt Persona Drawer */}
-      {showSystemPromptDrawer && (
-        <div style={{ padding: '14px 20px', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-card)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>System Persona & Instructions</span>
-            <button onClick={() => setShowSystemPromptDrawer(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: '12px' }}>Done</button>
-          </div>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            {SYSTEM_PROMPTS.map(preset => (
-              <button
-                key={preset.id}
-                onClick={() => handleSelectSystemPrompt(preset)}
-                className={`chat-control-pill ${activePromptId === preset.id ? 'active' : ''}`}
+            {showModelDropdown && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  marginTop: '6px',
+                  width: '320px',
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border-card)',
+                  borderRadius: 'var(--radius-lg)',
+                  boxShadow: 'var(--shadow-card)',
+                  zIndex: 50,
+                  padding: '6px',
+                  maxHeight: '340px',
+                  overflowY: 'auto',
+                }}
               >
-                {preset.label}
-              </button>
-            ))}
+                <div style={{ padding: '6px 8px', fontSize: '11px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+                  Available Chat Models
+                </div>
+                {chatModels.map(m => (
+                  <div
+                    key={m.id}
+                    onClick={() => { setModel(m.id); setShowModelDropdown(false); }}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 'var(--radius-md)',
+                      cursor: 'pointer',
+                      background: (m.id === state.model || (m.aliases || []).includes(state.model)) ? 'var(--bg-card-hover)' : 'transparent',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '2px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-title)' }}>{m.id}</span>
+                      <span className="spec-badge">{m.quality_tier || 'standard'}</span>
+                    </div>
+                    <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
+                      Context: {m.context_max || 4096} tokens • Family: {m.family || 'general'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <textarea
-            rows={2}
-            value={state.systemPrompt}
-            onChange={e => setSystemPrompt(e.target.value)}
-            placeholder="Custom system instructions..."
-            className="gen-textarea"
-            style={{ fontSize: '12px' }}
-          />
+
+          <div className="chat-header-controls">
+            <button
+              className={`chat-control-pill ${showSystemPromptDrawer ? 'active' : ''}`}
+              onClick={() => setShowSystemPromptDrawer(!showSystemPromptDrawer)}
+              title="System Persona & Instructions"
+            >
+              <FiSliders size={13} />
+              <span>Persona</span>
+            </button>
+
+            {state.preferSpeculative && (
+              <span className="chat-control-pill active" title="Speculative Decoding Enabled">
+                ⚡ Speculative
+              </span>
+            )}
+          </div>
         </div>
-      )}
 
-      {/* Messages Scroll Area with Smooth, Non-Interfering Scroll */}
-      <div
-        ref={scrollContainerRef}
-        onScroll={handleScroll}
-        className="chat-messages-scroll"
-      >
-        {state.messages.length === 0 ? (
-          <div className="chat-empty-state">
-            <div className="empty-logo-glow">
-              <FiZap size={32} />
+        {/* System Prompt Persona Drawer */}
+        {showSystemPromptDrawer && (
+          <div style={{ padding: '14px 20px', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-card)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>System Persona & Instructions</span>
+              <button onClick={() => setShowSystemPromptDrawer(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: '12px' }}>Done</button>
             </div>
-            <h1 className="empty-title">What would you like to explore?</h1>
-            <p className="empty-sub">
-              Running locally on Apple Silicon / MLX with Pantry. Full OpenAI API compatibility with real tool calling, reasoning models, and instant low latency.
-            </p>
-
-            <div className="prompt-suggestions-grid">
-              {PROMPT_SUGGESTIONS.map((item, idx) => (
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {SYSTEM_PROMPTS.map(preset => (
                 <button
-                  key={idx}
-                  className="prompt-suggestion-card"
-                  onClick={() => sendMessage(item.desc)}
+                  key={preset.id}
+                  onClick={() => handleSelectSystemPrompt(preset)}
+                  className={`chat-control-pill ${activePromptId === preset.id ? 'active' : ''}`}
                 >
-                  <strong style={{ color: 'var(--text-title)', marginBottom: '4px' }}>{item.title}</strong>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{item.desc}</span>
+                  {preset.label}
                 </button>
               ))}
             </div>
-          </div>
-        ) : (
-          state.messages.map((msg, idx) => (
-            <ChatMessage
-              key={idx}
-              message={msg}
-              isStreaming={state.isStreaming && idx === state.messages.length - 1}
-              onRetry={idx === state.messages.length - 1 ? handleRetry : undefined}
+            <textarea
+              rows={2}
+              value={state.systemPrompt}
+              onChange={e => setSystemPrompt(e.target.value)}
+              placeholder="Custom system instructions..."
+              className="gen-textarea"
+              style={{ fontSize: '12px' }}
             />
-          ))
+          </div>
         )}
+
+        {/* Messages Scroll Area with Smooth, Non-Interfering Scroll */}
+        <div
+          ref={scrollContainerRef}
+          onScroll={handleScroll}
+          className="chat-messages-scroll"
+        >
+          {state.messages.length === 0 ? (
+            <div className="chat-empty-state">
+              <div className="empty-logo-glow">
+                <FiZap size={32} />
+              </div>
+              <h1 className="empty-title">What would you like to explore?</h1>
+              <p className="empty-sub">
+                Running locally on Apple Silicon / MLX with Pantry. Full OpenAI API compatibility with real tool calling, reasoning models, and instant low latency.
+              </p>
+
+              <div className="prompt-suggestions-grid">
+                {PROMPT_SUGGESTIONS.map((item, idx) => (
+                  <button
+                    key={idx}
+                    className="prompt-suggestion-card"
+                    onClick={() => sendMessage(item.desc)}
+                  >
+                    <strong style={{ color: 'var(--text-title)', marginBottom: '4px' }}>{item.title}</strong>
+                    <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>{item.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            state.messages.map((msg, idx) => (
+              <ChatMessage
+                key={idx}
+                message={msg}
+                isStreaming={state.isStreaming && idx === state.messages.length - 1}
+                onRetry={idx === state.messages.length - 1 ? handleRetry : undefined}
+                onOpenCanvas={(code, type) => {
+                  setActiveArtifact({
+                    id: Date.now().toString(),
+                    title: type === 'mermaid' ? 'Mermaid Diagram' : type === 'html' ? 'Live Web Application' : type === 'svg' ? 'Interactive SVG' : `${type.toUpperCase()} Code`,
+                    type,
+                    code,
+                  });
+                }}
+              />
+            ))
+          )}
+        </div>
+
+        {/* Floating Jump to Bottom Button */}
+        {userScrolledUp && state.messages.length > 0 && (
+          <button
+            className="chat-jump-bottom-btn"
+            onClick={() => scrollToBottom(true)}
+          >
+            <FiArrowDown size={14} />
+            <span>Latest message</span>
+          </button>
+        )}
+
+        {/* Composer Input Bar */}
+        <ChatInput
+          onSend={sendMessage}
+          disabled={state.isStreaming}
+          autoFocus
+        />
       </div>
 
-      {/* Floating Jump to Bottom Button */}
-      {userScrolledUp && state.messages.length > 0 && (
-        <button
-          className="chat-jump-bottom-btn"
-          onClick={() => scrollToBottom(true)}
-        >
-          <FiArrowDown size={14} />
-          <span>Latest message</span>
-        </button>
+      {/* Slide-out / Split Canvas Workbench */}
+      {activeArtifact && (
+        <CanvasWorkbench
+          artifact={activeArtifact}
+          onClose={() => setActiveArtifact(null)}
+          onUpdateCode={(updatedCode) => {
+            setActiveArtifact(prev => prev ? { ...prev, code: updatedCode } : null);
+          }}
+        />
       )}
-
-      {/* Composer Input Bar */}
-      <ChatInput
-        onSend={sendMessage}
-        disabled={state.isStreaming}
-        autoFocus
-      />
     </div>
   );
 }
