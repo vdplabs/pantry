@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiCpu, FiTerminal, FiZap, FiUser } from 'react-icons/fi';
+import { FiCopy, FiCheck, FiChevronDown, FiChevronUp, FiCpu, FiTerminal, FiZap, FiUser, FiRefreshCw } from 'react-icons/fi';
 import type { Message, MessageContent, ToolCall } from '@/types';
 import { marked } from 'marked';
 import hljs from 'highlight.js';
@@ -17,7 +17,7 @@ renderer.code = ({ text, lang }: { text: string; lang?: string; escaped?: boolea
     lang && hljs.getLanguage(lang)
       ? hljs.highlight(text, { language: lang }).value
       : hljs.highlightAuto(text).value;
-  return `<div class="code-block-wrapper"><div class="code-block-header"><span class="code-lang">${language}</span><button class="code-copy-btn" onclick="navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(text)}'))">Copy</button></div><pre><code class="hljs language-${language}">${highlighted}</code></pre></div>`;
+  return `<div class="code-block-wrapper"><div class="code-block-header"><span class="code-lang">${language}</span><button class="code-copy-btn" onclick="(function(btn){navigator.clipboard.writeText(decodeURIComponent('${encodeURIComponent(text)}')).then(function(){btn.innerHTML='<svg width=\\'12\\' height=\\'12\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2.5\\'><polyline points=\\'20 6 9 17 4 12\\'/></svg> Copied';setTimeout(function(){btn.innerHTML='<svg width=\\'12\\' height=\\'12\\' viewBox=\\'0 0 24 24\\' fill=\\'none\\' stroke=\\'currentColor\\' stroke-width=\\'2\\'><rect x=\\'9\\' y=\\'9\\' width=\\'13\\' height=\\'13\\' rx=\\'2\\' ry=\\'2\\'/><path d=\\'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1\\'/></svg> Copy';},2000);});})(this)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg> Copy</button></div><pre><code class="hljs language-${language}">${highlighted}</code></pre></div>`;
 };
 
 marked.setOptions({ renderer, gfm: true, breaks: true });
@@ -175,6 +175,7 @@ export default function ChatMessage({ message, isStreaming, onRetry }: Props) {
             </button>
             {onRetry && (
               <button onClick={onRetry} className="chat-action-btn" title="Retry generation">
+                <FiRefreshCw size={12} />
                 <span>Retry</span>
               </button>
             )}

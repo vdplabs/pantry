@@ -317,8 +317,9 @@ export default function GeneratePage() {
                   </span>
                 )}
               </div>
-              <button onClick={handleCopy} className="code-copy-btn">
-                {copied ? 'Copied!' : 'Copy Complete Code'}
+              <button onClick={handleCopy} className="code-copy-btn" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                {copied ? <FiCheck size={12} color="#10b981" /> : <FiCopy size={12} />}
+                <span>{copied ? 'Copied!' : 'Copy Complete Code'}</span>
               </button>
             </div>
 
