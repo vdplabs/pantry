@@ -71,6 +71,7 @@ from pantry.schemas import (
     SpeculativeBenchmarkRequest,
     SpeculativeBenchmarkResponse,
     SpeculativePairInfo,
+    TextCompleteRequest,
     UnloadBody,
     VideoGenerateRequest,
 )
@@ -557,6 +558,27 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             ),
         }
 
+    @app.get("/v1/models/{model:path}")
+    def model_retrieve(model: str) -> dict[str, Any]:
+        pkg = svc.resolve_model(model)
+        ready = store.weights_ready(pkg)
+        return {
+            "id": model,
+            "object": "model",
+            "created": int(svc._start_time),
+            "owned_by": "pantry",
+            "permission": [],
+            "root": pkg.id,
+            "parent": None,
+            "package_id": pkg.id,
+            "family": pkg.family,
+            "role": pkg.role,
+            "modalities": pkg.modalities,
+            "quality_tier": pkg.quality_tier.value,
+            "context_max": pkg.context_max,
+            "weights_ready": ready,
+        }
+
     @app.post("/v1/resolve")
     def resolve_http(req: CapabilityRequest) -> dict[str, Any]:
         return svc.resolve_req(req)
@@ -714,6 +736,191 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             "loaded": store.read_state().get("loaded", []),
         }
 
+    @app.post("/v1/completions")
+    async def text_completions(req: TextCompleteRequest) -> Any:
+        pkg = svc.resolve_model(req.model)
+        svc.touch_model(pkg.id)
+        if not _is_text_package(pkg):
+            raise HTTPException(
+                status_code=400,
+                detail=f"package {pkg.id} is not a text/code completion model",
+            )
+        if not store.weights_ready(pkg):
+            raise HTTPException(
+                status_code=409,
+                detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
+            )
+        runtime = svc.runtimes.for_manifest(pkg)
+        prompt = req.prompt_text()
+        stops = req.effective_stops()
+        usage_info: dict[str, Any] = {}
+
+        async def _complete_text() -> str:
+            with svc.tracking_load(pkg.id, "Generating code/text completion…", modality="text"):
+                return await runtime.complete_text(
+                    pkg,
+                    prompt,
+                    suffix=req.suffix,
+                    max_tokens=req.max_tokens,
+                    temperature=req.temperature,
+                    stop=stops,
+                    usage=usage_info,
+                )
+
+        if not req.stream:
+            t0 = time.time()
+            try:
+                text = await svc.scheduler.run(
+                    req.priority,
+                    _complete_text,
+                    modality="text",
+                    model=req.model,
+                    description="Generating code/text completion…",
+                )
+                duration_s = max(0.01, time.time() - t0)
+                usage = usage_info if usage_info else {
+                    "prompt_tokens": max(1, len(prompt.split())),
+                    "completion_tokens": max(1, len(text.split())),
+                    "total_tokens": max(2, len(prompt.split()) + len(text.split())),
+                }
+                TokenMetricsTracker.get().record_completion(
+                    model=req.model,
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    decode_duration_s=duration_s,
+                    prefill_ms=max(1.0, duration_s * 200.0),
+                    context_limit=getattr(pkg, "context_max", 4096),
+                    model_params_b=getattr(pkg, "params_b", 3.0),
+                )
+                RequestLogTracker.get().record_request(
+                    model=req.model,
+                    tokens_in=usage.get("prompt_tokens", 0),
+                    tokens_out=usage.get("completion_tokens", 0),
+                    duration_ms=int(duration_s * 1000),
+                    status=200,
+                )
+                return {
+                    "id": f"cmpl-{uuid.uuid4().hex[:12]}",
+                    "object": "text_completion",
+                    "created": int(time.time()),
+                    "model": req.model,
+                    "system_fingerprint": "fp_pantry_mlx",
+                    "choices": [
+                        {
+                            "text": text,
+                            "index": 0,
+                            "logprobs": None,
+                            "finish_reason": "stop",
+                        }
+                    ],
+                    "usage": usage,
+                }
+            except Exception as exc:
+                dur_ms = int(max(0.01, time.time() - t0) * 1000)
+                st = getattr(exc, "status_code", 500)
+                RequestLogTracker.get().record_request(
+                    model=req.model,
+                    tokens_in=0,
+                    tokens_out=0,
+                    duration_ms=dur_ms,
+                    status=st,
+                )
+                raise
+
+        async def text_event_stream() -> AsyncIterator[bytes]:
+            cid = f"cmpl-{uuid.uuid4().hex[:12]}"
+            created = int(time.time())
+            t_stream_start = time.time()
+            stream_usage: dict[str, Any] = {}
+            svc.active_streams += 1
+            assembled: list[str] = []
+
+            async def _locked_text_stream() -> AsyncIterator[str]:
+                async with svc.scheduler.hold(req.priority, modality="text", model=req.model, description="Streaming code/text completion…"):
+                    with svc.tracking_load(pkg.id, "Streaming code/text completion…", modality="text"):
+                        async for chunk in runtime.stream_text(
+                            pkg,
+                            prompt,
+                            suffix=req.suffix,
+                            max_tokens=req.max_tokens,
+                            temperature=req.temperature,
+                            stop=stops,
+                            usage=stream_usage,
+                        ):
+                            yield chunk
+
+            try:
+                async for piece in _locked_text_stream():
+                    if not piece:
+                        continue
+                    assembled.append(piece)
+                    payload = {
+                        "id": cid,
+                        "object": "text_completion",
+                        "created": created,
+                        "model": req.model,
+                        "system_fingerprint": "fp_pantry_mlx",
+                        "choices": [
+                            {
+                                "text": piece,
+                                "index": 0,
+                                "logprobs": None,
+                                "finish_reason": None,
+                            }
+                        ],
+                    }
+                    yield f"data: {json.dumps(payload)}\n\n".encode()
+
+                full_text = "".join(assembled)
+                usage = stream_usage if stream_usage else {
+                    "prompt_tokens": max(1, len(prompt.split())),
+                    "completion_tokens": max(1, len(full_text.split())),
+                    "total_tokens": max(2, len(prompt.split()) + len(full_text.split())),
+                }
+                duration_s = max(0.01, time.time() - t_stream_start)
+                TokenMetricsTracker.get().record_completion(
+                    model=req.model,
+                    prompt_tokens=usage.get("prompt_tokens", 0),
+                    completion_tokens=usage.get("completion_tokens", 0),
+                    decode_duration_s=duration_s,
+                    prefill_ms=max(1.0, duration_s * 200.0),
+                    context_limit=getattr(pkg, "context_max", 4096),
+                    model_params_b=getattr(pkg, "params_b", 3.0),
+                )
+                RequestLogTracker.get().record_request(
+                    model=req.model,
+                    tokens_in=usage.get("prompt_tokens", 0),
+                    tokens_out=usage.get("completion_tokens", 0),
+                    duration_ms=int(duration_s * 1000),
+                    status=200,
+                )
+                done = {
+                    "id": cid,
+                    "object": "text_completion",
+                    "created": created,
+                    "model": req.model,
+                    "system_fingerprint": "fp_pantry_mlx",
+                    "choices": [{"text": "", "index": 0, "logprobs": None, "finish_reason": "stop"}],
+                    "usage": usage,
+                }
+                yield f"data: {json.dumps(done)}\n\n".encode()
+                yield b"data: [DONE]\n\n"
+            except Exception as exc:
+                dur_ms = int(max(0.01, time.time() - t_stream_start) * 1000)
+                st = getattr(exc, "status_code", 500)
+                RequestLogTracker.get().record_request(
+                    model=req.model,
+                    tokens_in=0,
+                    tokens_out=0,
+                    duration_ms=dur_ms,
+                    status=st,
+                )
+                raise
+            finally:
+                svc.active_streams = max(0, svc.active_streams - 1)
+
+        return StreamingResponse(text_event_stream(), media_type="text/event-stream")
+
     @app.post("/v1/chat/completions")
     async def chat_completions(req: CompleteRequest) -> Any:
         pkg = svc.resolve_model(req.model)
@@ -744,6 +951,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         )
         speculative = draft_path is not None
         req_adapters = req.adapters or ([req.adapter] if req.adapter else None)
+        stops = req.effective_stops()
         usage_info: dict[str, Any] = {}
 
         async def _complete() -> str:
@@ -763,6 +971,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     tool_choice=req.tool_choice,
                     response_format=req.response_format,
                     adapters=req_adapters,
+                    stop=stops,
                 )
 
         if not req.stream:
@@ -771,16 +980,26 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 text = await svc.scheduler.run(req.priority, _complete, modality="text", model=req.model, description="Generating chat response…")
                 duration_s = max(0.01, time.time() - t0)
                 tool_calls = _parse_tool_calls(text, tools=req.tools, tool_choice=req.tool_choice) if (req.tools or req.tool_choice) else None
-                if not tool_calls and req.response_format:
-                    from pantry.grammar import StrictToolCallGuard
+                from pantry.grammar import StrictToolCallGuard
 
-                    text = StrictToolCallGuard.enforce_response_format(text, req.response_format)
+                clean_content = StrictToolCallGuard.extract_clean_content(text, tool_calls) if tool_calls else text
+                if not tool_calls and req.response_format:
+                    clean_content = StrictToolCallGuard.enforce_response_format(text, req.response_format)
+
+                reasoning_content = None
+                if "<think>" in text and "</think>" in text:
+                    think_match = re.search(r"<think>(.*?)</think>", text, re.DOTALL)
+                    if think_match:
+                        reasoning_content = think_match.group(1).strip()
+
                 message_obj: dict[str, Any] = {
                     "role": "assistant",
-                    "content": None if tool_calls else text,
+                    "content": clean_content if not tool_calls else (clean_content or None),
                 }
                 if tool_calls:
                     message_obj["tool_calls"] = tool_calls
+                if reasoning_content:
+                    message_obj["reasoning_content"] = reasoning_content
                 finish_reason = "tool_calls" if tool_calls else "stop"
 
                 usage = usage_info if usage_info else _estimate_usage(pkg, req.messages, text)
@@ -839,6 +1058,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                     "created": int(time.time()),
                     "model": req.model,
                     "package_id": pkg.id,
+                    "system_fingerprint": "fp_pantry_mlx",
                     "speculative": speculative,
                     "draft_package_id": draft_id,
                     "choices": [
@@ -898,30 +1118,102 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                             yield chunk
 
             try:
-                async for piece in _locked_stream():
-                    if not piece:
-                        continue
-                    if first_token_time is None:
-                        first_token_time = time.time()
-                    assembled.append(piece)
-                    payload = {
-                        "id": cid,
-                        "object": "chat.completion.chunk",
-                        "created": created,
-                        "model": req.model,
-                        "choices": [
-                            {
-                                "index": 0,
-                                "delta": {"content": piece},
-                                "finish_reason": None,
-                            }
-                        ],
-                    }
-                    yield f"data: {json.dumps(payload)}\n\n".encode()
+                want_tools = bool(req.tools or req.tool_choice)
+                if not want_tools:
+                    async for piece in _locked_stream():
+                        if not piece:
+                            continue
+                        if first_token_time is None:
+                            first_token_time = time.time()
+                        assembled.append(piece)
+                        payload = {
+                            "id": cid,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": req.model,
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {"content": piece},
+                                    "finish_reason": None,
+                                }
+                            ],
+                        }
+                        yield f"data: {json.dumps(payload)}\n\n".encode()
+                else:
+                    async for piece in _locked_stream():
+                        if not piece:
+                            continue
+                        if first_token_time is None:
+                            first_token_time = time.time()
+                        assembled.append(piece)
 
                 full_text = "".join(assembled)
                 tool_calls = _parse_tool_calls(full_text, tools=req.tools, tool_choice=req.tool_choice) if (req.tools or req.tool_choice) else None
                 finish_reason = "tool_calls" if tool_calls else "stop"
+
+                if want_tools:
+                    from pantry.grammar import StrictToolCallGuard
+
+                    clean_content = StrictToolCallGuard.extract_clean_content(full_text, tool_calls) if tool_calls else full_text
+                    if tool_calls:
+                        if clean_content:
+                            payload = {
+                                "id": cid,
+                                "object": "chat.completion.chunk",
+                                "created": created,
+                                "model": req.model,
+                                "choices": [
+                                    {
+                                        "index": 0,
+                                        "delta": {"role": "assistant", "content": clean_content},
+                                        "finish_reason": None,
+                                    }
+                                ],
+                            }
+                            yield f"data: {json.dumps(payload)}\n\n".encode()
+
+                        delta_tool_calls = [
+                            {
+                                "index": i,
+                                "id": tc["id"],
+                                "type": "function",
+                                "function": {
+                                    "name": tc["function"]["name"],
+                                    "arguments": tc["function"]["arguments"],
+                                },
+                            }
+                            for i, tc in enumerate(tool_calls)
+                        ]
+                        payload = {
+                            "id": cid,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": req.model,
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {"role": "assistant", "tool_calls": delta_tool_calls},
+                                    "finish_reason": None,
+                                }
+                            ],
+                        }
+                        yield f"data: {json.dumps(payload)}\n\n".encode()
+                    else:
+                        payload = {
+                            "id": cid,
+                            "object": "chat.completion.chunk",
+                            "created": created,
+                            "model": req.model,
+                            "choices": [
+                                {
+                                    "index": 0,
+                                    "delta": {"role": "assistant", "content": clean_content},
+                                    "finish_reason": None,
+                                }
+                            ],
+                        }
+                        yield f"data: {json.dumps(payload)}\n\n".encode()
 
                 usage = stream_usage if stream_usage else _estimate_usage(pkg, req.messages, full_text)
                 cached_tokens = 0
@@ -2041,6 +2333,113 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             modality="stt",
             model=model,
             description="Transcribing audio…",
+        )
+        dur_ms = int(max(0.01, time.time() - t0) * 1000)
+        audio_dur = 0.0
+        for seg in result.get("segments", []):
+            if isinstance(seg, dict) and "end" in seg:
+                try:
+                    audio_dur = max(audio_dur, float(seg["end"]))
+                except Exception:
+                    pass
+        if audio_dur == 0.0:
+            audio_dur = max(1.0, len(result.get("text", "").split()) * 0.4)
+        TokenMetricsTracker.get().record_audio_transcription(
+            model=model,
+            audio_seconds=audio_dur,
+            duration_ms=dur_ms,
+        )
+        RequestLogTracker.get().record_request(
+            model=model,
+            tokens_in=0,
+            tokens_out=0,
+            duration_ms=dur_ms,
+            status=200,
+        )
+
+        fmt = (response_format or "json").lower().strip()
+        if fmt == "text":
+            return PlainTextResponse(result.get("text", ""))
+        if fmt == "vtt":
+            return PlainTextResponse(
+                format_vtt(result.get("segments", [])),
+                media_type="text/vtt",
+            )
+        if fmt == "srt":
+            return PlainTextResponse(
+                format_srt(result.get("segments", [])),
+                media_type="text/plain",
+            )
+        if fmt == "verbose_json":
+            return result
+        return {"text": result.get("text", "")}
+
+    @app.post("/v1/audio/translations")
+    async def audio_translations(
+        file: UploadFile = File(...),
+        model: str = Form(...),
+        prompt: str | None = Form(None),
+        response_format: str = Form("json"),
+        temperature: float | None = Form(None),
+    ) -> Any:
+        pkg = svc.resolve_model(model)
+        if not _is_stt_package(pkg):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"package {pkg.id} is not a speech-to-text model "
+                    f"(modalities={pkg.modalities})"
+                ),
+            )
+        if not store.weights_ready(pkg):
+            raise HTTPException(
+                status_code=409,
+                detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
+            )
+
+        from pantry.audio_runtime import (
+            audio_transcription_runtime_for,
+            format_srt,
+            format_vtt,
+        )
+
+        runtime = audio_transcription_runtime_for(pkg, store)
+
+        import shutil
+        import tempfile
+
+        suffix = Path(file.filename or "audio.wav").suffix or ".wav"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            tmp_path = Path(tmp.name)
+            try:
+                shutil.copyfileobj(file.file, tmp)
+            finally:
+                file.file.close()
+
+        async def _translate() -> dict[str, Any]:
+            try:
+                with svc.tracking_load(pkg.id, "Translating audio / loading model…", modality="stt"):
+                    return await asyncio.to_thread(
+                        runtime.transcribe,
+                        pkg,
+                        audio_path=tmp_path,
+                        language=None,
+                        prompt=prompt,
+                        temperature=temperature,
+                        word_timestamps=False,
+                        original_filename=file.filename,
+                        task="translate",
+                    )
+            finally:
+                tmp_path.unlink(missing_ok=True)
+
+        t0 = time.time()
+        result = await svc.scheduler.run(
+            "interactive",
+            _translate,
+            modality="stt",
+            model=model,
+            description="Translating audio…",
         )
         dur_ms = int(max(0.01, time.time() - t0) * 1000)
         audio_dur = 0.0

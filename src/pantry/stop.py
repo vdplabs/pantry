@@ -117,8 +117,12 @@ def looks_like_repetition_loop(text: str) -> bool:
 class StreamStopper:
     """Accumulate streamed text; truncate at stop strings / loops."""
 
-    def __init__(self, manifest: PackageManifest | None = None) -> None:
+    def __init__(self, manifest: PackageManifest | None = None, extra_stops: list[str] | None = None) -> None:
         self.stops = stop_strings(manifest)
+        if extra_stops:
+            for s in extra_stops:
+                if s and s not in self.stops:
+                    self.stops.append(s)
         self._buf = ""
         self.halted = False
 

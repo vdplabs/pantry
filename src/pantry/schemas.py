@@ -208,15 +208,23 @@ def normalize_message_content(content: str | list[Any] | None) -> str:
 
 
 class CompleteRequest(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     model: str = "chat-standard"
     messages: list[ChatMessage]
     stream: bool = False
     temperature: float | None = None
+    top_p: float | None = None
     max_tokens: int | None = None
     # Newer OpenAI SDKs prefer this name; merged into max_tokens when unset.
     max_completion_tokens: int | None = None
+    n: int | None = 1
+    stop: str | list[str] | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    seed: int | None = None
+    user: str | None = None
+    stream_options: dict[str, Any] | None = None
     priority: str = "interactive"  # interactive | batch
     # When true (or model alias chat-fast), use draft_package_id if weights are ready.
     prefer_speculative: bool = False
@@ -234,6 +242,63 @@ class CompleteRequest(BaseModel):
         if self.max_tokens is not None:
             return self.max_tokens
         return self.max_completion_tokens
+
+    def effective_stops(self) -> list[str]:
+        if not self.stop:
+            return []
+        if isinstance(self.stop, str):
+            return [self.stop]
+        return list(self.stop)
+
+
+class TextCompleteRequest(BaseModel):
+    """OpenAI-compatible text / code / FIM completions request."""
+    model_config = ConfigDict(populate_by_name=True, extra="ignore")
+
+    model: str = "chat-standard"
+    prompt: str | list[str] | list[int] | list[list[int]] = ""
+    suffix: str | None = None
+    max_tokens: int | None = 128
+    temperature: float | None = None
+    top_p: float | None = None
+    n: int | None = 1
+    stream: bool = False
+    logprobs: int | None = None
+    echo: bool = False
+    stop: str | list[str] | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    best_of: int | None = None
+    stream_options: dict[str, Any] | None = None
+    user: str | None = None
+    priority: str = "interactive"
+    prefer_speculative: bool = False
+    draft_model: str | None = Field(default=None, alias="draft_package_id")
+    num_draft_tokens: int | None = None
+    prefer_prefix_cache: bool = True
+    prefill_step_size: int = 2048
+    adapters: list[str] | None = None
+    adapter: str | None = None
+
+    def prompt_text(self) -> str:
+        if isinstance(self.prompt, str):
+            return self.prompt
+        if isinstance(self.prompt, list):
+            parts = []
+            for p in self.prompt:
+                if isinstance(p, str):
+                    parts.append(p)
+                else:
+                    parts.append(str(p))
+            return "".join(parts)
+        return str(self.prompt)
+
+    def effective_stops(self) -> list[str]:
+        if not self.stop:
+            return []
+        if isinstance(self.stop, str):
+            return [self.stop]
+        return list(self.stop)
 
 
 class SpeculativePairInfo(BaseModel):

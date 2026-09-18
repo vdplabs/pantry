@@ -31,7 +31,7 @@ def apply_chat_template(
     tools_prompt = _format_tools_prompt(tools) if tools else ""
 
     msgs = list(messages)
-    has_sys = any(m.role == "system" for m in msgs)
+    has_sys = any(m.role in ("system", "developer") for m in msgs)
 
     if not has_sys:
         combined = (preamble + tools_prompt).strip()
@@ -42,8 +42,8 @@ def apply_chat_template(
         new_msgs: list[ChatMessage] = []
         appended = False
         for m in msgs:
-            if m.role == "system" and not appended:
-                new_msgs.append(ChatMessage(role="system", content=m.text() + tools_prompt))
+            if m.role in ("system", "developer") and not appended:
+                new_msgs.append(ChatMessage(role=m.role, content=m.text() + tools_prompt))
                 appended = True
             else:
                 new_msgs.append(m)
@@ -56,10 +56,42 @@ def apply_chat_template(
     return _chatml(msgs)
 
 
+def _format_message_content(m: ChatMessage) -> str:
+    content = m.text()
+    if m.tool_calls:
+        tc_blocks = []
+        for tc in m.tool_calls:
+            fn = tc.get("function", tc) if isinstance(tc, dict) else {}
+            name = fn.get("name") or tc.get("name", "")
+            raw_args = fn.get("arguments", tc.get("arguments", {}))
+            if isinstance(raw_args, str):
+                try:
+                    parsed_args = json.loads(raw_args)
+                except Exception:
+                    parsed_args = raw_args
+            else:
+                parsed_args = raw_args
+            tc_blocks.append(
+                f"<tool_call>\n{json.dumps({'name': name, 'arguments': parsed_args})}\n</tool_call>"
+            )
+        tc_str = "\n".join(tc_blocks)
+        if content:
+            content = f"{content}\n{tc_str}"
+        else:
+            content = tc_str
+
+    if m.role in ("tool", "function"):
+        if not content.startswith("<tool_response>"):
+            content = f"<tool_response>\n{content}\n</tool_response>"
+
+    return content
+
+
 def _chatml(messages: list[ChatMessage]) -> str:
     parts: list[str] = []
     for m in messages:
-        parts.append(f"<|im_start|>{m.role}\n{m.text()}<|im_end|>")
+        role = "system" if m.role == "developer" else ("user" if m.role in ("tool", "function") else m.role)
+        parts.append(f"<|im_start|>{role}\n{_format_message_content(m)}<|im_end|>")
     parts.append("<|im_start|>assistant\n")
     return "\n".join(parts)
 
@@ -67,14 +99,20 @@ def _chatml(messages: list[ChatMessage]) -> str:
 def _llama3(messages: list[ChatMessage]) -> str:
     parts = ["<|begin_of_text|>"]
     for m in messages:
+        role = "system" if m.role == "developer" else ("ipython" if m.role in ("tool", "function") else m.role)
         parts.append(
-            f"<|start_header_id|>{m.role}<|end_header_id|>\n\n{m.text()}<|eot_id|>"
+            f"<|start_header_id|>{role}<|end_header_id|>\n\n{_format_message_content(m)}<|eot_id|>"
         )
     parts.append("<|start_header_id|>assistant<|end_header_id|>\n\n")
     return "".join(parts)
 
 
-def strip_stop_tokens(text: str, manifest: PackageManifest) -> str:
+def strip_stop_tokens(text: str, manifest: PackageManifest, extra_stops: list[str] | None = None) -> str:
     from pantry.stop import stop_strings, strip_at_stop
 
-    return strip_at_stop(text, stop_strings(manifest))
+    stops = stop_strings(manifest)
+    if extra_stops:
+        for s in extra_stops:
+            if s and s not in stops:
+                stops.append(s)
+    return strip_at_stop(text, stops)

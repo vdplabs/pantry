@@ -19,7 +19,7 @@ def test_dashboard_endpoint(tmp_path):
     assert "text/html" in resp.headers["content-type"]
     assert "Pantry · System Monitor" in resp.text
     assert "CPU Activity" in resp.text
-    assert "AI Models in Memory" in resp.text
+    assert "System Memory" in resp.text
     assert "Playground" in resp.text
     assert "Image Studio" in resp.text
     assert "Music & Audio" in resp.text

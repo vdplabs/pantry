@@ -23,7 +23,7 @@ def register_hf_repo(store: PackageStore, repo_id: str) -> PackageManifest:
     if not is_hf_repo_id(clean_repo):
         raise ValueError(f"Invalid Hugging Face repo id: {repo_id}")
     manifest = generate_manifest_template(repo_id=clean_repo)
-    existing = store.load_manifeset(manifest.id)
+    existing = store.load_manifest(manifest.id)
     if existing is not None:
         return existing
     return create_custom_pack(store, manifest.model_dump())

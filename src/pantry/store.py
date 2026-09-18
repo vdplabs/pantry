@@ -277,7 +277,7 @@ class PackageStore:
 
         See ``find_hf_snapshot()`` for details.
         """
-        if not re.fullMatch(r"[^/\s]+/[^/\s]+", repo_id):
+        if not re.fullmatch(r"[^/\s]+/[^/\s]+", repo_id):
             return []
 
         folder_name = f"models--{repo_id.replace('/', '--')}"

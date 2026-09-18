@@ -71,8 +71,9 @@ class AudioTranscriptionRuntime(ABC):
         temperature: float | None = None,
         word_timestamps: bool = False,
         original_filename: str | None = None,
+        task: str = "transcribe",
     ) -> dict[str, Any]:
-        """Transcribe an audio file into text and segment timestamps."""
+        """Transcribe or translate an audio file into text and segment timestamps."""
         raise NotImplementedError
 
 
@@ -92,15 +93,18 @@ class EchoAudioTranscriptionRuntime(AudioTranscriptionRuntime):
         temperature: float | None = None,
         word_timestamps: bool = False,
         original_filename: str | None = None,
+        task: str = "transcribe",
     ) -> dict[str, Any]:
         path = Path(audio_path)
         if not path.exists():
             raise FileNotFoundError(f"audio file not found: {audio_path}")
 
         name = original_filename or path.name
-        text = f"[pantry echo_stt · {manifest.id}] Transcribed audio from {name}."
+        action_verb = "Translated" if task == "translate" else "Transcribed"
+        suffix_phrase = " to English" if task == "translate" else ""
+        text = f"[pantry echo_stt · {manifest.id}] {action_verb} audio from {name}{suffix_phrase}."
         words: list[dict[str, Any]] = [
-            {"word": "Transcribed", "start": 0.0, "end": 0.5},
+            {"word": action_verb, "start": 0.0, "end": 0.5},
             {"word": "audio", "start": 0.5, "end": 1.0},
             {"word": "from", "start": 1.0, "end": 1.3},
             {"word": f"{name}.", "start": 1.3, "end": 2.0},
@@ -119,7 +123,7 @@ class EchoAudioTranscriptionRuntime(AudioTranscriptionRuntime):
             "words": words if word_timestamps else None,
         }
         return {
-            "task": "transcribe",
+            "task": task,
             "language": language or "english",
             "duration": 2.0,
             "text": text,
@@ -197,6 +201,7 @@ class MLXWhisperRuntime(AudioTranscriptionRuntime):
         temperature: float | None = None,
         word_timestamps: bool = False,
         original_filename: str | None = None,
+        task: str = "transcribe",
     ) -> dict[str, Any]:
         self._ensure_cache_env()
 
@@ -222,6 +227,7 @@ class MLXWhisperRuntime(AudioTranscriptionRuntime):
         kwargs: dict[str, Any] = {
             "path_or_hf_repo": model_target,
             "word_timestamps": word_timestamps,
+            "task": task,
         }
         if language:
             kwargs["language"] = language
@@ -243,7 +249,7 @@ class MLXWhisperRuntime(AudioTranscriptionRuntime):
             duration = float(segments[-1].get("end", 0.0))
 
         return {
-            "task": "transcribe",
+            "task": task,
             "language": lang,
             "duration": duration,
             "text": text,

@@ -108,6 +108,8 @@ class EchoVisionRuntime(VisionRuntime):
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
         adapters: list[str] | None = None,
+        stop: list[str] | str | None = None,
+        **kwargs: Any,
     ) -> str:
         # Collect all image references from all messages
         all_images: list[dict[str, Any]] = []
@@ -188,6 +190,8 @@ class EchoVisionRuntime(VisionRuntime):
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
         adapters: list[str] | None = None,
+        stop: list[str] | str | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[str]:
         text = await self.complete(
             manifest,
@@ -204,6 +208,8 @@ class EchoVisionRuntime(VisionRuntime):
             tool_choice=tool_choice,
             response_format=response_format,
             adapters=adapters,
+            stop=stop,
+            **kwargs,
         )
         step = max(8, len(text) // 8 or 1)
         for i in range(0, len(text), step):
@@ -250,6 +256,8 @@ class MLXVisionRuntime(VisionRuntime):
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
         adapters: list[str] | None = None,
+        stop: list[str] | str | None = None,
+        **kwargs: Any,
     ) -> str:
         try:
             from mlx_vlm import generate, load  # type: ignore
@@ -353,6 +361,8 @@ class MLXVisionRuntime(VisionRuntime):
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
         adapters: list[str] | None = None,
+        stop: list[str] | str | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[str]:
         text = await self.complete(
             manifest,
@@ -369,6 +379,8 @@ class MLXVisionRuntime(VisionRuntime):
             tool_choice=tool_choice,
             response_format=response_format,
             adapters=adapters,
+            stop=stop,
+            **kwargs,
         )
         step = max(8, len(text) // 8 or 1)
         for i in range(0, len(text), step):

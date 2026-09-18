@@ -191,6 +191,76 @@ class StrictToolCallGuard:
     """Validates, formats, and repairs structured tool calls and JSON responses."""
 
     @classmethod
+    def _normalize_call_dict(
+        cls,
+        parsed: Any,
+        tool_map: dict[str, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Normalize parsed JSON or dict into standard tool_call dicts."""
+        res: list[dict[str, Any]] = []
+        if isinstance(parsed, list):
+            for item in parsed:
+                res.extend(cls._normalize_call_dict(item, tool_map))
+            return res
+
+        if not isinstance(parsed, dict):
+            return res
+
+        name: str | None = None
+        args: Any = {}
+
+        # 1. Standard: {"name": "...", "arguments": ...}
+        if "name" in parsed and (
+            "arguments" in parsed or "parameters" in parsed or parsed["name"] in tool_map
+        ):
+            name = str(parsed["name"])
+            args = parsed.get("arguments", parsed.get("parameters", {}))
+        # 2. OpenAI structure: {"type": "function", "function": {"name": "...", "arguments": ...}}
+        elif "function" in parsed and isinstance(parsed["function"], dict):
+            fn = parsed["function"]
+            if "name" in fn:
+                name = str(fn["name"])
+                args = fn.get("arguments", fn.get("parameters", {}))
+        # 3. Direct function name as single key: {"get_weather": {"location": "..."}}
+        elif len(parsed) == 1 and next(iter(parsed.keys())) in tool_map:
+            name = next(iter(parsed.keys()))
+            args = parsed[name]
+
+        if name:
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except Exception:
+                    try:
+                        args = json.loads(repair_truncated_json(args))
+                    except Exception:
+                        args = {}
+            if not isinstance(args, dict):
+                args = {}
+
+            # Validate against schema if tool known
+            if name in tool_map and tool_map[name]:
+                valid, err = validate_json_schema(args, tool_map[name])
+                if not valid:
+                    logger.warning("Tool call '%s' failed strict schema: %s", name, err)
+                    mock = generate_schema_mock(tool_map[name])
+                    mock.update(args)
+                    args = mock
+
+            res.append(
+                {
+                    "id": f"call_{uuid.uuid4().hex[:8]}",
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "arguments": json.dumps(args),
+                    },
+                }
+            )
+
+        return res
+
+    @classmethod
     def parse_and_validate(
         cls,
         text: str,
@@ -219,39 +289,57 @@ class StrictToolCallGuard:
             repaired = repair_truncated_json(m)
             try:
                 parsed = json.loads(repaired)
-                if isinstance(parsed, dict) and "name" in parsed:
-                    name = str(parsed["name"])
-                    args = parsed.get("arguments", {})
-                    if isinstance(args, str):
-                        try:
-                            args = json.loads(args)
-                        except Exception:
-                            args = json.loads(repair_truncated_json(args))
+                tool_calls.extend(cls._normalize_call_dict(parsed, tool_map))
+            except Exception:
+                # Try finding JSON block inside
+                extracted = extract_json_block(m)
+                try:
+                    parsed = json.loads(repair_truncated_json(extracted))
+                    tool_calls.extend(cls._normalize_call_dict(parsed, tool_map))
+                except Exception as exc:
+                    logger.warning("Failed to parse <tool_call> block: %s", exc)
 
-                    # Validate against schema if tool known
-                    if name in tool_map and tool_map[name]:
-                        valid, err = validate_json_schema(args, tool_map[name])
-                        if not valid:
-                            logger.warning("Tool call '%s' failed strict schema: %s", name, err)
-                            # Fill missing required properties from schema mock
-                            mock = generate_schema_mock(tool_map[name])
-                            mock.update(args)
-                            args = mock
+        # 2. Tag with name attribute: <function=name>...</function> or <tool_call:name>...</tool_call:name>
+        if not tool_calls:
+            named_tags = re.findall(r"<(?:tool_call:|function\s*=\s*['\"]?)([a-zA-Z0-9_\-\.]+?)['\"]?>\s*(.*?)\s*</(?:tool_call:[a-zA-Z0-9_\-\.]+|function)>", text, re.DOTALL)
+            for fn_name, fn_args_raw in named_tags:
+                try:
+                    parsed_args = json.loads(repair_truncated_json(fn_args_raw))
+                    tool_calls.extend(cls._normalize_call_dict({"name": fn_name, "arguments": parsed_args}, tool_map))
+                except Exception as exc:
+                    logger.warning("Failed to parse named function tag <%s>: %s", fn_name, exc)
 
-                    tool_calls.append(
-                        {
-                            "id": f"call_{uuid.uuid4().hex[:8]}",
-                            "type": "function",
-                            "function": {
-                                "name": name,
-                                "arguments": json.dumps(args),
-                            },
-                        }
-                    )
-            except Exception as exc:
-                logger.warning("Failed to parse tool call block: %s", exc)
+        # 3. Mistral / Hermes format: [TOOL_CALLS] [...]
+        if not tool_calls:
+            mistral_match = re.search(r"\[TOOL_CALLS\]\s*([\[\{].*?[\]\}])", text, re.DOTALL)
+            if mistral_match:
+                try:
+                    parsed = json.loads(repair_truncated_json(mistral_match.group(1)))
+                    tool_calls.extend(cls._normalize_call_dict(parsed, tool_map))
+                except Exception as exc:
+                    logger.warning("Failed to parse [TOOL_CALLS] block: %s", exc)
 
-        # 2. If tool_choice is forced but no call was found, synthesize the required call
+        # 4. Markdown code blocks ```tool_call or ```json containing function calls
+        if not tool_calls:
+            code_blocks = re.findall(r"```(?:tool_call|json)?\s*([\{\[].*?[\}\]])\s*```", text, re.DOTALL)
+            for cb in code_blocks:
+                try:
+                    parsed = json.loads(repair_truncated_json(cb))
+                    tool_calls.extend(cls._normalize_call_dict(parsed, tool_map))
+                except Exception:
+                    pass
+
+        # 5. Raw JSON object / array if tool_choice or tools given and JSON has name or matching tool
+        if not tool_calls and (tool_map or tool_choice):
+            extracted = extract_json_block(text)
+            if extracted and extracted != text:
+                try:
+                    parsed = json.loads(repair_truncated_json(extracted))
+                    tool_calls.extend(cls._normalize_call_dict(parsed, tool_map))
+                except Exception:
+                    pass
+
+        # 6. If tool_choice is forced but no call was found, synthesize the required call
         if not tool_calls and tool_choice:
             req_name = None
             if isinstance(tool_choice, dict):
@@ -273,6 +361,36 @@ class StrictToolCallGuard:
                 )
 
         return tool_calls if tool_calls else None
+
+    @classmethod
+    def extract_clean_content(
+        cls,
+        text: str,
+        tool_calls: list[dict[str, Any]] | None = None,
+    ) -> str | None:
+        """Strips tool call tags, blocks, and thinking from text, returning remaining prose or None."""
+        if not text:
+            return None
+
+        cleaned = text
+        # Remove thinking blocks <think>...</think>
+        cleaned = re.sub(r"<think>.*?</think>", "", cleaned, flags=re.DOTALL)
+        # Remove XML tool call tags
+        cleaned = re.sub(r"<tool_call>.*?</tool_call>", "", cleaned, flags=re.DOTALL)
+        cleaned = re.sub(r"<tool_call>.*", "", cleaned, flags=re.DOTALL)
+        cleaned = re.sub(r"<(?:tool_call:|function\s*=\s*['\"]?)[a-zA-Z0-9_\-\.]+?['\"]?>.*?</(?:tool_call:[a-zA-Z0-9_\-\.]+|function)>", "", cleaned, flags=re.DOTALL)
+        cleaned = re.sub(r"\[TOOL_CALLS\].*", "", cleaned, flags=re.DOTALL)
+
+        # If tool_calls exist, also clean any markdown code blocks containing the tool calls
+        if tool_calls:
+            for tc in tool_calls:
+                fn_name = tc.get("function", {}).get("name", "")
+                if fn_name:
+                    # Remove fenced blocks with fn_name
+                    cleaned = re.sub(rf"```(?:tool_call|json)?\s*\{{[^`]*?{re.escape(fn_name)}[^`]*?\}}```", "", cleaned, flags=re.DOTALL)
+
+        cleaned = cleaned.strip()
+        return cleaned if cleaned else None
 
     @classmethod
     def enforce_response_format(

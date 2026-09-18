@@ -36,6 +36,8 @@ class Runtime(ABC):
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
         adapters: list[str] | None = None,
+        stop: list[str] | str | None = None,
+        **kwargs: Any,
     ) -> str:
         raise NotImplementedError
 
@@ -56,6 +58,8 @@ class Runtime(ABC):
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
         adapters: list[str] | None = None,
+        stop: list[str] | str | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[str]:
         text = await self.complete(
             manifest,
@@ -78,6 +82,55 @@ class Runtime(ABC):
             yield text[i : i + step]
             await asyncio.sleep(0)
 
+    async def complete_text(
+        self,
+        manifest: PackageManifest,
+        prompt: str,
+        suffix: str | None = None,
+        *,
+        max_tokens: int | None = 128,
+        temperature: float | None = None,
+        stop: list[str] | None = None,
+        usage: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> str:
+        parts: list[str] = []
+        async for chunk in self.stream_text(
+            manifest,
+            prompt,
+            suffix=suffix,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop=stop,
+            usage=usage,
+            **kwargs,
+        ):
+            parts.append(chunk)
+        return "".join(parts)
+
+    async def stream_text(
+        self,
+        manifest: PackageManifest,
+        prompt: str,
+        suffix: str | None = None,
+        *,
+        max_tokens: int | None = 128,
+        temperature: float | None = None,
+        stop: list[str] | None = None,
+        usage: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        full = prompt if not suffix else f"{prompt}\n{suffix}"
+        async for chunk in self.stream(
+            manifest,
+            [ChatMessage(role="user", content=full)],
+            max_tokens=max_tokens,
+            temperature=temperature,
+            usage=usage,
+            **kwargs,
+        ):
+            yield chunk
+
 
 class EchoRuntime(Runtime):
     """Deterministic demo backend — proves template ownership + HTTP without MLX."""
@@ -99,6 +152,8 @@ class EchoRuntime(Runtime):
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
         adapters: list[str] | None = None,
+        stop: list[str] | str | None = None,
+        **kwargs: Any,
     ) -> str:
         prompt = apply_chat_template(manifest, messages, tools=tools)
         last_user = ""
@@ -147,7 +202,15 @@ class EchoRuntime(Runtime):
                 cleaned = json.dumps(mock, indent=2)
             else:
                 cleaned = json.dumps({"status": "ok", "message": f"Echo JSON from {manifest.id}", "input": last_user})
-        elif tools and (tool_choice or any("tool" in m.text().lower() or "weather" in m.text().lower() for m in messages if m.role == "user")):
+        elif tools and any(m.role == "tool" for m in messages):
+            tool_msg = next((m for m in reversed(messages) if m.role == "tool"), messages[-1])
+            cleaned = f"Based on the tool output ({tool_msg.text()}), here is the final answer for: {last_user or 'your request'}."
+        elif tools and tool_choice != "none" and (
+            tool_choice in ("required", "auto")
+            or isinstance(tool_choice, dict)
+            or any("tool" in m.text().lower() or "weather" in m.text().lower() or "calc" in m.text().lower() for m in messages if m.role == "user")
+            or True  # Default to executing tool call when tools are provided in echo mode
+        ):
             import json
             from pantry.grammar import generate_schema_mock
 
@@ -159,7 +222,7 @@ class EchoRuntime(Runtime):
                     if fn.get("name") == t_name:
                         selected_tool = t
                         break
-            fn_info = selected_tool.get("function", selected_tool)
+            fn_info = selected_tool.get("function", selected_tool) if isinstance(selected_tool, dict) else {}
             fn_name = fn_info.get("name", "tool_call")
             params = fn_info.get("parameters", {})
             args_mock = generate_schema_mock(params)
@@ -199,6 +262,59 @@ class EchoRuntime(Runtime):
                     "speedup_factor": 1.45,
                 }
         return cleaned
+
+    async def complete_text(
+        self,
+        manifest: PackageManifest,
+        prompt: str,
+        suffix: str | None = None,
+        *,
+        max_tokens: int | None = 128,
+        temperature: float | None = None,
+        stop: list[str] | None = None,
+        usage: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> str:
+        if suffix:
+            body = f"    # completed code between prefix and suffix\n    return process({prompt.strip()[-10:] if prompt else 'None'})"
+        else:
+            body = f" [completed text from {manifest.id}: {prompt[-30:].strip() if prompt else 'empty'}]"
+
+        cleaned = strip_stop_tokens(body, manifest, extra_stops=stop)
+        if usage is not None:
+            p_toks = max(1, len(prompt.split()) + (len(suffix.split()) if suffix else 0))
+            c_toks = max(1, len(cleaned.split()))
+            usage["prompt_tokens"] = p_toks
+            usage["completion_tokens"] = c_toks
+            usage["total_tokens"] = p_toks + c_toks
+        return cleaned
+
+    async def stream_text(
+        self,
+        manifest: PackageManifest,
+        prompt: str,
+        suffix: str | None = None,
+        *,
+        max_tokens: int | None = 128,
+        temperature: float | None = None,
+        stop: list[str] | None = None,
+        usage: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        text = await self.complete_text(
+            manifest,
+            prompt,
+            suffix=suffix,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop=stop,
+            usage=usage,
+            **kwargs,
+        )
+        step = max(4, len(text) // 6 or 1)
+        for i in range(0, len(text), step):
+            yield text[i : i + step]
+            await asyncio.sleep(0)
 
 
 def resolve_draft_path(
@@ -304,6 +420,8 @@ class MLXRuntime(Runtime):
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
         adapters: list[str] | None = None,
+        stop: list[str] | str | None = None,
+        **kwargs: Any,
     ) -> str:
         parts: list[str] = []
         async for chunk in self.stream(
@@ -321,6 +439,8 @@ class MLXRuntime(Runtime):
             tool_choice=tool_choice,
             response_format=response_format,
             adapters=adapters,
+            stop=stop,
+            **kwargs,
         ):
             parts.append(chunk)
         raw = strip_stop_tokens("".join(parts), manifest)
@@ -347,6 +467,8 @@ class MLXRuntime(Runtime):
         tool_choice: str | dict[str, Any] | None = None,
         response_format: dict[str, Any] | str | None = None,
         adapters: list[str] | None = None,
+        stop: list[str] | str | None = None,
+        **kwargs: Any,
     ) -> AsyncIterator[str]:
         try:
             from mlx_lm import load, stream_generate  # type: ignore
@@ -384,7 +506,31 @@ class MLXRuntime(Runtime):
                 self._models[draft_path] = loaded_draft  # type: ignore[assignment]
             draft_model_obj, _draft_tok = self._models[draft_path]
 
-        prompt = apply_chat_template(manifest, messages, tools=tools)
+        prompt = None
+        if hasattr(tokenizer, "apply_chat_template"):
+            try:
+                hf_msgs = []
+                for m in messages:
+                    msg_dict: dict[str, Any] = {"role": m.role, "content": m.text()}
+                    if m.tool_calls:
+                        msg_dict["tool_calls"] = m.tool_calls
+                    if m.tool_call_id:
+                        msg_dict["tool_call_id"] = m.tool_call_id
+                    if m.name:
+                        msg_dict["name"] = m.name
+                    hf_msgs.append(msg_dict)
+                prompt = tokenizer.apply_chat_template(
+                    hf_msgs,
+                    tools=tools,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+            except Exception:
+                prompt = None
+
+        if not prompt:
+            prompt = apply_chat_template(manifest, messages, tools=tools)
+
         max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
         temp = 0.0 if temperature is None else float(temperature)
 
@@ -502,7 +648,10 @@ class MLXRuntime(Runtime):
 
         from pantry.stop import StreamStopper
 
-        stopper = StreamStopper(manifest)
+        extra_stops = kwargs.get("stop") or kwargs.get("extra_stops")
+        if isinstance(extra_stops, str):
+            extra_stops = [extra_stops]
+        stopper = StreamStopper(manifest, extra_stops=extra_stops)
         producer = asyncio.create_task(asyncio.to_thread(_produce))
         try:
             while True:
@@ -545,6 +694,144 @@ class MLXRuntime(Runtime):
                         "acceptance_rate": min(1.0, acc_rate),
                         "speedup_factor": max(1.0, speedup),
                     }
+
+    async def complete_text(
+        self,
+        manifest: PackageManifest,
+        prompt: str,
+        suffix: str | None = None,
+        *,
+        max_tokens: int | None = 128,
+        temperature: float | None = None,
+        stop: list[str] | None = None,
+        usage: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> str:
+        parts: list[str] = []
+        async for chunk in self.stream_text(
+            manifest,
+            prompt,
+            suffix=suffix,
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop=stop,
+            usage=usage,
+            **kwargs,
+        ):
+            parts.append(chunk)
+        return "".join(parts)
+
+    async def stream_text(
+        self,
+        manifest: PackageManifest,
+        prompt: str,
+        suffix: str | None = None,
+        *,
+        max_tokens: int | None = 128,
+        temperature: float | None = None,
+        stop: list[str] | None = None,
+        usage: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> AsyncIterator[str]:
+        try:
+            from mlx_lm import load, stream_generate
+        except ImportError as e:
+            raise RuntimeError("MLX runtime requested but mlx-lm is not installed.") from e
+
+        model_path = self._resolve_weights_path(manifest)
+        if model_path not in self._models:
+            loaded = await asyncio.to_thread(load, model_path)
+            self._models[model_path] = loaded
+        if self.store is not None:
+            self.store.mark_loaded(manifest.id, pin=False)
+        model, tokenizer = self._models[model_path]
+
+        fam = (manifest.family or "").lower()
+        if suffix:
+            if "deepseek" in fam or "starcoder" in fam:
+                full_prompt = f"<｜fim begin｜>{prompt}<｜fim hole｜>{suffix}<｜fim end｜>"
+            elif "llama" in fam or "codellama" in fam:
+                full_prompt = f"<PRE> {prompt} <SUF>{suffix} <MID>"
+            else:
+                full_prompt = f"<|fim_prefix|>{prompt}<|fim_suffix|>{suffix}<|fim_middle|>"
+        else:
+            full_prompt = prompt
+
+        max_toks = clamp_max_tokens(max_tokens, manifest=manifest)
+        temp = 0.0 if temperature is None else float(temperature)
+
+        prompt_tokens: list[int] = []
+        try:
+            prompt_tokens = list(tokenizer.encode(full_prompt))
+        except Exception:
+            prompt_tokens = [abs(hash(w)) % 100000 + 1 for w in full_prompt.split()]
+        prompt_tokens_count = len(prompt_tokens)
+
+        if usage is not None:
+            usage["prompt_tokens"] = prompt_tokens_count
+            usage["completion_tokens"] = 0
+            usage["total_tokens"] = prompt_tokens_count
+
+        queue: asyncio.Queue[str | None] = asyncio.Queue()
+        loop = asyncio.get_running_loop()
+        errors: list[BaseException] = []
+        cancel = threading.Event()
+        gen_tokens_count = [0]
+
+        def _produce() -> None:
+            try:
+                from mlx_lm.sample_utils import make_logits_processors, make_sampler
+
+                sampler = make_sampler(temp=temp)
+                processors = make_logits_processors(repetition_penalty=1.05)
+                gen = stream_generate(
+                    model,
+                    tokenizer,
+                    prompt=prompt_tokens if prompt_tokens else full_prompt,
+                    max_tokens=max_toks,
+                    sampler=sampler,
+                    logits_processors=processors,
+                )
+                for item in gen:
+                    if cancel.is_set():
+                        break
+                    gt = getattr(item, "generation_tokens", None)
+                    if gt is not None:
+                        gen_tokens_count[0] = int(gt)
+                    else:
+                        gen_tokens_count[0] += 1
+                    text = getattr(item, "text", None) or ""
+                    if text:
+                        loop.call_soon_threadsafe(queue.put_nowait, text)
+            except BaseException as exc:
+                errors.append(exc)
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+        from pantry.stop import StreamStopper
+
+        extra_stops = stop or []
+        stopper = StreamStopper(manifest, extra_stops=extra_stops)
+        producer = asyncio.create_task(asyncio.to_thread(_produce))
+        try:
+            while True:
+                chunk = await queue.get()
+                if chunk is None:
+                    break
+                piece = stopper.push(chunk)
+                if piece:
+                    yield piece
+                if stopper.halted:
+                    cancel.set()
+                    break
+            if errors:
+                raise RuntimeError(f"mlx text generation failed: {errors[0]}") from errors[0]
+        finally:
+            cancel.set()
+            await producer
+            if usage is not None:
+                usage["completion_tokens"] = gen_tokens_count[0]
+                usage["total_tokens"] = prompt_tokens_count + gen_tokens_count[0]
 
     def _resolve_weights_path(self, manifest: PackageManifest) -> str:
         if self.store is not None:
@@ -692,7 +979,31 @@ class CUDARuntime(Runtime):
             raise RuntimeError(f"PyTorch/Transformers not available for CUDA runtime: {e}") from e
 
         model, tokenizer = await asyncio.to_thread(self._get_model, manifest)
-        prompt = apply_chat_template(manifest, messages, tools=tools)
+        prompt = None
+        if hasattr(tokenizer, "apply_chat_template"):
+            try:
+                hf_msgs = []
+                for m in messages:
+                    msg_dict: dict[str, Any] = {"role": m.role, "content": m.text()}
+                    if m.tool_calls:
+                        msg_dict["tool_calls"] = m.tool_calls
+                    if m.tool_call_id:
+                        msg_dict["tool_call_id"] = m.tool_call_id
+                    if m.name:
+                        msg_dict["name"] = m.name
+                    hf_msgs.append(msg_dict)
+                prompt = tokenizer.apply_chat_template(
+                    hf_msgs,
+                    tools=tools,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+            except Exception:
+                prompt = None
+
+        if not prompt:
+            prompt = apply_chat_template(manifest, messages, tools=tools)
+
         max_toks = clamp_max_tokens(max_tokens, manifest.limits.max_tokens_soft)
 
         inputs = tokenizer(prompt, return_tensors="pt")
