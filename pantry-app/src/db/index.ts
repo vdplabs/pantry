@@ -21,21 +21,27 @@ export let database: RxDatabase | null = null;
 export let dbReady = false;
 
 export async function initDatabase(): Promise<RxDatabase> {
-  if (database) return database;
+  if (database && dbReady) return database;
 
-  addRxPlugin(RxDBLeaderElectionPlugin);
-  addRxPlugin(RxDBQueryBuilderPlugin);
-  addRxPlugin(RxDBUpdatePlugin);
-  addRxPlugin(RxDBCleanupPlugin);
-  addRxPlugin(RxDBLocalDocumentsPlugin);
-  addRxPlugin(RxDBAttachmentsPlugin);
-  addRxPlugin(RxDBMigrationSchemaPlugin);
+  try {
+    addRxPlugin(RxDBLeaderElectionPlugin);
+    addRxPlugin(RxDBQueryBuilderPlugin);
+    addRxPlugin(RxDBUpdatePlugin);
+    addRxPlugin(RxDBCleanupPlugin);
+    addRxPlugin(RxDBLocalDocumentsPlugin);
+    addRxPlugin(RxDBAttachmentsPlugin);
+    addRxPlugin(RxDBMigrationSchemaPlugin);
+  } catch {
+    // Plugins might already be added
+  }
 
-  database = await createRxDatabase({
-    name: DB_NAME,
-    storage: getRxStorageDexie(),
-    closeDuplicates: true,
-  });
+  if (!database) {
+    database = await createRxDatabase({
+      name: DB_NAME,
+      storage: getRxStorageDexie(),
+      closeDuplicates: true,
+    });
+  }
 
   const existingCollections = Object.keys((database as any).collections || {});
 
@@ -43,6 +49,14 @@ export async function initDatabase(): Promise<RxDatabase> {
     await database.addCollections({
       conversations: {
         schema: conversationSchema,
+        migrationStrategies: {
+          1: (oldDoc: any) => ({
+            ...oldDoc,
+            plugin_id: oldDoc.plugin_id,
+            plugin_framework: oldDoc.plugin_framework,
+            canvas_state: oldDoc.canvas_state,
+          }),
+        },
       },
     });
   }
@@ -85,7 +99,7 @@ export function getCollection<T>(name: string): RxCollection<T, {}, {}, {}, unkn
 }
 
 export const conversationSchema = {
-  version: 0,
+  version: 1,
   primaryKey: 'id',
   type: 'object',
   properties: {
