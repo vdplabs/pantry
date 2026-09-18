@@ -166,3 +166,141 @@ export async function chatOnce(
     usage: json.usage,
   };
 }
+
+export interface ImageStepEvent {
+  type: 'step';
+  step: number;
+  total: number;
+  width?: number;
+  height?: number;
+  b64_json?: string;
+  previewUrl?: string;
+}
+
+export interface ImageDoneEvent {
+  type: 'done';
+  created?: number;
+  model?: string;
+  package_id?: string;
+  data: Array<{
+    b64_json?: string;
+    url?: string;
+    revised_prompt?: string;
+    width?: number;
+    height?: number;
+  }>;
+}
+
+export function streamImage(
+  opts: {
+    prompt: string;
+    model?: string;
+    size?: string;
+    n?: number;
+    steps?: number;
+    guidance?: number;
+    negative_prompt?: string;
+  },
+  callbacks: {
+    onStep?: (step: ImageStepEvent) => void;
+    onDone?: (done: ImageDoneEvent) => void;
+    onError?: (err: Error) => void;
+  }
+): AbortController {
+  const controller = new AbortController();
+  const BASE_URL = import.meta.env.VITE_API_URL || '';
+
+  (async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/v1/images/generations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream',
+        },
+        body: JSON.stringify({
+          model: opts.model || 'image-standard',
+          prompt: opts.prompt,
+          size: opts.size || '1024x1024',
+          n: opts.n || 1,
+          steps: opts.steps ?? 4,
+          guidance: opts.guidance ?? 0.0,
+          negative_prompt: opts.negative_prompt,
+          response_format: 'b64_json',
+          stream: true,
+        }),
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        let errMessage = `Image generation failed (${response.status})`;
+        try {
+          const errJson = await response.json();
+          errMessage = errJson.detail || errJson.error?.message || errMessage;
+        } catch {}
+        throw new Error(errMessage);
+      }
+
+      if (!response.body) {
+        throw new Error('No response stream returned by server');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEvent = 'message';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith('event:')) {
+            currentEvent = trimmed.slice(6).trim();
+            continue;
+          }
+          if (!trimmed.startsWith('data:')) continue;
+          const dataStr = trimmed.slice(5).trim();
+          if (!dataStr || dataStr === '[DONE]') continue;
+
+          let parsed: any = null;
+          try {
+            parsed = JSON.parse(dataStr);
+          } catch {
+            continue;
+          }
+
+          if (parsed.type === 'error' || parsed.error) {
+            const msg = typeof parsed.error === 'string' ? parsed.error : parsed.error?.message || parsed.message || 'Image generation failed';
+            throw new Error(msg);
+          }
+
+          if (parsed.type === 'step' || currentEvent === 'step') {
+            const stepEvent: ImageStepEvent = {
+              type: 'step',
+              step: parsed.step,
+              total: parsed.total,
+              width: parsed.width,
+              height: parsed.height,
+              b64_json: parsed.b64_json,
+              previewUrl: parsed.b64_json ? `data:image/jpeg;base64,${parsed.b64_json}` : undefined,
+            };
+            callbacks.onStep?.(stepEvent);
+          } else if (parsed.type === 'done' || currentEvent === 'done') {
+            callbacks.onDone?.(parsed as ImageDoneEvent);
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      callbacks.onError?.(err instanceof Error ? err : new Error(String(err)));
+    }
+  })();
+
+  return controller;
+}

@@ -1,10 +1,10 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   FiImage, FiTrash2, FiDownload, FiRefreshCw, FiCopy, FiCheck,
-  FiSliders, FiMaximize2, FiX, FiLayers, FiZap
+  FiSliders, FiMaximize2, FiX, FiLayers, FiZap, FiSquare
 } from 'react-icons/fi';
 import { useApp } from '@/context/AppContext';
-import api from '@/services/api';
+import { streamImage, ImageStepEvent, ImageDoneEvent } from '@/services/streaming';
 import type { Generation } from '@/types';
 
 const ASPECT_RATIOS = [
@@ -31,11 +31,16 @@ export default function ImagePage() {
   const [seed, setSeed] = useState(-1);
   const [selectedModel, setSelectedModel] = useState('image-standard');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [totalSteps, setTotalSteps] = useState(4);
   const [progressPercent, setProgressPercent] = useState(0);
+  const [stepPreview, setStepPreview] = useState<string | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string>('');
   const [currentResult, setCurrentResult] = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   const imageModels = state.models.filter(m =>
     (m.modalities || []).some(mod => mod.toLowerCase().includes('image') || mod.toLowerCase().includes('diffusion')) ||
@@ -44,50 +49,80 @@ export default function ImagePage() {
 
   const imageGenerations = generations.filter(g => g.type === 'image');
 
+  const handleStop = () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+      abortRef.current = null;
+    }
+    setIsGenerating(false);
+    setStatusMessage('Generation cancelled');
+  };
+
   const handleGenerate = useCallback(async () => {
     if (!prompt.trim()) return;
 
-    setIsGenerating(true);
-    setProgressPercent(10);
-    setErrorMsg(null);
-
-    const progressInterval = setInterval(() => {
-      setProgressPercent(prev => Math.min(prev + 15, 90));
-    }, 400);
-
-    try {
-      const res = await api.generateImage(
-        prompt.trim(),
-        selectedModel,
-        selectedRatio.size,
-        1,
-        steps,
-        guidance
-      );
-
-      clearInterval(progressInterval);
-      setProgressPercent(100);
-
-      const b64 = res.data?.[0]?.b64_json;
-      if (b64) {
-        const dataUrl = `data:image/png;base64,${b64}`;
-        setCurrentResult(dataUrl);
-        addGeneration({
-          id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
-          type: 'image',
-          prompt: prompt.trim(),
-          result: dataUrl,
-          createdAt: new Date().toISOString(),
-          model: selectedModel,
-        });
-      }
-      setIsGenerating(false);
-    } catch (err: any) {
-      clearInterval(progressInterval);
-      setIsGenerating(false);
-      setErrorMsg(err.message || String(err));
+    if (abortRef.current) {
+      abortRef.current.abort();
     }
-  }, [prompt, selectedModel, selectedRatio, steps, guidance, addGeneration]);
+
+    setIsGenerating(true);
+    setCurrentStep(0);
+    setTotalSteps(steps);
+    setProgressPercent(0);
+    setStepPreview(null);
+    setErrorMsg(null);
+    setStatusMessage('Initializing diffusion pipeline & encoding prompt...');
+
+    const controller = streamImage(
+      {
+        prompt: prompt.trim(),
+        model: selectedModel,
+        size: selectedRatio.size,
+        n: 1,
+        steps,
+        guidance,
+        negative_prompt: negativePrompt || undefined,
+      },
+      {
+        onStep: (stepEvt: ImageStepEvent) => {
+          setCurrentStep(stepEvt.step);
+          setTotalSteps(stepEvt.total);
+          const pct = Math.round((stepEvt.step / stepEvt.total) * 100);
+          setProgressPercent(pct);
+          setStatusMessage(`Denoising step ${stepEvt.step} / ${stepEvt.total} (${pct}%)`);
+          if (stepEvt.previewUrl) {
+            setStepPreview(stepEvt.previewUrl);
+          }
+        },
+        onDone: (doneEvt: ImageDoneEvent) => {
+          setProgressPercent(100);
+          setStatusMessage('Rendering finalized');
+          const b64 = doneEvt.data?.[0]?.b64_json;
+          if (b64) {
+            const dataUrl = `data:image/png;base64,${b64}`;
+            setCurrentResult(dataUrl);
+            setStepPreview(null);
+            addGeneration({
+              id: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
+              type: 'image',
+              prompt: prompt.trim(),
+              result: dataUrl,
+              createdAt: new Date().toISOString(),
+              model: selectedModel,
+            });
+          }
+          setIsGenerating(false);
+        },
+        onError: (err: Error) => {
+          setIsGenerating(false);
+          setStepPreview(null);
+          setErrorMsg(err.message || String(err));
+        },
+      }
+    );
+
+    abortRef.current = controller;
+  }, [prompt, selectedModel, selectedRatio, steps, guidance, negativePrompt, addGeneration]);
 
   const handleDownload = (imgUrl: string) => {
     const a = document.createElement('a');
@@ -184,14 +219,25 @@ export default function ImagePage() {
             />
           </div>
 
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating || !prompt.trim()}
-            className="primary-action-btn"
-          >
-            {isGenerating ? <FiRefreshCw className="spinning" size={15} /> : <FiZap size={15} />}
-            <span>{isGenerating ? 'Rendering Pixels...' : 'Generate Image'}</span>
-          </button>
+          {isGenerating ? (
+            <button
+              onClick={handleStop}
+              className="primary-action-btn"
+              style={{ background: 'var(--accent-rose)', borderColor: 'var(--accent-rose)' }}
+            >
+              <FiSquare size={15} />
+              <span>Stop Rendering</span>
+            </button>
+          ) : (
+            <button
+              onClick={handleGenerate}
+              disabled={isGenerating || !prompt.trim()}
+              className="primary-action-btn"
+            >
+              <FiZap size={15} />
+              <span>Generate Image</span>
+            </button>
+          )}
         </div>
 
         {/* Studio Center Workspace */}
@@ -218,20 +264,73 @@ export default function ImagePage() {
           </div>
 
           {/* Canvas Preview Box */}
-          <div className="studio-panel" style={{ padding: '20px', minHeight: '380px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+          <div className="studio-panel" style={{ padding: '20px', minHeight: '400px', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
             {errorMsg && (
               <div style={{ padding: '12px 16px', borderRadius: '8px', background: 'var(--accent-rose-subtle)', color: 'var(--accent-rose)', fontSize: '13px', textAlign: 'center' }}>
                 ⚠️ {errorMsg}
               </div>
             )}
 
-            {isGenerating && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignContent: 'center', alignItems: 'center', gap: '12px' }}>
-                <FiRefreshCw className="spinning" size={32} color="var(--accent-primary)" />
-                <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Diffusion denoising in progress... ({progressPercent}%)</span>
-                <div style={{ width: '200px', height: '4px', background: 'var(--border-card)', borderRadius: '4px', overflow: 'hidden' }}>
-                  <div style={{ width: `${progressPercent}%`, height: '100%', background: 'var(--accent-primary)', transition: 'width 0.3s ease' }} />
+            {isGenerating && stepPreview && (
+              <div style={{ position: 'relative', maxWidth: '100%', maxHeight: '520px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ position: 'relative', borderRadius: 'var(--radius-lg)', overflow: 'hidden', boxShadow: '0 8px 32px rgba(0,0,0,0.35)' }}>
+                  <img
+                    src={stepPreview}
+                    alt="Step preview"
+                    style={{ maxWidth: '100%', maxHeight: '420px', objectFit: 'contain', display: 'block' }}
+                  />
+                  <div style={{
+                    position: 'absolute',
+                    top: '12px',
+                    left: '12px',
+                    padding: '6px 14px',
+                    borderRadius: '20px',
+                    background: 'rgba(10, 14, 26, 0.85)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--accent-primary)',
+                  }}>
+                    <span className="pulsing-dot" />
+                    <span>Step {currentStep} / {totalSteps} ({progressPercent}%)</span>
+                  </div>
                 </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '14px', width: '100%', maxWidth: '360px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', fontSize: '12px', color: 'var(--text-muted)' }}>
+                    <span>{statusMessage || `Denoising step ${currentStep} of ${totalSteps}...`}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{progressPercent}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: '6px', background: 'var(--border-card)', borderRadius: '4px', overflow: 'hidden' }}>
+                    <div style={{ width: `${progressPercent}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-purple))', transition: 'width 0.4s ease' }} />
+                  </div>
+                  <button onClick={handleStop} className="chat-control-pill" style={{ marginTop: '4px' }}>
+                    <FiSquare size={12} /> Stop Rendering
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isGenerating && !stepPreview && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignContent: 'center', alignItems: 'center', gap: '14px' }}>
+                <FiRefreshCw className="spinning" size={36} color="var(--accent-primary)" />
+                <div style={{ textAlign: 'center' }}>
+                  <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                    {statusMessage || 'Initializing neural diffusion model...'}
+                  </div>
+                  <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                    {currentStep > 0 ? `Step ${currentStep} of ${totalSteps} (${progressPercent}%)` : 'Encoding text prompt & allocating latent tensors on Apple Silicon'}
+                  </span>
+                </div>
+                <div style={{ width: '240px', height: '6px', background: 'var(--border-card)', borderRadius: '4px', overflow: 'hidden' }}>
+                  <div style={{ width: `${Math.max(5, progressPercent)}%`, height: '100%', background: 'linear-gradient(90deg, var(--accent-primary), var(--accent-purple))', transition: 'width 0.4s ease' }} />
+                </div>
+                <button onClick={handleStop} className="chat-control-pill" style={{ marginTop: '6px' }}>
+                  <FiSquare size={12} /> Stop Rendering
+                </button>
               </div>
             )}
 
