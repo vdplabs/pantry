@@ -1,5 +1,20 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { FiSend, FiPaperclip, FiX, FiSliders, FiZap, FiCode, FiLayers, FiFileText, FiFile, FiAlertCircle } from 'react-icons/fi';
+import {
+  FiSend,
+  FiPaperclip,
+  FiX,
+  FiSliders,
+  FiZap,
+  FiCode,
+  FiLayers,
+  FiFileText,
+  FiFile,
+  FiAlertCircle,
+  FiChevronDown,
+  FiCheck,
+  FiUser,
+  FiSettings,
+} from 'react-icons/fi';
 import { useApp } from '@/context/AppContext';
 import type { MessageContent } from '@/types';
 import { extractTextFromPdf } from '@/utils/pdfExtractor';
@@ -21,6 +36,13 @@ export interface ChatAttachment {
   file: File;
 }
 
+export const SYSTEM_PROMPTS = [
+  { id: 'default', label: 'Default Assistant', prompt: 'You are a helpful, accurate, and concise AI assistant.' },
+  { id: 'coder', label: 'Expert Software Engineer', prompt: 'You are an expert senior software engineer. Provide production-ready, clean, well-commented code solutions with architectural insights.' },
+  { id: 'concise', label: 'Concise Terminal Expert', prompt: 'Answer directly, accurately, and without unnecessary preamble. Output shell commands and code succinctly.' },
+  { id: 'analyst', label: 'Research & Data Analyst', prompt: 'Analyze problems methodically with step-by-step reasoning, tradeoffs, and structured summaries.' },
+];
+
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -39,15 +61,35 @@ function formatFileSize(bytes: number): string {
 export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { state, setModel, setMaxTokens, setTemperature, setPreferSpeculative } = useApp();
+  const modelDropdownRef = useRef<HTMLDivElement>(null);
+  const personaDrawerRef = useRef<HTMLDivElement>(null);
+
+  const {
+    state,
+    setModel,
+    setSystemPrompt,
+    setMaxTokens,
+    setTemperature,
+    setPreferSpeculative,
+  } = useApp();
   const defaultPlaceholder = placeholder || 'Message Pantry model... (Enter to send, Shift+Enter for newline)';
 
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [showPersonaDrawer, setShowPersonaDrawer] = useState(false);
+  const [activePromptId, setActivePromptId] = useState('default');
   const [inputValue, setInputValue] = useState('');
 
-  const currentModel = state.models.find(m => m.id === state.model || (m.aliases || []).includes(state.model));
+  const currentModel = state.models.find(m => m.id === state.model || (m.aliases || []).includes(state.model)) || state.models[0];
+  
+  const chatModels = state.models.filter(m =>
+    (m.modalities || []).some(mod => mod.toLowerCase().includes('text') || mod.toLowerCase().includes('chat')) ||
+    (m.role || '').toLowerCase().includes('chat') ||
+    (m.role || '').toLowerCase().includes('reasoning')
+  );
+  const displayModels = chatModels.length > 0 ? chatModels : state.models;
   const isVisionModel = (currentModel?.modalities || []).some(m => m.toLowerCase().includes('vision') || m.toLowerCase().includes('image')) ||
     (currentModel?.role || '').toLowerCase().includes('vision') ||
     (state.model || '').toLowerCase().includes('vision') ||
@@ -61,6 +103,25 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
   );
 
   const hasImages = attachments.some(a => a.type === 'image');
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
+        setShowModelDropdown(false);
+      }
+      if (personaDrawerRef.current && !personaDrawerRef.current.contains(event.target as Node)) {
+        setShowPersonaDrawer(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectSystemPrompt = (preset: typeof SYSTEM_PROMPTS[0]) => {
+    setActivePromptId(preset.id);
+    setSystemPrompt(preset.prompt);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -300,7 +361,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
 
         {/* Parameters Drawer */}
         {showControls && (
-          <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border-card-subtle)', background: 'var(--bg-card-inner)', display: 'flex', gap: '20px', flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="composer-controls-drawer">
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
               <span style={{ color: 'var(--text-muted)' }}>Temperature:</span>
               <input
@@ -310,9 +371,9 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
                 step="0.05"
                 value={temperature}
                 onChange={e => setTemperature(parseFloat(e.target.value))}
-                style={{ width: '90px', accentColor: 'var(--accent-primary)' }}
+                style={{ width: '80px', accentColor: 'var(--accent-primary)' }}
               />
-              <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--text-primary)' }}>{temperature}</span>
+              <span style={{ fontFamily: 'var(--mono)', fontSize: '11px', color: 'var(--text-primary)', width: '28px' }}>{temperature}</span>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px' }}>
@@ -343,8 +404,134 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
         {/* Bottom Bar */}
         <div className="composer-bottom-bar">
           <div className="composer-tools-left">
-            <label className="composer-btn" title="Attach image, text, code, or document">
-              <FiPaperclip size={16} />
+            {/* Model Selector Pill & Popup */}
+            <div className="composer-tool-item" ref={modelDropdownRef}>
+              <button
+                type="button"
+                className={`composer-model-pill ${showModelDropdown ? 'active' : ''}`}
+                onClick={() => {
+                  setShowModelDropdown(prev => !prev);
+                  setShowPersonaDrawer(false);
+                  setShowControls(false);
+                }}
+                title="Select Active Chat Model"
+              >
+                <span className="model-ready-dot" />
+                <span className="composer-model-name-label">{currentModel?.id || state.model || 'Select Model'}</span>
+                {currentModel?.quality_tier && (
+                  <span className="spec-badge">{currentModel.quality_tier}</span>
+                )}
+                <FiChevronDown size={13} className={`composer-chevron ${showModelDropdown ? 'open' : ''}`} />
+              </button>
+
+              {showModelDropdown && (
+                <div className="composer-popup-menu composer-model-dropdown">
+                  <div className="composer-popup-header">
+                    <span>Available Chat Models</span>
+                    <span className="composer-popup-count">{displayModels.length} models</span>
+                  </div>
+                  <div className="composer-popup-list">
+                    {displayModels.map(m => {
+                      const isSelected = m.id === state.model || (m.aliases || []).includes(state.model);
+                      return (
+                        <div
+                          key={m.id}
+                          onClick={() => {
+                            setModel(m.id);
+                            setShowModelDropdown(false);
+                          }}
+                          className={`composer-model-option ${isSelected ? 'selected' : ''}`}
+                        >
+                          <div className="composer-model-option-top">
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                              <span className={`model-ready-dot ${isSelected ? 'online' : 'dim'}`} />
+                              <span className="composer-model-option-title">{m.id}</span>
+                            </div>
+                            <span className="spec-badge">{m.quality_tier || 'standard'}</span>
+                          </div>
+                          <div className="composer-model-option-sub">
+                            <span>Context: {m.context_max || 4096} tokens</span>
+                            <span>•</span>
+                            <span>Family: {m.family || 'general'}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Persona Selector Pill & Popup */}
+            <div className="composer-tool-item" ref={personaDrawerRef}>
+              <button
+                type="button"
+                className={`composer-persona-pill ${showPersonaDrawer ? 'active' : ''}`}
+                onClick={() => {
+                  setShowPersonaDrawer(prev => !prev);
+                  setShowModelDropdown(false);
+                  setShowControls(false);
+                }}
+                title="System Persona & Instructions"
+              >
+                <FiSliders size={13} />
+                <span>Persona</span>
+                {state.systemPrompt && state.systemPrompt !== SYSTEM_PROMPTS[0].prompt && (
+                  <span className="composer-active-dot" />
+                )}
+              </button>
+
+              {showPersonaDrawer && (
+                <div className="composer-popup-menu composer-persona-dropdown">
+                  <div className="composer-popup-header">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <FiSliders size={13} color="var(--accent-primary)" />
+                      <span>System Persona & Instructions</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPersonaDrawer(false)}
+                      className="composer-drawer-close-btn"
+                    >
+                      Done
+                    </button>
+                  </div>
+
+                  <div className="composer-persona-presets">
+                    {SYSTEM_PROMPTS.map(preset => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        onClick={() => handleSelectSystemPrompt(preset)}
+                        className={`composer-preset-chip ${activePromptId === preset.id ? 'active' : ''}`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="composer-persona-custom">
+                    <label className="composer-persona-label">Custom Instructions:</label>
+                    <textarea
+                      rows={3}
+                      value={state.systemPrompt || ''}
+                      onChange={e => {
+                        setSystemPrompt(e.target.value);
+                        setActivePromptId('custom');
+                      }}
+                      placeholder="Enter custom instructions or persona guidelines for the model..."
+                      className="composer-persona-textarea"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="composer-tools-divider" />
+
+            {/* Attach File Button */}
+            <label className="composer-btn" title="Attach image, document, text, or code">
+              <FiPaperclip size={15} />
               <input
                 ref={fileInputRef}
                 type="file"
@@ -355,13 +542,18 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
               />
             </label>
 
+            {/* Parameters Settings Button */}
             <button
               type="button"
               className={`composer-btn ${showControls ? 'active' : ''}`}
-              onClick={() => setShowControls(!showControls)}
-              title="Generation Parameters"
+              onClick={() => {
+                setShowControls(!showControls);
+                setShowModelDropdown(false);
+                setShowPersonaDrawer(false);
+              }}
+              title="Generation Parameters (Temp, Tokens, Speculative)"
             >
-              <FiSliders size={15} />
+              <FiSettings size={14} />
             </button>
           </div>
 

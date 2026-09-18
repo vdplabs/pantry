@@ -39,9 +39,6 @@ export default function ChatPage() {
     renameConversation,
     updateCanvasState,
   } = useApp();
-  const [showModelDropdown, setShowModelDropdown] = useState(false);
-  const [showSystemPromptDrawer, setShowSystemPromptDrawer] = useState(false);
-  const [activePromptId, setActivePromptId] = useState('default');
   const [userScrolledUp, setUserScrolledUp] = useState(false);
   const [activeArtifact, setActiveArtifact] = useState<CanvasArtifact | null>(null);
   const [canvasCollapsed, setCanvasCollapsed] = useState(false);
@@ -51,14 +48,6 @@ export default function ChatPage() {
   const isAutoScrollingRef = useRef(false);
   const streamAbortRef = useRef<AbortController | null>(null);
   const activeStreamingConvIdRef = useRef<string | null>(null);
-
-  const chatModels = state.models.filter(m =>
-    (m.modalities || []).some(mod => mod.toLowerCase().includes('text') || mod.toLowerCase().includes('chat')) ||
-    (m.role || '').toLowerCase().includes('chat') ||
-    (m.role || '').toLowerCase().includes('reasoning')
-  );
-
-  const currentModel = state.models.find(m => m.id === state.model || (m.aliases || []).includes(state.model)) || state.models[0];
 
   const handleScroll = useCallback(() => {
     if (!scrollContainerRef.current) return;
@@ -107,11 +96,6 @@ export default function ChatPage() {
       setTimeout(() => scrollToBottom(false), 50);
     }
   }, [activeConversationId, scrollToBottom, setIsStreaming]);
-
-  const handleSelectSystemPrompt = (preset: typeof SYSTEM_PROMPTS[0]) => {
-    setActivePromptId(preset.id);
-    setSystemPrompt(preset.prompt);
-  };
 
   const activeConv = conversations.find(c => c.id === activeConversationId);
   const activePlugin = getPluginById(activeConv?.plugin_id);
@@ -425,131 +409,43 @@ export default function ChatPage() {
     <div className={`chat-page-container ${activeArtifact ? 'with-canvas-workbench' : ''} ${activePlugin && !canvasCollapsed ? 'with-studio-layout' : ''}`}>
       {/* Left Chat Pane */}
       <div className="chat-main-area">
-        {/* Model Bar */}
-        <div className="chat-header-bar">
-          <div style={{ position: 'relative' }}>
-            <button
-              className="chat-model-selector-btn"
-              onClick={() => setShowModelDropdown(!showModelDropdown)}
-            >
-              <span className="model-ready-dot" />
-              <span>{currentModel?.id || state.model || 'Select Model'}</span>
-              {currentModel?.quality_tier && (
-                <span className="spec-badge">{currentModel.quality_tier}</span>
-              )}
-              <FiChevronDown size={14} />
-            </button>
-
-            {showModelDropdown && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  marginTop: '6px',
-                  width: '320px',
-                  background: 'var(--bg-card)',
-                  border: '1px solid var(--border-card)',
-                  borderRadius: 'var(--radius-lg)',
-                  boxShadow: 'var(--shadow-card)',
-                  zIndex: 50,
-                  padding: '6px',
-                  maxHeight: '340px',
-                  overflowY: 'auto',
-                }}
-              >
-                <div style={{ padding: '6px 8px', fontSize: '11px', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
-                  Available Chat Models
+        {/* Top Header Bar (Shown for active plugins/studios or active conversation) */}
+        {(activePlugin || activeConv?.title) && (
+          <div className="chat-header-bar">
+            <div className="chat-header-left">
+              {activePlugin ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '15px' }}>{activePlugin.icon}</span>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-title)' }}>
+                    {activeConv?.title || activePlugin.name}
+                  </span>
                 </div>
-                {chatModels.map(m => (
-                  <div
-                    key={m.id}
-                    onClick={() => { setModel(m.id); setShowModelDropdown(false); }}
-                    style={{
-                      padding: '8px 10px',
-                      borderRadius: 'var(--radius-md)',
-                      cursor: 'pointer',
-                      background: (m.id === state.model || (m.aliases || []).includes(state.model)) ? 'var(--bg-card-hover)' : 'transparent',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '2px',
-                    }}
+              ) : (
+                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-title)' }}>
+                  {activeConv?.title || 'New Chat'}
+                </span>
+              )}
+            </div>
+
+            <div className="chat-header-controls">
+              {activePlugin && (
+                <div className="studio-header-pill">
+                  <span className="studio-pill-icon">{activePlugin.icon}</span>
+                  <span className="studio-pill-title">{activePlugin.shortName}</span>
+                  {activeConv?.plugin_framework && (
+                    <span className="studio-pill-framework">{activeConv.plugin_framework}</span>
+                  )}
+                  <button
+                    onClick={() => setCanvasCollapsed(prev => !prev)}
+                    className="studio-pill-toggle"
+                    title={canvasCollapsed ? "Open Studio Canvas" : "Collapse Studio Canvas"}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-title)' }}>{m.id}</span>
-                      <span className="spec-badge">{m.quality_tier || 'standard'}</span>
-                    </div>
-                    <span style={{ fontSize: '11px', color: 'var(--text-dim)' }}>
-                      Context: {m.context_max || 4096} tokens • Family: {m.family || 'general'}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="chat-header-controls">
-            {activePlugin && (
-              <div className="studio-header-pill">
-                <span className="studio-pill-icon">{activePlugin.icon}</span>
-                <span className="studio-pill-title">{activePlugin.shortName}</span>
-                {activeConv?.plugin_framework && (
-                  <span className="studio-pill-framework">{activeConv.plugin_framework}</span>
-                )}
-                <button
-                  onClick={() => setCanvasCollapsed(prev => !prev)}
-                  className="studio-pill-toggle"
-                  title={canvasCollapsed ? "Open Studio Canvas" : "Collapse Studio Canvas"}
-                >
-                  <FiColumns size={12} />
-                  <span>{canvasCollapsed ? 'Show Canvas' : 'Hide Canvas'}</span>
-                </button>
-              </div>
-            )}
-
-            <button
-              className={`chat-control-pill ${showSystemPromptDrawer ? 'active' : ''}`}
-              onClick={() => setShowSystemPromptDrawer(!showSystemPromptDrawer)}
-              title="System Persona & Instructions"
-            >
-              <FiSliders size={13} />
-              <span>Persona</span>
-            </button>
-
-            {state.preferSpeculative && (
-              <span className="chat-control-pill active" title="Speculative Decoding Enabled">
-                ⚡ Speculative
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* System Prompt Persona Drawer */}
-        {showSystemPromptDrawer && (
-          <div style={{ padding: '14px 20px', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border-card)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-title)' }}>System Persona & Instructions</span>
-              <button onClick={() => setShowSystemPromptDrawer(false)} style={{ background: 'transparent', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: '12px' }}>Done</button>
+                    <FiColumns size={12} />
+                    <span>{canvasCollapsed ? 'Show Canvas' : 'Hide Canvas'}</span>
+                  </button>
+                </div>
+              )}
             </div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {SYSTEM_PROMPTS.map(preset => (
-                <button
-                  key={preset.id}
-                  onClick={() => handleSelectSystemPrompt(preset)}
-                  className={`chat-control-pill ${activePromptId === preset.id ? 'active' : ''}`}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-            <textarea
-              rows={2}
-              value={state.systemPrompt}
-              onChange={e => setSystemPrompt(e.target.value)}
-              placeholder="Custom system instructions..."
-              className="gen-textarea"
-              style={{ fontSize: '12px' }}
-            />
           </div>
         )}
 

@@ -1695,14 +1695,259 @@ pre code.hljs {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  padding: 8px 12px;
   border-top: 1px solid var(--border-card-subtle);
+  position: relative;
 }
 
 .composer-tools-left {
   display: flex;
   align-items: center;
   gap: 6px;
+  flex-wrap: wrap;
+}
+
+.composer-tool-item {
+  position: relative;
+}
+
+.composer-model-pill,
+.composer-persona-pill {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-card);
+  background: var(--bg-card);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.composer-model-pill:hover,
+.composer-persona-pill:hover,
+.composer-model-pill.active,
+.composer-persona-pill.active {
+  background: var(--bg-card-hover);
+  border-color: var(--accent-primary-border);
+  color: #ffffff;
+}
+
+.composer-model-name-label {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-chevron {
+  color: var(--text-dim);
+  transition: transform 0.2s ease;
+}
+
+.composer-chevron.open {
+  transform: rotate(180deg);
+}
+
+.composer-active-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  box-shadow: 0 0 6px var(--accent-primary);
+}
+
+.composer-tools-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--border-card);
+  margin: 0 2px;
+}
+
+.composer-popup-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  background: #0b1120;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.05);
+  z-index: 100;
+  overflow: hidden;
+  animation: fadeInFast 0.15s ease-out;
+}
+
+.composer-model-dropdown {
+  width: 320px;
+  max-height: 360px;
+  display: flex;
+  flex-direction: column;
+}
+
+.composer-persona-dropdown {
+  width: 360px;
+  max-height: 420px;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+  gap: 10px;
+}
+
+.composer-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border-card-subtle);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-dim);
+  background: rgba(15, 23, 42, 0.5);
+}
+
+.composer-popup-count {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-dim);
+  text-transform: none;
+}
+
+.composer-popup-list {
+  padding: 6px;
+  overflow-y: auto;
+  max-height: 290px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.composer-model-option {
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.composer-model-option:hover {
+  background: var(--bg-card-hover);
+}
+
+.composer-model-option.selected {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.3);
+}
+
+.composer-model-option-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.composer-model-option-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-title);
+}
+
+.composer-model-option-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.composer-persona-presets {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.composer-preset-chip {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-card);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.composer-preset-chip:hover,
+.composer-preset-chip.active {
+  background: var(--accent-primary-subtle);
+  border-color: var(--accent-primary-border);
+  color: var(--accent-primary);
+}
+
+.composer-persona-custom {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.composer-persona-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.composer-persona-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  background: #060911;
+  border: 1px solid var(--border-card);
+  border-radius: var(--radius-md);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font);
+  line-height: 1.4;
+  resize: vertical;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.composer-persona-textarea:focus {
+  border-color: var(--accent-primary);
+}
+
+.composer-drawer-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--accent-primary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.composer-drawer-close-btn:hover {
+  background: var(--accent-primary-subtle);
+}
+
+.composer-controls-drawer {
+  padding: 10px 14px;
+  border-top: 1px solid var(--border-card-subtle);
+  background: var(--bg-card-inner);
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: center;
+  animation: fadeInFast 0.15s ease-out;
 }
 
 .composer-btn {
@@ -1719,7 +1964,8 @@ pre code.hljs {
   transition: all 0.15s ease;
 }
 
-.composer-btn:hover {
+.composer-btn:hover,
+.composer-btn.active {
   background: rgba(255, 255, 255, 0.08);
   color: var(--text-primary);
 }
@@ -3652,7 +3898,8 @@ pre code.hljs {
 .tm-threat-card {
   background: #0c1220;
   border: 1px solid #1e293b;
-  border-radius: var(--radius-lg);
+  border-radius: 0px; 
+  /* var(--radius-lg); */
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
