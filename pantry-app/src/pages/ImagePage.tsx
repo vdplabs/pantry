@@ -232,7 +232,7 @@ export default function ImagePage() {
         </div>
 
         {/* Studio Center Workspace */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', minWidth: 0, width: '100%', overflow: 'hidden' }}>
           {/* Prompt Composer Box */}
           <div className="studio-panel" style={{ padding: '16px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
@@ -318,11 +318,22 @@ export default function ImagePage() {
 
           {/* History Gallery Strip */}
           {imageGenerations.length > 0 && (
-            <div className="studio-panel" style={{ padding: '16px' }}>
+            <div className="studio-panel" style={{ padding: '16px', minWidth: 0, width: '100%', overflow: 'hidden' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
                 <span className="studio-panel-title" style={{ fontSize: '13px' }}>Recent Generations ({imageGenerations.length})</span>
               </div>
-              <div style={{ display: 'flex', gap: '12px', overflowX: 'auto', padding: '6px 0' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '12px',
+                  overflowX: 'auto',
+                  overflowY: 'hidden',
+                  padding: '6px 2px 10px 2px',
+                  width: '100%',
+                  minWidth: 0,
+                  WebkitOverflowScrolling: 'touch',
+                }}
+              >
                 {imageGenerations.map(gen => (
                   <div
                     key={gen.id}

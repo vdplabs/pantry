@@ -334,7 +334,7 @@ export default function GeneratePage() {
         </div>
 
         {/* Code Editor & Output Workbench */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', minWidth: 0, width: '100%' }}>
           {mode === 'fim' ? (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
               <div className="studio-panel" style={{ padding: '16px' }}>
