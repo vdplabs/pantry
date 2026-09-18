@@ -381,7 +381,7 @@ def load_mlx_model(
     tokenizer_config: dict[str, Any] | None = None,
     model_config: dict[str, Any] | None = None,
     adapter_path: str | None = None,
-    lazy: bool = False,
+    lazy: bool = True,
 ) -> tuple[Any, Any]:
     """Load model and tokenizer using mlx-lm, supporting strict=False fallback for FP8/MoE weights."""
     import pathlib
@@ -402,10 +402,9 @@ def load_mlx_model(
         tok_cfg.update(tokenizer_config)
 
     try:
-        model, config = load_model(model_path, lazy=lazy, strict=True, model_config=model_config)
-    except Exception:
-        # Retry with strict=False to support FP8 / quantized MoE weights with extra parameters or scales
         model, config = load_model(model_path, lazy=lazy, strict=False, model_config=model_config)
+    except Exception:
+        model, config = load_model(model_path, lazy=lazy, strict=True, model_config=model_config)
 
     if adapter_path is not None:
         model = load_adapters(model, adapter_path)
