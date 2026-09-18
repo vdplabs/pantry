@@ -1,7 +1,8 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   FiMusic, FiTrash2, FiDownload, FiLoader, FiPlay, FiPause,
-  FiZap, FiRefreshCw, FiCopy, FiCheck, FiSliders, FiClock, FiVolume2, FiRepeat
+  FiZap, FiRefreshCw, FiCopy, FiCheck, FiSliders, FiClock,
+  FiVolume2, FiVolumeX, FiRepeat, FiDisc, FiRadio
 } from 'react-icons/fi';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
@@ -49,6 +50,8 @@ export default function MusicPage() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [totalDuration, setTotalDuration] = useState(0);
+  const [isLooping, setIsLooping] = useState(false);
+  const [isMuted, setIsMuted] = useState(false);
 
   const audioModels = state.models.filter(m =>
     (m.modalities || []).some(mod =>
@@ -157,6 +160,18 @@ export default function MusicPage() {
     }
   };
 
+  const toggleMute = () => {
+    if (!audioRef.current) return;
+    audioRef.current.muted = !isMuted;
+    setIsMuted(!isMuted);
+  };
+
+  const toggleLoop = () => {
+    if (!audioRef.current) return;
+    audioRef.current.loop = !isLooping;
+    setIsLooping(!isLooping);
+  };
+
   const handleDownload = () => {
     const src = audioResult || viewing?.result;
     if (!src) return;
@@ -199,7 +214,7 @@ export default function MusicPage() {
           />
 
           {/* Preset Chips */}
-          <div style={{ marginTop: 8, marginBottom: 12 }}>
+          <div style={{ marginTop: 4, marginBottom: 8 }}>
             <div className="gen-label" style={{ marginBottom: 6 }}>Inspiration Presets</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {MUSIC_PRESETS.map((preset, idx) => (
@@ -209,15 +224,15 @@ export default function MusicPage() {
                   style={{
                     padding: '4px 8px',
                     borderRadius: 6,
-                    border: '1px solid var(--border-subtle)',
-                    background: 'var(--bg-tertiary)',
+                    border: '1px solid var(--border-card)',
+                    background: 'var(--bg-card)',
                     color: 'var(--text-secondary)',
                     fontSize: 10,
                     cursor: 'pointer',
                     transition: 'all 0.15s ease'
                   }}
                   onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--accent-primary)'}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-subtle)'}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border-card)'}
                 >
                   {preset.label}
                 </button>
@@ -247,7 +262,7 @@ export default function MusicPage() {
           </div>
 
           {/* Duration Slider */}
-          <div className="gen-section" style={{ marginTop: 8 }}>
+          <div className="gen-section" style={{ marginTop: 4 }}>
             <div className="gen-section-head" style={{ display: 'flex', justifyContent: 'space-between' }}>
               <div className="gen-section-title"><FiClock size={11} /> Duration</div>
               <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-primary)' }}>{duration}s</span>
@@ -267,7 +282,7 @@ export default function MusicPage() {
             className="gen-submit"
             onClick={handleGenerateAudio}
             disabled={isGenerating || !audioPrompt.trim()}
-            style={{ marginTop: 14 }}
+            style={{ marginTop: 10 }}
           >
             {isGenerating ? <FiLoader size={13} className="gen-spinner" style={{ margin: 0 }} /> : <FiMusic size={13} />}
             {isGenerating ? `Generating · ${Math.round(generatingPercent)}%` : 'Generate Audio'}
@@ -301,7 +316,7 @@ export default function MusicPage() {
                 </button>
               )}
               <button className="gen-canvas-action" onClick={() => setShowGallery(v => !v)}>
-                <FiPlay size={10} /> History
+                <FiDisc size={11} /> History
               </button>
             </div>
           </div>
@@ -309,12 +324,12 @@ export default function MusicPage() {
           <div className="gen-workspace" style={{ padding: 24, overflowY: 'auto' }}>
             {isGenerating && (
               <div className="gen-generating">
-                <FiLoader size={32} className="gen-spinner" />
+                <FiLoader size={36} className="gen-spinner" />
                 <div style={{ fontSize: 14, fontWeight: 600, marginTop: 12 }}>Creating audio waveform</div>
                 <div style={{ color: 'var(--text-muted)', fontSize: 11, marginTop: 4 }}>
                   {Math.round(generatingPercent)}% · Model: {selectedAudioModel}
                 </div>
-                <div className="gen-progress" style={{ width: 220, marginTop: 12 }}>
+                <div className="gen-progress" style={{ width: 240, marginTop: 12 }}>
                   <div style={{ width: `${generatingPercent}%` }} />
                 </div>
               </div>
@@ -323,44 +338,65 @@ export default function MusicPage() {
             {!isGenerating && activeAudioSrc && (
               <div
                 style={{
-                  maxWidth: 640,
+                  maxWidth: 600,
                   margin: '0 auto',
                   width: '100%',
                   background: 'var(--bg-card)',
-                  border: '1px solid var(--border-subtle)',
+                  border: '1px solid var(--border-card)',
                   borderRadius: 16,
-                  padding: 24,
-                  boxShadow: 'var(--shadow-md)',
+                  padding: 28,
+                  boxShadow: 'var(--shadow-card)',
                   textAlign: 'center'
                 }}
               >
-                {/* Audio Icon & Wave Graphic */}
+                {/* Audio Disc & Equalizer Animation */}
                 <div
                   style={{
-                    width: 72,
-                    height: 72,
+                    width: 76,
+                    height: 76,
                     borderRadius: '50%',
-                    background: 'var(--accent-subtle)',
+                    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(168, 85, 247, 0.2) 100%)',
+                    border: '1px solid var(--accent-primary-border)',
                     color: 'var(--accent-primary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     margin: '0 auto 16px auto',
-                    boxShadow: '0 0 20px rgba(59, 130, 246, 0.2)'
+                    boxShadow: '0 0 24px rgba(99, 102, 241, 0.25)',
+                    transform: isPlaying ? 'rotate(360deg)' : 'none',
+                    transition: isPlaying ? 'transform 4s linear infinite' : 'transform 0.5s ease'
                   }}
                 >
                   <FiMusic size={32} />
                 </div>
 
+                {/* Animated spectrum visualizer bars */}
+                {isPlaying && (
+                  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 4, height: 24, marginBottom: 14 }}>
+                    {[14, 22, 10, 24, 16, 20, 8, 24, 18, 12, 22, 15].map((h, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          width: 3,
+                          height: `${h}px`,
+                          borderRadius: 2,
+                          background: 'linear-gradient(180deg, var(--accent-primary) 0%, var(--accent-cyan) 100%)',
+                          animation: `pulse-ring ${(0.4 + (i % 4) * 0.15)}s ease-in-out infinite alternate`
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+
                 {/* Prompt Info */}
-                <h3 style={{ fontSize: 15, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 6 }}>
-                  {viewing?.prompt || audioPrompt || 'Generated Music Track'}
+                <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-title)', marginBottom: 6, lineHeight: 1.5 }}>
+                  "{viewing?.prompt || audioPrompt || 'Generated Music Track'}"
                 </h3>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 20 }}>
-                  Model: {viewing?.model || selectedAudioModel}
+                <div style={{ fontSize: 11, color: 'var(--text-dim)', marginBottom: 20 }}>
+                  Model: <code style={{ color: 'var(--accent-primary)' }}>{viewing?.model || selectedAudioModel}</code>
                 </div>
 
-                {/* Audio Player Controls */}
+                {/* Audio Element */}
                 <audio
                   ref={audioRef}
                   src={activeAudioSrc}
@@ -377,7 +413,7 @@ export default function MusicPage() {
                 />
 
                 {/* Visual Progress Bar */}
-                <div style={{ marginBottom: 16 }}>
+                <div style={{ marginBottom: 18 }}>
                   <input
                     type="range"
                     min={0}
@@ -391,19 +427,33 @@ export default function MusicPage() {
                     }}
                     style={{ width: '100%', accentColor: 'var(--accent-primary)', cursor: 'pointer' }}
                   />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginTop: 4 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-dim)', marginTop: 4, fontFamily: 'var(--mono)' }}>
                     <span>{currentTime.toFixed(1)}s</span>
                     <span>{totalDuration ? `${totalDuration.toFixed(1)}s` : `${duration}s`}</span>
                   </div>
                 </div>
 
-                {/* Playback Buttons */}
-                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16 }}>
+                {/* Controls Bar */}
+                <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12 }}>
+                  <button
+                    onClick={toggleLoop}
+                    className="gen-canvas-action"
+                    style={{
+                      padding: 8,
+                      borderRadius: '50%',
+                      color: isLooping ? 'var(--accent-primary)' : 'var(--text-dim)',
+                      borderColor: isLooping ? 'var(--accent-primary)' : 'var(--border-card)'
+                    }}
+                    title={isLooping ? 'Looping enabled' : 'Enable loop'}
+                  >
+                    <FiRepeat size={14} />
+                  </button>
+
                   <button
                     onClick={togglePlay}
                     style={{
-                      width: 44,
-                      height: 44,
+                      width: 48,
+                      height: 48,
                       borderRadius: '50%',
                       background: 'var(--accent-primary)',
                       color: '#ffffff',
@@ -412,30 +462,29 @@ export default function MusicPage() {
                       alignItems: 'center',
                       justifyContent: 'center',
                       cursor: 'pointer',
-                      boxShadow: '0 4px 12px rgba(59, 130, 246, 0.4)',
+                      boxShadow: '0 4px 16px rgba(99, 102, 241, 0.45)',
                       transition: 'transform 0.15s ease'
                     }}
                     onMouseDown={e => e.currentTarget.style.transform = 'scale(0.95)'}
                     onMouseUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                    title={isPlaying ? 'Pause' : 'Play'}
                   >
-                    {isPlaying ? <FiPause size={18} /> : <FiPlay size={18} style={{ marginLeft: 2 }} />}
+                    {isPlaying ? <FiPause size={20} /> : <FiPlay size={20} style={{ marginLeft: 2 }} />}
+                  </button>
+
+                  <button
+                    onClick={toggleMute}
+                    className="gen-canvas-action"
+                    style={{ padding: 8, borderRadius: '50%' }}
+                    title={isMuted ? 'Unmute' : 'Mute'}
+                  >
+                    {isMuted ? <FiVolumeX size={14} /> : <FiVolume2 size={14} />}
                   </button>
 
                   <button
                     onClick={handleDownload}
-                    style={{
-                      padding: '8px 14px',
-                      borderRadius: 8,
-                      background: 'var(--bg-tertiary)',
-                      border: '1px solid var(--border-subtle)',
-                      color: 'var(--text-primary)',
-                      fontSize: 12,
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 6
-                    }}
+                    className="gen-canvas-action"
+                    style={{ padding: '8px 14px', borderRadius: 8, marginLeft: 8 }}
                   >
                     <FiDownload size={13} /> Save WAV
                   </button>
@@ -445,7 +494,7 @@ export default function MusicPage() {
 
             {!isGenerating && !activeAudioSrc && (
               <div className="gen-empty">
-                <div className="gen-empty-icon"><FiMusic size={24} /></div>
+                <div className="gen-empty-icon"><FiMusic size={26} /></div>
                 <div className="gen-empty-title">Music & Sound Studio</div>
                 <div className="gen-empty-copy">
                   Enter a musical description or select an inspiration preset to synthesize realistic music loops and soundscapes.

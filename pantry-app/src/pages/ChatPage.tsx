@@ -1,5 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { FiZap, FiChevronDown, FiSettings, FiLayers, FiCpu, FiMessageSquare, FiSliders } from 'react-icons/fi';
+import {
+  FiZap, FiChevronDown, FiSettings, FiLayers, FiCpu,
+  FiMessageSquare, FiSliders, FiArrowDown, FiTerminal, FiCode, FiCompass
+} from 'react-icons/fi';
 import { useApp } from '@/context/AppContext';
 import ChatInput from '@/components/ChatInput';
 import ChatMessage from '@/components/ChatMessage';
@@ -22,13 +25,14 @@ const PROMPT_SUGGESTIONS = [
 ];
 
 export default function ChatPage() {
-  const { state, setMessages, setIsStreaming, setModel, setSystemPrompt } = useApp();
+  const { state, setMessages, setIsStreaming, setModel, setSystemPrompt, activeConversationId } = useApp();
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [showSystemPromptDrawer, setShowSystemPromptDrawer] = useState(false);
   const [activePromptId, setActivePromptId] = useState('default');
-  const [selectedTools, setSelectedTools] = useState(false);
+  const [userScrolledUp, setUserScrolledUp] = useState(false);
 
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const userScrolledUpRef = useRef(false);
   const streamAbortRef = useRef<AbortController | null>(null);
 
   const chatModels = state.models.filter(m =>
@@ -39,13 +43,37 @@ export default function ChatPage() {
 
   const currentModel = state.models.find(m => m.id === state.model || (m.aliases || []).includes(state.model)) || state.models[0];
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
+    const hasScrolledUp = !isAtBottom;
+    userScrolledUpRef.current = hasScrolledUp;
+    setUserScrolledUp(hasScrolledUp);
+  }, []);
 
+  const scrollToBottom = useCallback((smooth = false) => {
+    if (!scrollContainerRef.current) return;
+    userScrolledUpRef.current = false;
+    setUserScrolledUp(false);
+    if (smooth) {
+      scrollContainerRef.current.scrollTo({
+        top: scrollContainerRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    } else {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+    }
+  }, []);
+
+  // On conversation switch or initial load, jump to bottom
   useEffect(() => {
-    scrollToBottom();
-  }, [state.messages, state.isStreaming]);
+    if (activeConversationId) {
+      userScrolledUpRef.current = false;
+      setUserScrolledUp(false);
+      setTimeout(() => scrollToBottom(false), 50);
+    }
+  }, [activeConversationId, scrollToBottom]);
 
   const handleSelectSystemPrompt = (preset: typeof SYSTEM_PROMPTS[0]) => {
     setActivePromptId(preset.id);
@@ -54,7 +82,6 @@ export default function ChatPage() {
 
   const sendMessage = useCallback(async (content: string | MessageContent[]) => {
     const userMsg: Message = { role: 'user', content };
-    const assistantMsgIndex = state.messages.length + 1;
     
     // Add user message and empty assistant placeholder
     setMessages(prev => [
@@ -63,6 +90,10 @@ export default function ChatPage() {
       { role: 'assistant', content: '', reasoning_content: '' }
     ]);
     
+    userScrolledUpRef.current = false;
+    setUserScrolledUp(false);
+    setTimeout(() => scrollToBottom(false), 10);
+
     setIsStreaming(true);
     const t0 = performance.now();
     let tokenCount = 0;
@@ -107,6 +138,11 @@ export default function ChatPage() {
             }
             return copy;
           });
+
+          // Only auto-scroll if the user hasn't scrolled up to read previous messages
+          if (!userScrolledUpRef.current && scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+          }
         },
         (result) => {
           const duration_s = Math.max(0.01, (performance.now() - t0) / 1000);
@@ -131,6 +167,10 @@ export default function ChatPage() {
             }
             return copy;
           });
+
+          if (!userScrolledUpRef.current && scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+          }
         },
         (err) => {
           setIsStreaming(false);
@@ -159,6 +199,10 @@ export default function ChatPage() {
             }
             return copy;
           });
+
+          if (!userScrolledUpRef.current && scrollContainerRef.current) {
+            scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+          }
         },
         (tools) => {
           currentTools = tools;
@@ -191,7 +235,7 @@ export default function ChatPage() {
         return copy;
       });
     }
-  }, [state.messages, state.model, state.temperature, state.maxTokens, state.topP, state.systemPrompt, state.preferSpeculative, setMessages, setIsStreaming]);
+  }, [state.messages, state.model, state.temperature, state.maxTokens, state.topP, state.systemPrompt, state.preferSpeculative, setMessages, setIsStreaming, scrollToBottom]);
 
   const handleRetry = () => {
     if (state.messages.length < 2) return;
@@ -313,14 +357,18 @@ export default function ChatPage() {
             value={state.systemPrompt}
             onChange={e => setSystemPrompt(e.target.value)}
             placeholder="Custom system instructions..."
-            className="form-textarea"
+            className="gen-textarea"
             style={{ fontSize: '12px' }}
           />
         </div>
       )}
 
-      {/* Messages Scroll Area */}
-      <div className="chat-messages-scroll">
+      {/* Messages Scroll Area with Smooth, Non-Interfering Scroll */}
+      <div
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="chat-messages-scroll"
+      >
         {state.messages.length === 0 ? (
           <div className="chat-empty-state">
             <div className="empty-logo-glow">
@@ -354,8 +402,18 @@ export default function ChatPage() {
             />
           ))
         )}
-        <div ref={messagesEndRef} />
       </div>
+
+      {/* Floating Jump to Bottom Button */}
+      {userScrolledUp && state.messages.length > 0 && (
+        <button
+          className="chat-jump-bottom-btn"
+          onClick={() => scrollToBottom(true)}
+        >
+          <FiArrowDown size={14} />
+          <span>Latest message</span>
+        </button>
+      )}
 
       {/* Composer Input Bar */}
       <ChatInput
@@ -366,3 +424,4 @@ export default function ChatPage() {
     </div>
   );
 }
+
