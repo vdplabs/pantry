@@ -133,7 +133,13 @@ export default function ChatPage() {
       }
     }
 
-    const userMsg: Message = { role: 'user', content };
+    const userMsg: Message = {
+      role: 'user',
+      content,
+      meta: {
+        created: Date.now(),
+      },
+    };
     
     // Add user message and empty assistant placeholder
     setMessages(prev => [
@@ -244,7 +250,7 @@ export default function ChatPage() {
                   finish_reason: result.finishReason,
                   speculative: result.speculative,
                   draft_package_id: result.draftPackageId,
-                  created: result.created,
+                  created: result.created ? (result.created < 1e11 ? result.created * 1000 : result.created) : Date.now(),
                 },
                 token_stats: {
                   tps,
@@ -282,6 +288,9 @@ export default function ChatPage() {
               copy[idx] = {
                 ...copy[idx],
                 content: `⚠️ Error: ${err.message || String(err)}`,
+                meta: {
+                  created: Date.now(),
+                },
               };
             }
             return copy;

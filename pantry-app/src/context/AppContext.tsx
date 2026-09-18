@@ -12,6 +12,7 @@ import {
   setSetting,
   removeSetting,
 } from '@/db';
+import { sortConversations } from '@/utils/conversationUtils';
 
 interface AppState {
   sidebarOpen: boolean;
@@ -136,7 +137,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           getSetting('pantry_active'),
         ]);
         if (cancelled) return;
-        setConversations(loadedConvs);
+        setConversations(sortConversations(loadedConvs));
         setGenerations(loadedGens);
         if (activeId) {
           setActiveConversationId(activeId);
@@ -205,41 +206,54 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     if (activeConversationId) {
       setConversations(prev => {
-        const updated = prev.map(c => {
-          if (c.id !== activeConversationId) return c;
+        const currentConv = prev.find(c => c.id === activeConversationId);
+        if (!currentConv) return prev;
 
-          let title = c.title;
-          // Auto-rename if title is default 'New Chat' or 'Untitled Chat' and we have user messages
-          if ((!title || title === 'New Chat' || title === 'Untitled Chat') && messages.length > 0) {
-            const firstUserMsg = messages.find(m => m.role === 'user');
-            if (firstUserMsg) {
-              let text = '';
-              if (typeof firstUserMsg.content === 'string') {
-                text = firstUserMsg.content;
-              } else if (Array.isArray(firstUserMsg.content)) {
-                const textObj = firstUserMsg.content.find(p => p.type === 'text');
-                text = textObj?.text || '';
-              }
-              const autoTitle = generateAutoTitle(text);
-              if (autoTitle && autoTitle !== 'New Chat') {
-                title = autoTitle;
-              }
+        const currentMsgs = currentConv.messages || [];
+        const isSameMessages =
+          currentMsgs === messages ||
+          (currentMsgs.length === messages.length &&
+            (currentMsgs.length === 0 ||
+              (currentMsgs[currentMsgs.length - 1]?.content === messages[messages.length - 1]?.content &&
+               currentMsgs[currentMsgs.length - 1]?.role === messages[messages.length - 1]?.role &&
+               currentMsgs[0]?.content === messages[0]?.content)));
+
+        let title = currentConv.title;
+        // Auto-rename if title is default 'New Chat' or 'Untitled Chat' and we have user messages
+        if ((!title || title === 'New Chat' || title === 'Untitled Chat') && messages.length > 0) {
+          const firstUserMsg = messages.find(m => m.role === 'user');
+          if (firstUserMsg) {
+            let text = '';
+            if (typeof firstUserMsg.content === 'string') {
+              text = firstUserMsg.content;
+            } else if (Array.isArray(firstUserMsg.content)) {
+              const textObj = firstUserMsg.content.find(p => p.type === 'text');
+              text = textObj?.text || '';
+            }
+            const autoTitle = generateAutoTitle(text);
+            if (autoTitle && autoTitle !== 'New Chat') {
+              title = autoTitle;
             }
           }
-
-          return {
-            ...c,
-            title,
-            messages,
-            message_count: messages.length,
-            updated_at: new Date().toISOString(),
-          };
-        });
-        const conv = updated.find(c => c.id === activeConversationId);
-        if (conv) {
-          saveConversationToDb(conv).catch(e => console.error('saveConversation failed:', e));
         }
-        return updated;
+
+        // If messages and title haven't changed, don't update updated_at or re-save
+        if (isSameMessages && title === currentConv.title) {
+          return prev;
+        }
+
+        const updatedConv: Conversation = {
+          ...currentConv,
+          title,
+          messages,
+          message_count: messages.length,
+          updated_at: new Date().toISOString(),
+        };
+
+        saveConversationToDb(updatedConv).catch(e => console.error('saveConversation failed:', e));
+
+        const updated = prev.map(c => c.id === activeConversationId ? updatedConv : c);
+        return sortConversations(updated);
       });
     }
   }, [messages, activeConversationId, state.isStreaming]);
@@ -286,16 +300,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const createConversation = useCallback(async (initialTitle?: string) => {
     const id = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
+    const now = new Date().toISOString();
     const conv: Conversation = {
       id,
       title: initialTitle || 'New Chat',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      created_at: now,
+      updated_at: now,
       message_count: 0,
       model: state.model || 'chat-standard',
       messages: [],
     };
-    setConversations(prev => [conv, ...prev]);
+    setConversations(prev => sortConversations([conv, ...prev]));
     setActiveConversationId(conv.id);
     setMessages([]);
     await saveConversationToDb(conv).catch(e => console.error('saveConversation failed:', e));
@@ -303,16 +318,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [state.model]);
 
   const renameConversation = useCallback((id: string, title: string) => {
-    setConversations(prev =>
-      prev.map(c => c.id === id ? { ...c, title, updated_at: new Date().toISOString() } : c)
-    );
-    // Save renamed conversation
     setConversations(prev => {
       const conv = prev.find(c => c.id === id);
-      if (conv) {
-        saveConversationToDb({ ...conv, title, updated_at: new Date().toISOString() }).catch(e => console.error('saveConversation failed:', e));
-      }
-      return prev;
+      if (!conv) return prev;
+      const updatedConv = { ...conv, title, updated_at: new Date().toISOString() };
+      saveConversationToDb(updatedConv).catch(e => console.error('saveConversation failed:', e));
+      const updated = prev.map(c => c.id === id ? updatedConv : c);
+      return sortConversations(updated);
     });
   }, []);
 
