@@ -579,6 +579,20 @@ class MLXRuntime(Runtime):
             prompt_tokens = list(tokenizer.encode(prompt))
         except Exception:  # noqa: BLE001
             prompt_tokens = [abs(hash(w)) % 100000 + 1 for w in prompt.split()]
+
+        # Enforce context limits so massive prompts do not exceed KV cache bounds or trigger Metal GPU watchdog timeouts
+        context_limit = getattr(manifest, "context_max", None) or 131072
+        max_prompt_len = max(512, context_limit - max_toks)
+        if len(prompt_tokens) > max_prompt_len:
+            logger.warning(
+                "Prompt length (%d tokens) exceeds model context headroom (%d tokens of %d limit). "
+                "Truncating prompt to fit within model context window.",
+                len(prompt_tokens),
+                max_prompt_len,
+                context_limit,
+            )
+            prompt_tokens = prompt_tokens[-max_prompt_len:]
+
         prompt_tokens_count = len(prompt_tokens)
 
         from pantry.prefix_cache import PrefixCacheManager
@@ -805,6 +819,19 @@ class MLXRuntime(Runtime):
             prompt_tokens = list(tokenizer.encode(full_prompt))
         except Exception:
             prompt_tokens = [abs(hash(w)) % 100000 + 1 for w in full_prompt.split()]
+
+        context_limit = getattr(manifest, "context_max", None) or 131072
+        max_prompt_len = max(512, context_limit - max_toks)
+        if len(prompt_tokens) > max_prompt_len:
+            logger.warning(
+                "Raw prompt length (%d tokens) exceeds model context headroom (%d tokens of %d limit). "
+                "Truncating prompt to fit within model context window.",
+                len(prompt_tokens),
+                max_prompt_len,
+                context_limit,
+            )
+            prompt_tokens = prompt_tokens[-max_prompt_len:]
+
         prompt_tokens_count = len(prompt_tokens)
 
         if usage is not None:
