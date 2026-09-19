@@ -377,7 +377,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
               <input
                 type="range"
                 min="0"
-                max="1.5"
+                max="2.0"
                 step="0.05"
                 value={temperature}
                 onChange={e => setTemperature(parseFloat(e.target.value))}
@@ -391,7 +391,7 @@ export default function ChatInput({ placeholder, onSend, autoFocus, disabled }: 
               <input
                 type="number"
                 min="64"
-                max="8192"
+                max="32768"
                 step="64"
                 value={maxTokens}
                 onChange={e => setMaxTokens(parseInt(e.target.value) || 256)}

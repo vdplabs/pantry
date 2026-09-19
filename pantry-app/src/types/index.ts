@@ -15,6 +15,20 @@ export interface ModelInfo {
   quality_tier?: string;
 }
 
+export interface AdapterInfo {
+  id: string;
+  name: string;
+  base_family?: string;
+  modality?: string;
+  rank?: number;
+  alpha?: number;
+  target_modules?: string[];
+  path?: string;
+  size_bytes?: number;
+  attached_models?: string[];
+  scale?: number;
+}
+
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'developer' | 'tool';
   content: string | MessageContent[];

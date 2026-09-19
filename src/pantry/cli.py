@@ -979,18 +979,61 @@ def pack_intents_cmd(
 def pack_rebind_cmd(
     alias: str = typer.Argument(..., help="Intent alias to rebind (e.g. 'chat-standard', 'coder')"),
     package_id: str = typer.Argument(..., help="Target package id to bind to this intent"),
+    draft: str | None = typer.Option(None, "--draft", help="Optional draft model package ID for speculative decoding"),
     home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
 ) -> None:
-    """Rebind an intent alias to a different package."""
+    """Rebind an intent alias to a different package with optional speculative draft pairing."""
     from pantry.hub import rebind_intent_alias
 
     store = _store(home)
     try:
-        updated = rebind_intent_alias(store, alias, package_id)
+        updated = rebind_intent_alias(store, alias, package_id, draft_package_id=draft)
         typer.secho(f"✔ Successfully rebound '{alias}' to '{updated.id}'", fg=typer.colors.GREEN)
+        if updated.runtime.draft_package_id:
+            typer.echo(f"  Speculative draft: {updated.runtime.draft_package_id}")
         typer.echo(f"  Package aliases: {', '.join(updated.aliases)}")
     except Exception as e:
         typer.secho(f"Error rebinding intent: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from e
+
+
+@pack_app.command("rename")
+def pack_rename_cmd(
+    old_alias: str = typer.Argument(..., help="Current intent alias name (e.g. 'coder-compact')"),
+    new_alias: str = typer.Argument(..., help="New intent alias name (e.g. 'dev-expert')"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+) -> None:
+    """Rename an intent alias to a new alias name across model packages."""
+    from pantry.hub import rename_intent_alias
+
+    store = _store(home)
+    try:
+        updated = rename_intent_alias(store, old_alias, new_alias)
+        typer.secho(f"✔ Successfully renamed intent '{old_alias}' to '{new_alias}' (bound to '{updated.id}')", fg=typer.colors.GREEN)
+        typer.echo(f"  Package aliases: {', '.join(updated.aliases)}")
+    except Exception as e:
+        typer.secho(f"Error renaming intent alias: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from e
+
+
+@pack_app.command("set-draft")
+def pack_set_draft_cmd(
+    target_package_id: str = typer.Argument(..., help="Target package id to configure draft pairing for"),
+    draft_package_id: str | None = typer.Argument(None, help="Draft package id ('auto', 'none', or package ID)"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+) -> None:
+    """Set, auto-recommend ('auto'), or clear ('none') the speculative draft pairing on a target package."""
+    from pantry.hub import set_package_draft
+
+    store = _store(home)
+    try:
+        updated = set_package_draft(store, target_package_id, draft_package_id)
+        if updated.runtime.draft_package_id:
+            typer.secho(f"✔ Set speculative draft for '{updated.id}' -> '{updated.runtime.draft_package_id}'", fg=typer.colors.GREEN)
+        else:
+            typer.secho(f"✔ Cleared speculative draft for '{updated.id}'", fg=typer.colors.GREEN)
+    except Exception as e:
+        typer.secho(f"Error setting speculative draft: {e}", fg=typer.colors.RED, err=True)
         raise typer.Exit(1) from e
 
 

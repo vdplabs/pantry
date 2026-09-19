@@ -56,6 +56,7 @@ interface AppContextType {
   updateCanvasState: (updater: any | ((prev: any) => any)) => void;
   setConversationPlugin: (id: string, pluginId: string, pluginFramework?: string) => void;
   setActiveTab: (tab: string) => void;
+  setApiUrl: (url: string) => void;
   setModel: (model: string) => void;
   setModality: (m: ChatModality) => void;
   setTemperature: (t: number) => void;
@@ -136,7 +137,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
       if (cancelled) return;
       try {
-        const [loadedConvs, loadedGens, activeId, model, modality, apiUrl, sidebarOpen] = await Promise.all([
+        const [
+          loadedConvs,
+          loadedGens,
+          activeId,
+          model,
+          modality,
+          apiUrl,
+          sidebarOpen,
+          temperature,
+          maxTokens,
+          topP,
+          systemPrompt,
+          streamEnabled,
+          preferSpeculative,
+          enabledToolIds,
+          customToolsJson,
+        ] = await Promise.all([
           loadConversationsFromDb(),
           loadGenerationsFromDb(),
           getSetting('active_conversation_id'),
@@ -144,6 +161,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           getSetting('pantry_modality'),
           getSetting('pantry_api_url'),
           getSetting('pantry_active'),
+          getSetting('pantry_temperature'),
+          getSetting('pantry_max_tokens'),
+          getSetting('pantry_top_p'),
+          getSetting('pantry_system_prompt'),
+          getSetting('pantry_stream_enabled'),
+          getSetting('pantry_prefer_speculative'),
+          getSetting('pantry_enabled_tool_ids'),
+          getSetting('pantry_custom_tools_json'),
         ]);
         if (cancelled) return;
         setConversations(sortConversations(loadedConvs));
@@ -155,14 +180,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
             setMessages(activeConv.messages);
           }
         }
-        if (model) updateState({ model });
-        if (modality) updateState({ modality: modality as any });
-        if (apiUrl) updateState({ apiUrl });
+
+        const partial: Partial<AppState> = {};
+        if (model) partial.model = model;
+        if (modality) partial.modality = modality as any;
+        if (apiUrl) {
+          partial.apiUrl = apiUrl;
+        } else {
+          const lsApiUrl = localStorage.getItem('pantry_api_url');
+          if (lsApiUrl) partial.apiUrl = lsApiUrl;
+        }
         if (sidebarOpen) {
           try {
-            updateState({ sidebarOpen: JSON.parse(sidebarOpen) });
+            partial.sidebarOpen = JSON.parse(sidebarOpen);
           } catch { }
         }
+        if (temperature !== null && temperature !== undefined && !isNaN(parseFloat(temperature))) {
+          partial.temperature = parseFloat(temperature);
+        }
+        if (maxTokens !== null && maxTokens !== undefined && !isNaN(parseInt(maxTokens, 10))) {
+          partial.maxTokens = parseInt(maxTokens, 10);
+        }
+        if (topP !== null && topP !== undefined && !isNaN(parseFloat(topP))) {
+          partial.topP = parseFloat(topP);
+        }
+        if (systemPrompt !== null && systemPrompt !== undefined) {
+          partial.systemPrompt = systemPrompt;
+        }
+        if (streamEnabled !== null && streamEnabled !== undefined) {
+          try { partial.streamEnabled = JSON.parse(streamEnabled); } catch {}
+        }
+        if (preferSpeculative !== null && preferSpeculative !== undefined) {
+          try { partial.preferSpeculative = JSON.parse(preferSpeculative); } catch {}
+        }
+        if (enabledToolIds) {
+          try { partial.enabledToolIds = JSON.parse(enabledToolIds); } catch {}
+        }
+        if (customToolsJson !== null && customToolsJson !== undefined) {
+          partial.customToolsJson = customToolsJson;
+        }
+
+        if (Object.keys(partial).length > 0) {
+          updateState(partial);
+        }
+
         setDbReady(true);
       } catch (err) {
         console.error('load data failed:', err);
@@ -200,6 +261,46 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!dbReady) return;
     setSetting('pantry_api_url', state.apiUrl).catch(e => console.error('save api url failed:', e));
   }, [state.apiUrl, dbReady]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    setSetting('pantry_temperature', String(state.temperature)).catch(e => console.error('save temp failed:', e));
+  }, [state.temperature, dbReady]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    setSetting('pantry_max_tokens', String(state.maxTokens)).catch(e => console.error('save max tokens failed:', e));
+  }, [state.maxTokens, dbReady]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    setSetting('pantry_top_p', String(state.topP)).catch(e => console.error('save top p failed:', e));
+  }, [state.topP, dbReady]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    setSetting('pantry_system_prompt', state.systemPrompt).catch(e => console.error('save sys prompt failed:', e));
+  }, [state.systemPrompt, dbReady]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    setSetting('pantry_stream_enabled', JSON.stringify(state.streamEnabled)).catch(e => console.error('save stream failed:', e));
+  }, [state.streamEnabled, dbReady]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    setSetting('pantry_prefer_speculative', JSON.stringify(state.preferSpeculative)).catch(e => console.error('save speculative failed:', e));
+  }, [state.preferSpeculative, dbReady]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    setSetting('pantry_enabled_tool_ids', JSON.stringify(state.enabledToolIds)).catch(e => console.error('save enabled tool ids failed:', e));
+  }, [state.enabledToolIds, dbReady]);
+
+  useEffect(() => {
+    if (!dbReady) return;
+    setSetting('pantry_custom_tools_json', state.customToolsJson).catch(e => console.error('save custom tools json failed:', e));
+  }, [state.customToolsJson, dbReady]);
 
   useEffect(() => {
     setState(prev => ({ ...prev, messages }));
@@ -441,6 +542,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         updateCanvasState,
         setConversationPlugin,
         setActiveTab: useCallback((tab) => updateState({ activeTab: tab }), [updateState]),
+        setApiUrl: useCallback((apiUrl) => updateState({ apiUrl }), [updateState]),
         setModel: useCallback((model) => updateState({ model }), [updateState]),
         setModality: useCallback((modality) => updateState({ modality }), [updateState]),
         setTemperature: useCallback((t) => updateState({ temperature: t }), [updateState]),

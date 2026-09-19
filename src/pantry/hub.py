@@ -890,6 +890,9 @@ def get_intent_bindings(store: PackageStore) -> list[dict[str, Any]]:
                     "weights_ready": is_ready,
                     "bytes_on_disk": disk_b,
                     "hf_repo": m.runtime.hf_repo,
+                    "ram_gb_min": m.ram_gb_min,
+                    "draft_package_id": getattr(m.runtime, "draft_package_id", None),
+                    "modalities": list(m.modalities),
                 })
 
         active_info = None
@@ -905,7 +908,10 @@ def get_intent_bindings(store: PackageStore) -> list[dict[str, Any]]:
                 "bytes_on_disk": disk_b,
                 "hf_repo": active_pkg.runtime.hf_repo,
                 "context_max": active_pkg.context_max,
+                "ram_gb_min": active_pkg.ram_gb_min,
+                "draft_package_id": getattr(active_pkg.runtime, "draft_package_id", None),
                 "aliases": list(active_pkg.aliases),
+                "modalities": list(active_pkg.modalities),
             }
 
         results.append({
@@ -945,6 +951,9 @@ def get_intent_bindings(store: PackageStore) -> list[dict[str, Any]]:
                         "weights_ready": store.weights_ready(cand),
                         "bytes_on_disk": get_package_disk_size(store, cand),
                         "hf_repo": cand.runtime.hf_repo,
+                        "ram_gb_min": cand.ram_gb_min,
+                        "draft_package_id": getattr(cand.runtime, "draft_package_id", None),
+                        "modalities": list(cand.modalities),
                     })
 
             results.append({
@@ -962,7 +971,10 @@ def get_intent_bindings(store: PackageStore) -> list[dict[str, Any]]:
                     "bytes_on_disk": disk_b,
                     "hf_repo": m.runtime.hf_repo,
                     "context_max": m.context_max,
+                    "ram_gb_min": m.ram_gb_min,
+                    "draft_package_id": getattr(m.runtime, "draft_package_id", None),
                     "aliases": list(m.aliases),
+                    "modalities": list(m.modalities),
                 },
                 "candidates": candidates,
                 "is_custom": True,
@@ -971,7 +983,59 @@ def get_intent_bindings(store: PackageStore) -> list[dict[str, Any]]:
     return results
 
 
-def rebind_intent_alias(store: PackageStore, alias: str, target_package_id: str) -> PackageManifest:
+def set_package_draft(
+    store: PackageStore,
+    target_package_id: str,
+    draft_package_id: str | None = None,
+) -> PackageManifest:
+    """Set, auto-recommend, or clear the speculative draft package pairing on a target package."""
+    target_clean = target_package_id.strip()
+    target = store.load_manifest(target_clean)
+    if target is None:
+        target = store.install_from_bundled_catalog(target_clean)
+    if target is None:
+        raise ValueError(f"Target package not found: {target_clean}")
+
+    draft_clean = draft_package_id.strip() if draft_package_id else None
+    if draft_clean in (None, "", "none", "null"):
+        target.runtime.draft_package_id = None
+    elif draft_clean == "auto":
+        # Dynamic discovery: best compact model in same family with lower RAM
+        target_fam = (target.family or "").lower()
+        candidates_draft = [
+            p
+            for p in store.list_manifests()
+            if p.id != target.id
+            and "text" in p.modalities
+            and (p.family or "").lower() == target_fam
+            and (p.ram_gb_min or 0) < (target.ram_gb_min or 0)
+        ]
+        if candidates_draft:
+            candidates_draft.sort(
+                key=lambda p: (0 if p.quality_tier == QualityTier.compact else 1, p.ram_gb_min or 0)
+            )
+            target.runtime.draft_package_id = candidates_draft[0].id
+        else:
+            target.runtime.draft_package_id = None
+    else:
+        draft = store.load_manifest(draft_clean)
+        if draft is None:
+            draft = store.install_from_bundled_catalog(draft_clean)
+        if draft is None:
+            raise ValueError(f"Draft package not found: {draft_clean}")
+        target.runtime.draft_package_id = draft.id
+
+    store.write_manifest(target)
+    store._manifests_cache = None
+    return target
+
+
+def rebind_intent_alias(
+    store: PackageStore,
+    alias: str,
+    target_package_id: str,
+    draft_package_id: str | None = None,
+) -> PackageManifest:
     """Rebind an intent alias to target_package_id, removing it from any previous holder."""
     alias_clean = alias.strip()
     target_id_clean = target_package_id.strip()
@@ -994,11 +1058,68 @@ def rebind_intent_alias(store: PackageStore, alias: str, target_package_id: str)
     # Step 3: Add alias to target
     if alias_clean not in target.aliases:
         target.aliases.append(alias_clean)
-    store.write_manifest(target)
+
+    # Step 4: Optionally update speculative draft pairing if specified
+    if draft_package_id is not None:
+        set_package_draft(store, target.id, draft_package_id)
+    else:
+        store.write_manifest(target)
 
     # Invalidate store cache
     store._manifests_cache = None
     return target
+
+
+def rename_intent_alias(
+    store: PackageStore,
+    old_alias: str,
+    new_alias: str,
+) -> PackageManifest:
+    """Rename an existing intent alias to a new alias name across package manifests."""
+    old_clean = old_alias.strip()
+    new_clean = new_alias.strip()
+
+    if not old_clean:
+        raise ValueError("Original alias name cannot be empty.")
+    if not new_clean:
+        raise ValueError("New alias name cannot be empty.")
+
+    manifests = store.list_manifests()
+
+    # Find the manifest that currently holds old_alias
+    holder = None
+    for m in manifests:
+        if old_clean in m.aliases:
+            holder = m
+            break
+
+    # If not explicitly in aliases, try resolving via default catalog / resolver
+    if holder is None:
+        from pantry.resolve import find_by_model_string
+        holder = find_by_model_string(old_clean, manifests)
+        if holder is not None and old_clean not in holder.aliases:
+            holder.aliases.append(old_clean)
+
+    if holder is None:
+        raise ValueError(f"Intent alias '{old_clean}' not found.")
+
+    if old_clean == new_clean:
+        return holder
+
+    # Remove new_clean from any other packages to avoid conflicts
+    for m in manifests:
+        if m.id != holder.id and new_clean in m.aliases:
+            m.aliases = [a for a in m.aliases if a != new_clean]
+            store.write_manifest(m)
+
+    # In the holder manifest, replace old_clean with new_clean
+    holder.aliases = [new_clean if a == old_clean else a for a in holder.aliases]
+    if new_clean not in holder.aliases:
+        holder.aliases.append(new_clean)
+
+    store.write_manifest(holder)
+    store._manifests_cache = None
+    return holder
 
 
 def create_custom_pack(

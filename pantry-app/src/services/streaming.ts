@@ -228,6 +228,11 @@ export function streamImage(
     steps?: number;
     guidance?: number;
     negative_prompt?: string;
+    seed?: number;
+    adapters?: string[];
+    adapter_scales?: number[];
+    adapter?: string;
+    scale?: number;
   },
   callbacks: {
     onStep?: (step: ImageStepEvent) => void;
@@ -236,11 +241,11 @@ export function streamImage(
   }
 ): AbortController {
   const controller = new AbortController();
-  const BASE_URL = import.meta.env.VITE_API_URL || '';
+  const baseUrl = localStorage.getItem('pantry_api_url') || import.meta.env.VITE_API_URL || 'http://127.0.0.1:18787';
 
   (async () => {
     try {
-      const response = await fetch(`${BASE_URL}/v1/images/generations`, {
+      const response = await fetch(`${baseUrl}/v1/images/generations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -253,7 +258,10 @@ export function streamImage(
           n: opts.n || 1,
           steps: opts.steps ?? 4,
           guidance: opts.guidance ?? 0.0,
-          negative_prompt: opts.negative_prompt,
+          negative_prompt: opts.negative_prompt || undefined,
+          seed: opts.seed !== undefined && opts.seed >= 0 ? opts.seed : undefined,
+          adapters: opts.adapters && opts.adapters.length > 0 ? opts.adapters : (opts.adapter ? [opts.adapter] : undefined),
+          adapter_scales: opts.adapter_scales && opts.adapter_scales.length > 0 ? opts.adapter_scales : (opts.scale !== undefined ? [opts.scale] : undefined),
           response_format: 'b64_json',
           stream: true,
         }),

@@ -8,7 +8,7 @@ import api from '@/services/api';
 import type { HealthResponse, StorageInfo } from '@/types';
 
 export default function SettingsPage() {
-  const { state, setTemperature, setMaxTokens, setSystemPrompt, setPreferSpeculative } = useApp();
+  const { state, setTemperature, setMaxTokens, setSystemPrompt, setPreferSpeculative, setApiUrl: setContextApiUrl } = useApp();
   const [apiUrl, setApiUrl] = useState(state.apiUrl || 'http://127.0.0.1:18787');
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -25,6 +25,16 @@ export default function SettingsPage() {
   const [maxTok, setMaxTok] = useState(state.maxTokens);
   const [sysPrompt, setSysPrompt] = useState(state.systemPrompt);
   const [speculative, setSpeculative] = useState(state.preferSpeculative);
+
+  useEffect(() => {
+    setTemp(state.temperature);
+    setMaxTok(state.maxTokens);
+    setSysPrompt(state.systemPrompt);
+    setSpeculative(state.preferSpeculative);
+    if (state.apiUrl) {
+      setApiUrl(state.apiUrl);
+    }
+  }, [state.temperature, state.maxTokens, state.systemPrompt, state.preferSpeculative, state.apiUrl]);
 
   const checkConnection = useCallback(async () => {
     setTestingConnection(true);
@@ -83,6 +93,7 @@ export default function SettingsPage() {
     setMaxTokens(maxTok);
     setSystemPrompt(sysPrompt);
     setPreferSpeculative(speculative);
+    setContextApiUrl(apiUrl);
     localStorage.setItem('pantry_api_url', apiUrl);
 
     setTimeout(() => {
@@ -90,7 +101,7 @@ export default function SettingsPage() {
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 2500);
     }, 400);
-  }, [temp, maxTok, sysPrompt, speculative, apiUrl, setTemperature, setMaxTokens, setSystemPrompt, setPreferSpeculative]);
+  }, [temp, maxTok, sysPrompt, speculative, apiUrl, setTemperature, setMaxTokens, setSystemPrompt, setPreferSpeculative, setContextApiUrl]);
 
   return (
     <div className="settings-page" style={{ padding: '24px 32px', maxWidth: 1080, margin: '0 auto' }}>

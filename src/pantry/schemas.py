@@ -471,6 +471,17 @@ class TranscriptionVerboseResponse(BaseModel):
 class RebindPackBody(BaseModel):
     alias: str
     package_id: str
+    draft_package_id: str | None = None
+
+
+class RenameAliasBody(BaseModel):
+    old_alias: str
+    new_alias: str
+
+
+class SetDraftBody(BaseModel):
+    target_package_id: str
+    draft_package_id: str | None = None
 
 
 class CreatePackBody(BaseModel):

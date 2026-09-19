@@ -16,7 +16,9 @@ import type {
   MetricRow,
 } from '@/types';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:18787';
+function getBaseUrl(): string {
+  return localStorage.getItem('pantry_api_url') || import.meta.env.VITE_API_URL || 'http://127.0.0.1:18787';
+}
 
 class ApiError extends Error {
   status: number;
@@ -45,59 +47,102 @@ async function handleResponse<T>(res: Response): Promise<T> {
 
 const api = {
   get: <T>(url: string) =>
-    fetch(`${BASE_URL}${url}`).then(handleResponse<T>),
+    fetch(`${getBaseUrl()}${url}`).then(handleResponse<T>),
 
   post: <T>(url: string, body?: any) =>
-    fetch(`${BASE_URL}${url}`, {
+    fetch(`${getBaseUrl()}${url}`, {
       method: 'POST',
       headers: body ? { 'Content-Type': 'application/json' } : {},
       body: body ? JSON.stringify(body) : undefined,
     }).then(handleResponse<T>),
 
   put: <T>(url: string, body?: any) =>
-    fetch(`${BASE_URL}${url}`, {
+    fetch(`${getBaseUrl()}${url}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }).then(handleResponse<T>),
 
   delete: <T>(url: string) =>
-    fetch(`${BASE_URL}${url}`, { method: 'DELETE' }).then(handleResponse<T>),
+    fetch(`${getBaseUrl()}${url}`, { method: 'DELETE' }).then(handleResponse<T>),
 
   // Models
   listModels: () =>
-    fetch(`${BASE_URL}/v1/models`).then(handleResponse<{ data: ModelInfo[] }>),
+    fetch(`${getBaseUrl()}/v1/models`).then(handleResponse<{ data: ModelInfo[] }>),
 
   listModelsAll: () =>
-    fetch(`${BASE_URL}/v1/models?all_ids=1`).then(handleResponse<{ data: ModelInfo[] }>),
+    fetch(`${getBaseUrl()}/v1/models?all_ids=1`).then(handleResponse<{ data: ModelInfo[] }>),
 
   pullModel: (packageId: string) =>
-    fetch(`${BASE_URL}/v1/pull`, {
+    fetch(`${getBaseUrl()}/v1/pull`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ package_id: packageId }),
     }).then(handleResponse),
 
   loadModel: (req: ModelLoadRequest) =>
-    fetch(`${BASE_URL}/v1/load`, {
+    fetch(`${getBaseUrl()}/v1/load`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),
     }).then(handleResponse),
 
   unloadModel: (req: ModelLoadRequest) =>
-    fetch(`${BASE_URL}/v1/unload`, {
+    fetch(`${getBaseUrl()}/v1/unload`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),
     }).then(handleResponse),
 
   resolve: (req: ResolveRequest) =>
-    fetch(`${BASE_URL}/v1/resolve`, {
+    fetch(`${getBaseUrl()}/v1/resolve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),
     }).then(handleResponse<ResolveResponse>),
+
+  // Packs & Intents
+  listIntentPacks: () =>
+    fetch(`${getBaseUrl()}/v1/packs/intents`).then(handleResponse<{ intents: any[] }>),
+
+  rebindPack: (alias: string, packageId: string, draftPackageId?: string) =>
+    fetch(`${getBaseUrl()}/v1/packs/rebind`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ alias, package_id: packageId, draft_package_id: draftPackageId }),
+    }).then(handleResponse<any>),
+
+  renameIntentAlias: (oldAlias: string, newAlias: string) =>
+    fetch(`${getBaseUrl()}/v1/packs/rename-alias`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ old_alias: oldAlias, new_alias: newAlias }),
+    }).then(handleResponse<any>),
+
+  setDraftModel: (targetPackageId: string, draftPackageId?: string) =>
+    fetch(`${getBaseUrl()}/v1/packs/set-draft`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target_package_id: targetPackageId, draft_package_id: draftPackageId }),
+    }).then(handleResponse<any>),
+
+  // LoRA Adapters
+  listAdapters: () =>
+    fetch(`${getBaseUrl()}/v1/adapters`).then(handleResponse<{ adapters: import('@/types').AdapterInfo[] }>),
+
+  applyAdapter: (model: string, adapter: string, scale = 1.0) =>
+    fetch(`${getBaseUrl()}/v1/adapters/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, adapter, scale }),
+    }).then(handleResponse<any>),
+
+  unloadAdapter: (model: string, adapter?: string) =>
+    fetch(`${getBaseUrl()}/v1/adapters/unload`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, adapter }),
+    }).then(handleResponse<any>),
 
   // Chat
   chat: (messages: Message[], opts?: {
@@ -145,7 +190,7 @@ const api = {
     if (opts?.num_draft_tokens !== undefined) body.num_draft_tokens = opts.num_draft_tokens;
     if (opts?.priority) body.priority = opts.priority;
 
-    return fetch(`${BASE_URL}/v1/chat/completions`, {
+    return fetch(`${getBaseUrl()}/v1/chat/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -162,7 +207,7 @@ const api = {
     stop?: string[];
     stream?: boolean;
   }) => {
-    return fetch(`${BASE_URL}/v1/completions`, {
+    return fetch(`${getBaseUrl()}/v1/completions`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -178,16 +223,39 @@ const api = {
   },
 
   // Images
-  generateImage: (prompt: string, model = 'image-standard', size = '1024x1024', n = 1, steps = 4, guidance = 0.0) =>
-    fetch(`${BASE_URL}/v1/images/generations`, {
+  generateImage: (
+    prompt: string,
+    model = 'image-standard',
+    size = '1024x1024',
+    n = 1,
+    steps = 4,
+    guidance = 0.0,
+    negative_prompt?: string,
+    seed?: number,
+    adapters?: string[],
+    adapter_scales?: number[],
+  ) =>
+    fetch(`${getBaseUrl()}/v1/images/generations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model, prompt, size, n, steps, guidance, response_format: 'b64_json' }),
+      body: JSON.stringify({
+        model,
+        prompt,
+        size,
+        n,
+        steps,
+        guidance,
+        negative_prompt: negative_prompt || undefined,
+        seed: seed !== undefined && seed >= 0 ? seed : undefined,
+        adapters: adapters && adapters.length > 0 ? adapters : undefined,
+        adapter_scales: adapter_scales && adapter_scales.length > 0 ? adapter_scales : undefined,
+        response_format: 'b64_json',
+      }),
     }).then(handleResponse<ImageGenerationResponse>),
 
   // Audio generation
   generateAudio: (prompt: string, model = 'music-compact', duration = 3.0) =>
-    fetch(`${BASE_URL}/v1/audio/generations`, {
+    fetch(`${getBaseUrl()}/v1/audio/generations`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, prompt, duration_seconds: duration, response_format: 'b64_json' }),
@@ -200,7 +268,7 @@ const api = {
     fd.append('model', model);
     fd.append('response_format', responseFormat);
     if (language) fd.append('language', language);
-    return fetch(`${BASE_URL}/v1/audio/transcriptions`, {
+    return fetch(`${getBaseUrl()}/v1/audio/transcriptions`, {
       method: 'POST',
       body: fd,
     }).then(handleResponse<TranscriptionResponse>);
@@ -213,7 +281,7 @@ const api = {
     fd.append('model', model);
     fd.append('response_format', responseFormat);
     if (prompt) fd.append('prompt', prompt);
-    return fetch(`${BASE_URL}/v1/audio/translations`, {
+    return fetch(`${getBaseUrl()}/v1/audio/translations`, {
       method: 'POST',
       body: fd,
     }).then(handleResponse<TranscriptionResponse>);
@@ -221,7 +289,7 @@ const api = {
 
   // Embeddings
   embeddings: (input: string | string[], model = 'embed-compact') =>
-    fetch(`${BASE_URL}/v1/embeddings`, {
+    fetch(`${getBaseUrl()}/v1/embeddings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ model, input, encoding_format: 'float' }),
@@ -229,35 +297,35 @@ const api = {
 
   // System
   health: () =>
-    fetch(`${BASE_URL}/v1/health`).then(handleResponse<HealthResponse>),
+    fetch(`${getBaseUrl()}/v1/health`).then(handleResponse<HealthResponse>),
 
   stats: () =>
-    fetch(`${BASE_URL}/v1/monitor/stats`).then(handleResponse<MonitorStats>),
+    fetch(`${getBaseUrl()}/v1/monitor/stats`).then(handleResponse<MonitorStats>),
 
   storage: () =>
-    fetch(`${BASE_URL}/v1/storage`).then(handleResponse<StorageInfo>),
+    fetch(`${getBaseUrl()}/v1/storage`).then(handleResponse<StorageInfo>),
 
   prune: (dryRun = false) =>
-    fetch(`${BASE_URL}/v1/storage/prune`, {
+    fetch(`${getBaseUrl()}/v1/storage/prune`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dry_run: dryRun }),
     }).then(handleResponse),
 
   monitorReset: () =>
-    fetch(`${BASE_URL}/v1/monitor/reset`, { method: 'POST' }).then(handleResponse),
+    fetch(`${getBaseUrl()}/v1/monitor/reset`, { method: 'POST' }).then(handleResponse),
 
   memory: () =>
-    fetch(`${BASE_URL}/v1/memory`).then(handleResponse),
+    fetch(`${getBaseUrl()}/v1/memory`).then(handleResponse),
 
   clearMemory: () =>
-    fetch(`${BASE_URL}/v1/memory/clear`, { method: 'POST' }).then(handleResponse),
+    fetch(`${getBaseUrl()}/v1/memory/clear`, { method: 'POST' }).then(handleResponse),
 
   unloadAll: () =>
-    fetch(`${BASE_URL}/v1/models/unload`, { method: 'POST' }).then(handleResponse),
+    fetch(`${getBaseUrl()}/v1/models/unload`, { method: 'POST' }).then(handleResponse),
 
   metricRows: () =>
-    fetch(`${BASE_URL}/v1/monitor/metric-rows`).then(handleResponse<{ rows: MetricRow[] }>),
+    fetch(`${getBaseUrl()}/v1/monitor/metric-rows`).then(handleResponse<{ rows: MetricRow[] }>),
 };
 
 export default api;

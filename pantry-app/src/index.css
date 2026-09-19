@@ -240,7 +240,7 @@ button, select, textarea {
   align-items: center;
   gap: 4px;
   padding: 4px;
-  background: rgba(0, 0, 0, 0.3);
+  background: rgba(255,255,255,0.2);
   border: 1px solid var(--border-card);
   border-radius: var(--radius-full);
 }

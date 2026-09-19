@@ -3543,9 +3543,12 @@
               </div>
 
               <div class="card" style="margin-bottom: 24px;">
-                <div class="card-header">
+                <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                   <div class="card-title"><span>📋</span> Per-Model Benchmark Matrix</div>
-                  <div class="chip font-mono" id="perf-table-count">0 models recorded</div>
+                  <div style="display: flex; align-items: center; gap: 8px;">
+                    <div class="chip font-mono" id="perf-table-count">0 active models</div>
+                    <button class="btn-action" id="btn-toggle-perf-models" onclick="togglePerfShowAllModels()" style="padding: 3px 10px; font-size: 11px;">Show all</button>
+                  </div>
                 </div>
                 <div class="analytics-table-wrap">
                   <table class="analytics-table">
@@ -4421,16 +4424,32 @@
                   style="margin-top: 14px; background: var(--bg-card-inner); border: 1px solid var(--border-card-subtle); border-radius: 8px; padding: 14px;">
                   <div
                     style="font-size: 11px; font-weight: 500; color: var(--text-title); text-transform: uppercase; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between;">
-                    <span>🔄 Intent Remapping</span>
-                    <span id="insp-intent-status-badge" class="status-pill loaded">● Active</span>
+                    <span>🔄 Intent Remapping & Draft Pairing</span>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                      <button class="btn-action" style="padding: 2px 8px; font-size: 11px;" onclick="openRenameModal(studioState.selectedIntent ? studioState.selectedIntent.alias : '')">✏️ Rename</button>
+                      <span id="insp-intent-status-badge" class="status-pill loaded">● Active</span>
+                    </div>
                   </div>
-                  <p style="font-size: 11.5px; color: var(--text-muted); margin: 0 0 10px 0;">Select package for alias
+                  <p style="font-size: 11.5px; color: var(--text-muted); margin: 0 0 6px 0;">Target Package for alias
                     <strong id="insp-intent-alias-badge" class="font-mono"
                       style="color: #3b82f6;">chat-standard</strong>:
                   </p>
                   <select id="insp-intent-remap-select"
-                    style="width: 100%; background: var(--bg-surface); border: 1px solid var(--border-card); border-radius: 6px; padding: 8px 10px; font-size: 12px; font-family: var(--mono);"
+                    style="width: 100%;  border: 1px solid var(--border-card); border-radius: 6px; padding: 8px 10px; font-size: 12px; font-family: var(--mono);"
                     onchange="onInspectorRemapSelectChange()"></select>
+
+                  <div style="margin-top: 12px; border-top: 1px solid var(--border-card-subtle); padding-top: 10px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                      <span style="font-size: 11.5px; color: var(--text-muted); font-weight: 500;">⚡ Speculative Draft Model (Acceleration Pair)</span>
+                      <span id="insp-draft-recommendation-chip" class="chip font-mono" style="font-size: 10px; color: #38bdf8;">Auto-Recommended</span>
+                    </div>
+                    <select id="insp-intent-draft-select"
+                      style="width: 100%; border: 1px solid var(--border-card); border-radius: 6px; padding: 8px 10px; font-size: 12px; font-family: var(--mono);"
+                      onchange="onInspectorDraftSelectChange()"></select>
+                    <div id="insp-draft-hint" style="font-size: 11px; color: var(--text-muted); margin-top: 5px;">
+                      Pairs a low-parameter draft model sharing tokenizer vocabulary for accelerated decoding.
+                    </div>
+                  </div>
                 </div>
 
                 <div id="insp-footer-intent"
@@ -4785,6 +4804,29 @@ pantry prune</pre>
     </div>
   </div>
 
+  <div id="modal-intent-rename"
+    style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center;">
+    <div
+      style="background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 12px; padding: 24px; max-width: 480px; width: 90%; box-shadow: var(--shadow-card);">
+      <h3 style="margin: 0 0 8px 0; font-size: 16px; color: var(--text-title);" id="modal-rename-title">Rename Intent Alias</h3>
+      <p style="font-size: 12px; color: var(--text-muted); margin: 0 0 16px 0;">Update the alias name used for capability routing and model resolution.</p>
+      <div style="display: grid; gap: 12px; margin-bottom: 16px;">
+        <label style="font-size: 11px; color: var(--text-muted);">Current Alias
+          <input id="modal-rename-old-alias" type="text" readonly
+            style="display: block; width: 100%; box-sizing: border-box; margin-top: 5px; background: var(--bg-surface); border: 1px solid var(--border-card-subtle); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); color: var(--text-secondary); opacity: 0.85;" />
+        </label>
+        <label style="font-size: 11px; color: var(--text-muted);">New Alias Name
+          <input id="modal-rename-new-alias" type="text" placeholder="e.g. dev-expert or coder-fast"
+            style="display: block; width: 100%; box-sizing: border-box; margin-top: 5px; background: var(--bg-card-inner); border: 1px solid var(--border-card); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); color: var(--text-title);" />
+        </label>
+      </div>
+      <div style="display: flex; justify-content: flex-end; gap: 8px;">
+        <button class="btn-action" onclick="closeRenameModal()">Cancel</button>
+        <button class="btn-action load" onclick="submitRenameModal()">✏️ Rename Alias</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-create-intent"
     style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9999; align-items: center; justify-content: center;">
     <div
@@ -4834,6 +4876,7 @@ pantry prune</pre>
     let isPaused = false;
     let lastStats = null;
     let lastGpuPowerW = 0;
+    let perfShowAllModels = false;
 
     const netHistory = [];
     const gpuHistories = {};
@@ -5605,23 +5648,155 @@ pantry prune</pre>
       setCell('lat-total-p99', lat.total_latency_ms?.p99 ?? lp.total_ms_p99);
 
       const tbody = document.getElementById('perf-table-body');
-      if (tbody && modelKeys.length > 0) {
-        tbody.innerHTML = modelKeys.map(k => {
+      const countEl = document.getElementById('perf-table-count');
+      const toggleBtn = document.getElementById('btn-toggle-perf-models');
+
+      if (tbody) {
+        // Classify models into active (invocations > 0 or recorded metrics) vs uninvoked
+        const activeKeys = modelKeys.filter(k => {
           const m = models[k];
-          return `
+          const invocations = (m.session_requests || 0) + (m.cumulative_requests || 0);
+          return invocations > 0 || (m.avg_duration_ms && m.avg_duration_ms > 0) || (m.decode_tps_p50 && m.decode_tps_p50 > 0) || (m.ttft_ms_p50 && m.ttft_ms_p50 > 0);
+        });
+
+        // Sort active keys by invocations descending, then peak decode TPS
+        activeKeys.sort((a, b) => {
+          const mA = models[a], mB = models[b];
+          const invA = (mA.session_requests || 0) + (mA.cumulative_requests || 0);
+          const invB = (mB.session_requests || 0) + (mB.cumulative_requests || 0);
+          if (invB !== invA) return invB - invA;
+          return (mB.peak_decode_tps || 0) - (mA.peak_decode_tps || 0);
+        });
+
+        const idleKeys = modelKeys.filter(k => !activeKeys.includes(k));
+        const totalModelsCount = modelKeys.length;
+
+        // Determine which keys to display
+        let displayKeys = activeKeys;
+        if (perfShowAllModels || activeKeys.length === 0) {
+          displayKeys = [...activeKeys, ...idleKeys];
+        }
+
+        if (toggleBtn) {
+          if (activeKeys.length === 0) {
+            toggleBtn.style.display = totalModelsCount > 0 ? 'inline-block' : 'none';
+            toggleBtn.textContent = perfShowAllModels ? 'Show active only' : `Show all (${totalModelsCount})`;
+          } else if (idleKeys.length > 0) {
+            toggleBtn.style.display = 'inline-block';
+            toggleBtn.textContent = perfShowAllModels ? `Show active only (${activeKeys.length})` : `Show all (${totalModelsCount})`;
+          } else {
+            toggleBtn.style.display = 'none';
+          }
+        }
+
+        if (countEl) {
+          if (activeKeys.length > 0) {
+            countEl.textContent = perfShowAllModels
+              ? `${totalModelsCount} models (${activeKeys.length} active, ${idleKeys.length} idle)`
+              : `${activeKeys.length} active model${activeKeys.length === 1 ? '' : 's'}${idleKeys.length > 0 ? ` (${idleKeys.length} idle hidden)` : ''}`;
+          } else {
+            countEl.textContent = perfShowAllModels
+              ? `${totalModelsCount} models (0 active)`
+              : `0 active models (${totalModelsCount} available)`;
+          }
+        }
+
+        if (displayKeys.length > 0) {
+          tbody.innerHTML = displayKeys.map(k => {
+            const m = models[k];
+            const invocations = (m.session_requests || 0) + (m.cumulative_requests || 0);
+            const isIdle = invocations === 0 && !m.avg_duration_ms && !m.decode_tps_p50;
+            const modalityLabel = (m.modality || 'TEXT').toUpperCase();
+            const modalityClass = modalityLabel.toLowerCase();
+
+            return `
+              <tr style="${isIdle ? 'opacity: 0.65;' : ''}">
+                <td>
+                  <span class="font-mono" style="${!isIdle ? 'font-weight:600; color:var(--text-title);' : ''}">${escapeHtml(m.model)}</span>
+                  ${isIdle ? '<span style="font-size:10px; color:var(--text-muted); margin-left:6px;">(uninvoked)</span>' : ''}
+                </td>
+                <td><span class="modality-pill ${modalityClass}">${modalityLabel}</span></td>
+                <td class="font-mono">${m.decode_tps_p50 ? `${m.decode_tps_p50} / ${m.decode_tps_p95 || m.decode_tps_p50}` : '— / —'}</td>
+                <td class="font-mono" style="${m.peak_decode_tps > 0 ? 'color:var(--accent-primary); font-weight:600;' : ''}">${(m.peak_decode_tps || 0).toFixed(1)}</td>
+                <td class="font-mono">${m.ttft_ms_p50 ? `${m.ttft_ms_p50} / ${m.ttft_ms_p95 || m.ttft_ms_p50}` : '— / —'}</td>
+                <td class="font-mono">${m.avg_duration_ms ? Math.round(m.avg_duration_ms) + ' ms' : '—'}</td>
+                <td class="font-mono">${invocations}</td>
+                <td><button class="btn-action" onclick="launchInPlayground('${escapeHtml(m.model)}', '${(m.modality || 'chat').toLowerCase()}')">⚡ Test</button></td>
+              </tr>
+            `;
+          }).join('');
+        } else {
+          tbody.innerHTML = `
             <tr>
-              <td><span class="font-mono">${escapeHtml(m.model)}</span></td>
-              <td><span class="modality-pill text">${(m.modality || 'TEXT').toUpperCase()}</span></td>
-              <td class="font-mono">${m.decode_tps_p50 || '—'} / ${m.decode_tps_p95 || '—'}</td>
-              <td class="font-mono" style="color:var(--accent-primary);">${(m.peak_decode_tps || 0).toFixed(1)}</td>
-              <td class="font-mono">${m.ttft_ms_p50 || '—'} / ${m.ttft_ms_p95 || '—'}</td>
-              <td class="font-mono">${m.avg_duration_ms ? Math.round(m.avg_duration_ms) + ' ms' : '—'}</td>
-              <td class="font-mono">${m.session_requests || 0}</td>
-              <td><button class="btn-action" onclick="launchInPlayground('${escapeHtml(m.model)}', '${m.modality || 'chat'}')">⚡ Test</button></td>
+              <td colspan="8" style="text-align: center; color: var(--text-muted); padding: 32px 16px;">
+                No inference runs recorded yet. Generate tokens via Playground or API.
+              </td>
             </tr>
           `;
-        }).join('');
+        }
       }
+
+      // Speculative Decoding Acceleration Metrics
+      const spec = inf.speculative || {};
+      const specBadge = document.getElementById('perf-spec-badge');
+      const specDraft = document.getElementById('perf-spec-draft');
+      const specAccepted = document.getElementById('perf-spec-accepted');
+      const specRate = document.getElementById('perf-spec-rate');
+      const specFill = document.getElementById('perf-spec-fill');
+
+      if (specBadge) {
+        const speedup = spec.speedup_factor || 1.0;
+        specBadge.textContent = `${speedup.toFixed(2)}x Speedup`;
+        specBadge.style.color = speedup > 1.05 ? 'var(--accent-emerald, #10b981)' : 'var(--accent-primary, #ff5e36)';
+      }
+      if (specDraft) specDraft.textContent = (spec.draft_tokens || 0).toLocaleString();
+      if (specAccepted) specAccepted.textContent = (spec.accepted_tokens || 0).toLocaleString();
+      if (specRate) {
+        const rate = spec.acceptance_rate_percent != null
+          ? spec.acceptance_rate_percent
+          : (spec.draft_tokens > 0 ? ((spec.accepted_tokens / spec.draft_tokens) * 100).toFixed(1) : null);
+        specRate.textContent = rate != null ? `${rate}%` : '—';
+      }
+      if (specFill) {
+        const pct = spec.acceptance_rate_percent != null
+          ? spec.acceptance_rate_percent
+          : (spec.draft_tokens > 0 ? (spec.accepted_tokens / spec.draft_tokens) * 100 : 0);
+        specFill.style.width = `${Math.min(100, pct)}%`;
+      }
+
+      // Context Window Scaling & KV-Cache Footprint
+      const ctx = inf.context_fill || {};
+      const activeCtx = document.getElementById('perf-active-ctx');
+      const maxCtx = document.getElementById('perf-max-ctx');
+      const ctxFill = document.getElementById('perf-ctx-fill');
+      const kvRam = document.getElementById('perf-kv-ram');
+      if (activeCtx) activeCtx.textContent = `${(ctx.active_tokens || 0).toLocaleString()} tokens`;
+      if (maxCtx) maxCtx.textContent = `${(ctx.max_tokens || 32768).toLocaleString()} tokens`;
+      if (ctxFill) ctxFill.style.width = `${Math.min(100, ctx.percent || 0)}%`;
+      if (kvRam) kvRam.textContent = inf.kv_cache_human || '0 B';
+
+      // Prefix Cache Reuse Metrics
+      const pfx = inf.prefix_cache || {};
+      const pfxTokens = document.getElementById('perf-prefix-tokens');
+      const pfxRate = document.getElementById('perf-prefix-rate');
+      const pfxSaved = document.getElementById('perf-prefix-saved');
+      const pfxFill = document.getElementById('perf-prefix-fill');
+      const pfxBadge = document.getElementById('perf-prefix-badge');
+      if (pfxTokens) pfxTokens.textContent = `${(pfx.cached_prompt_tokens || 0).toLocaleString()} tokens`;
+      if (pfxRate) pfxRate.textContent = `${(pfx.hit_rate_percent || 0).toFixed(1)}%`;
+      if (pfxSaved) pfxSaved.textContent = `${(pfx.saved_prefill_ms || 0).toFixed(1)} ms`;
+      if (pfxFill) pfxFill.style.width = `${Math.min(100, pfx.hit_rate_percent || 0)}%`;
+      if (pfxBadge) pfxBadge.textContent = pfx.hits > 0 ? 'Active Cache Hit' : 'Zero-Cost Reuse';
+
+      // Memory Secrecy & CAS Dedup
+      const aim = data.ai_models || {};
+      const mem = data.memory || {};
+      const casSaved = document.getElementById('perf-cas-saved');
+      const casRatio = document.getElementById('perf-cas-ratio');
+      const dramHeadroom = document.getElementById('perf-dram-headroom');
+      if (casSaved) casSaved.textContent = aim.dedup_saved_human || '0 B';
+      if (casRatio) casRatio.textContent = aim.dedup_ratio ? `${aim.dedup_ratio.toFixed(1)}x` : '1.0x';
+      if (dramHeadroom) dramHeadroom.textContent = mem.free_human || '—';
     }
 
     function renderUsage(data) {
@@ -6056,6 +6231,7 @@ pantry prune</pre>
               <td>${isReady ? '<span class="status-pill loaded">● Ready</span>' : '<span class="status-pill standby">○ Need Pull</span>'}</td>
               <td class="font-mono">${diskGb > 0 ? `~${diskGb} GB` : '—'}</td>
               <td style="text-align:right;">
+                <button class="btn-action" style="margin-right: 4px;" onclick="event.stopPropagation(); openRenameModal('${escapeHtml(it.alias)}')">✏️ Rename</button>
                 <button class="btn-action" onclick="event.stopPropagation(); openRebindModal('${escapeHtml(it.alias)}')">🔄 Rebind</button>
               </td>
             </tr>
@@ -6104,6 +6280,113 @@ pantry prune</pre>
       if (m) selectModelForInspector(m);
     }
 
+    function populateInspectorDraftOptions(targetPkgId, currentDraftId) {
+      const draftSelect = document.getElementById('insp-intent-draft-select');
+      const hintEl = document.getElementById('insp-draft-hint');
+      const chipEl = document.getElementById('insp-draft-recommendation-chip');
+      if (!draftSelect) return;
+
+      const candidates = (studioState.selectedIntent?.candidates || []);
+      const targetPkg = candidates.find(c => c.package_id === targetPkgId) || studioState.selectedIntent?.active_package;
+      const targetFam = (targetPkg?.family || '').toLowerCase();
+      const targetRam = targetPkg?.ram_gb_min || 999;
+
+      // Filter compatible drafts: same family, text modality, lower ram
+      const sameFamDrafts = candidates.filter(c => 
+        c.package_id !== targetPkgId &&
+        (c.family || '').toLowerCase() === targetFam &&
+        (c.ram_gb_min || 0) < targetRam
+      );
+      const otherDrafts = candidates.filter(c => 
+        c.package_id !== targetPkgId &&
+        ((c.family || '').toLowerCase() !== targetFam || (c.ram_gb_min || 0) >= targetRam)
+      );
+
+      const recommendedDraft = sameFamDrafts.length > 0 ? sameFamDrafts[0] : null;
+
+      draftSelect.innerHTML = '';
+
+      // Option: Auto
+      const optAuto = document.createElement('option');
+      optAuto.value = 'auto';
+      optAuto.textContent = `✨ Auto-Recommend ${recommendedDraft ? `(${recommendedDraft.package_id})` : '(Same-Family Compact)'}`;
+      draftSelect.appendChild(optAuto);
+
+      // Option: None (standalone)
+      const optNone = document.createElement('option');
+      optNone.value = 'none';
+      optNone.textContent = '🚫 None (Run Standalone Without Draft)';
+      draftSelect.appendChild(optNone);
+
+      if (sameFamDrafts.length > 0) {
+        const grp = document.createElement('optgroup');
+        grp.label = `⚡ Compatible Same-Family Drafts (${targetFam.toUpperCase() || 'Matches'})`;
+        sameFamDrafts.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.package_id;
+          opt.textContent = `${c.package_id} (${c.weights_ready ? '⚡ Ready' : 'Need Pull'} · ~${(c.ram_gb_min || 1).toFixed(1)} GB)`;
+          grp.appendChild(opt);
+        });
+        draftSelect.appendChild(grp);
+      }
+
+      if (otherDrafts.length > 0) {
+        const grpOther = document.createElement('optgroup');
+        grpOther.label = 'Other Available Packages';
+        otherDrafts.forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.package_id;
+          opt.textContent = `${c.package_id} (${c.weights_ready ? '⚡ Ready' : 'Need Pull'})`;
+          grpOther.appendChild(opt);
+        });
+        draftSelect.appendChild(grpOther);
+      }
+
+      if (currentDraftId && currentDraftId !== 'none' && currentDraftId !== 'auto') {
+        draftSelect.value = currentDraftId;
+      } else if (currentDraftId === 'none') {
+        draftSelect.value = 'none';
+      } else {
+        draftSelect.value = 'auto';
+      }
+
+      onInspectorDraftSelectChange();
+    }
+
+    function onInspectorRemapSelectChange() {
+      const selectEl = document.getElementById('insp-intent-remap-select');
+      if (!selectEl) return;
+      populateInspectorDraftOptions(selectEl.value, 'auto');
+    }
+
+    function onInspectorDraftSelectChange() {
+      const draftSelect = document.getElementById('insp-intent-draft-select');
+      const hintEl = document.getElementById('insp-draft-hint');
+      const chipEl = document.getElementById('insp-draft-recommendation-chip');
+      if (!draftSelect || !hintEl) return;
+
+      const val = draftSelect.value;
+      if (val === 'none') {
+        hintEl.textContent = 'Standalone mode active: Model will execute without secondary speculative draft verification.';
+        if (chipEl) {
+          chipEl.textContent = 'Standalone';
+          chipEl.style.color = 'var(--text-muted)';
+        }
+      } else if (val === 'auto') {
+        hintEl.textContent = 'Automatic Speculative Pairing: Dynamically pairs with best same-family compact draft (e.g. Qwen2.5 0.5B) for ~1.6x-2.2x speedup.';
+        if (chipEl) {
+          chipEl.textContent = 'Auto-Recommended';
+          chipEl.style.color = '#38bdf8';
+        }
+      } else {
+        hintEl.textContent = `Explicit Draft Model '${val}': Generates candidate token batches with joint tensor verification.`;
+        if (chipEl) {
+          chipEl.textContent = 'Custom Draft Pair';
+          chipEl.style.color = 'var(--accent-emerald, #10b981)';
+        }
+      }
+    }
+
     function selectIntentForInspector(it) {
       studioState.selectedIntent = it;
       studioState.selectedModel = null;
@@ -6150,6 +6433,9 @@ pantry prune</pre>
         });
       }
       document.getElementById('insp-intent-alias-badge').textContent = it.alias;
+
+      // Populate draft pairing dropdown
+      populateInspectorDraftOptions(active.package_id, active.draft_package_id);
     }
 
     function selectModelForInspector(m) {
@@ -6214,9 +6500,54 @@ pantry prune</pre>
           body: JSON.stringify({ alias: studioState.rebindTargetAlias, package_id: select.value })
         });
         closeRebindModal();
-        loadIntentBindings();
+        await loadIntentBindings();
       } catch (err) {
         alert(`Rebind error: ${err.message}`);
+      }
+    }
+
+    function openRenameModal(alias) {
+      if (!alias) return;
+      const modal = document.getElementById('modal-intent-rename');
+      const oldInput = document.getElementById('modal-rename-old-alias');
+      const newInput = document.getElementById('modal-rename-new-alias');
+      if (oldInput) oldInput.value = alias;
+      if (newInput) {
+        newInput.value = alias;
+        setTimeout(() => newInput.focus(), 50);
+      }
+      if (modal) modal.style.display = 'flex';
+      studioState.renameTargetAlias = alias;
+    }
+
+    function closeRenameModal() {
+      const modal = document.getElementById('modal-intent-rename');
+      if (modal) modal.style.display = 'none';
+      studioState.renameTargetAlias = null;
+    }
+
+    async function submitRenameModal() {
+      const oldAlias = studioState.renameTargetAlias;
+      const newAlias = document.getElementById('modal-rename-new-alias')?.value?.trim();
+      if (!oldAlias || !newAlias) {
+        alert('Please enter a valid new alias name.');
+        return;
+      }
+      try {
+        const res = await fetch('/v1/packs/rename-alias', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ old_alias: oldAlias, new_alias: newAlias })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Rename failed');
+        }
+        closeRenameModal();
+        await loadIntentBindings();
+        selectIntentForInspectorByAlias(newAlias);
+      } catch (err) {
+        alert(`Rename error: ${err.message}`);
       }
     }
 
@@ -6224,15 +6555,25 @@ pantry prune</pre>
       if (!studioState.selectedIntent) return;
       const it = studioState.selectedIntent;
       const selectEl = document.getElementById('insp-intent-remap-select');
+      const draftSelectEl = document.getElementById('insp-intent-draft-select');
       if (!selectEl) return;
       try {
-        await fetch('/v1/packs/rebind', {
+        const res = await fetch('/v1/packs/rebind', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ alias: it.alias, package_id: selectEl.value })
+          body: JSON.stringify({
+            alias: it.alias,
+            package_id: selectEl.value,
+            draft_package_id: draftSelectEl ? draftSelectEl.value : undefined
+          })
         });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Remap failed');
+        }
         alert('Intent remapped successfully!');
-        loadIntentBindings();
+        await loadIntentBindings();
+        selectIntentForInspectorByAlias(it.alias);
       } catch (err) {
         alert(`Remap error: ${err.message}`);
       }

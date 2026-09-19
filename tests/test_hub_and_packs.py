@@ -296,3 +296,94 @@ def test_huggingface_hub_search(tmp_path: Path):
     assert all(m["source"] == "hub" for m in models_hf)
 
 
+def test_intent_pack_renaming_and_draft_pairing(tmp_path: Path):
+    from pantry.hub import rename_intent_alias, set_package_draft
+
+    store = PackageStore(tmp_path)
+    store.seed_from_catalog(bundled_catalog_dir())
+
+    # 1. Rename chat-standard -> dev-chat
+    renamed = rename_intent_alias(store, "chat-standard", "dev-chat")
+    assert "dev-chat" in renamed.aliases
+    assert "chat-standard" not in renamed.aliases
+
+    # 2. Verify resolver works with new alias
+    pkgs = store.list_manifests()
+    resolved = find_by_model_string("dev-chat", pkgs)
+    assert resolved is not None
+    assert resolved.id == renamed.id
+
+    # 3. Set draft pairing
+    target_id = "vdplabs.qwen25-1.5b.standard.v1"
+    draft_id = "vdplabs.qwen25-0.5b.compact.v1"
+    updated = set_package_draft(store, target_id, draft_id)
+    assert updated.runtime.draft_package_id == draft_id
+
+    # 4. Clear draft pairing
+    cleared = set_package_draft(store, target_id, "none")
+    assert cleared.runtime.draft_package_id is None
+
+    # 5. Auto draft pairing
+    auto = set_package_draft(store, target_id, "auto")
+    assert auto.runtime.draft_package_id is not None
+    assert "qwen" in auto.runtime.draft_package_id.lower()
+
+
+def test_server_pack_rename_and_draft_endpoints(tmp_path: Path):
+    store = PackageStore(tmp_path)
+    store.seed_from_catalog(bundled_catalog_dir())
+    app = create_app(store)
+    client = TestClient(app)
+
+    # 1. POST /v1/packs/rename-alias
+    r = client.post("/v1/packs/rename-alias", json={
+        "old_alias": "coder-compact",
+        "new_alias": "code-ninja",
+    })
+    assert r.status_code == 200
+    assert r.json()["new_alias"] == "code-ninja"
+    assert "code-ninja" in r.json()["aliases"]
+
+    # 2. POST /v1/packs/set-draft
+    r = client.post("/v1/packs/set-draft", json={
+        "target_package_id": "vdplabs.qwen25-1.5b.standard.v1",
+        "draft_package_id": "vdplabs.qwen25-0.5b.compact.v1",
+    })
+    assert r.status_code == 200
+    assert r.json()["draft_package_id"] == "vdplabs.qwen25-0.5b.compact.v1"
+
+    # 3. POST /v1/packs/rebind with draft_package_id
+    r = client.post("/v1/packs/rebind", json={
+        "alias": "chat-fast",
+        "package_id": "vdplabs.qwen25-1.5b.standard.v1",
+        "draft_package_id": "vdplabs.qwen25-0.5b.compact.v1",
+    })
+    assert r.status_code == 200
+    assert r.json()["draft_package_id"] == "vdplabs.qwen25-0.5b.compact.v1"
+
+
+def test_cli_pack_rename_and_draft_commands(tmp_path: Path):
+    store = PackageStore(tmp_path)
+    store.seed_from_catalog(bundled_catalog_dir())
+    runner = CliRunner()
+
+    # 1. pantry pack rename
+    res = runner.invoke(cli_app, [
+        "pack", "rename",
+        "chat-standard", "my-chat-alias",
+        "--home", str(tmp_path),
+    ])
+    assert res.exit_code == 0
+    assert "Successfully renamed intent" in res.stdout
+
+    # 2. pantry pack set-draft
+    res = runner.invoke(cli_app, [
+        "pack", "set-draft",
+        "vdplabs.qwen25-1.5b.standard.v1",
+        "vdplabs.qwen25-0.5b.compact.v1",
+        "--home", str(tmp_path),
+    ])
+    assert res.exit_code == 0
+    assert "Set speculative draft" in res.stdout
+
+

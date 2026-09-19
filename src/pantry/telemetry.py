@@ -307,6 +307,21 @@ class TokenMetricsTracker:
 
     def _get_or_create_model_entry(self, model: str, modality: str = "text") -> dict[str, Any]:
         mid = model or "default"
+        if modality == "text":
+            m_lower = mid.lower()
+            if "image" in m_lower or "flux" in m_lower or "sdxl" in m_lower or "diffusion" in m_lower or "turbo" in m_lower:
+                modality = "image"
+            elif "video" in m_lower or "ltx" in m_lower or "cog" in m_lower:
+                modality = "video"
+            elif "music" in m_lower or "musicgen" in m_lower:
+                modality = "music"
+            elif "transcribe" in m_lower or "whisper" in m_lower or "stt" in m_lower or "audio" in m_lower:
+                modality = "audio"
+            elif "embed" in m_lower:
+                modality = "embedding"
+            elif "rerank" in m_lower:
+                modality = "rerank"
+
         if mid not in self._model_stats:
             self._model_stats[mid] = {
                 "model": mid,
@@ -330,6 +345,9 @@ class TokenMetricsTracker:
                 "peak_decode_tps": 0.0,
                 "last_prefill_ms": 0.0,
             }
+        elif modality != "text" and self._model_stats[mid].get("modality") == "text":
+            self._model_stats[mid]["modality"] = modality
+
         return self._model_stats[mid]
 
     def _trigger_save(self) -> None:

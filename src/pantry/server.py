@@ -59,12 +59,14 @@ from pantry.schemas import (
     PullBody,
     QualityTier,
     RebindPackBody,
+    RenameAliasBody,
     RerankMeta,
     RerankMetaBilledUnits,
     RerankMetaTokens,
     RerankRequest,
     RerankResponse,
     RerankResultItem,
+    SetDraftBody,
     StoragePruneRequest,
     StoragePruneResponse,
     StorageStatsResponse,
@@ -620,13 +622,55 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         from pantry.hub import rebind_intent_alias
 
         try:
-            target = rebind_intent_alias(store, req.alias, req.package_id)
-            svc.log_event(f"Rebound intent '{req.alias}' to '{req.package_id}'")
+            target = rebind_intent_alias(store, req.alias, req.package_id, draft_package_id=req.draft_package_id)
+            svc.log_event(
+                f"Rebound intent '{req.alias}' to '{req.package_id}'"
+                + (f" (draft: {req.draft_package_id})" if req.draft_package_id else "")
+            )
             return {
                 "status": "ok",
                 "alias": req.alias,
                 "package_id": target.id,
+                "draft_package_id": target.runtime.draft_package_id,
                 "aliases": target.aliases,
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/v1/packs/rename-alias")
+    def pack_rename_alias(req: RenameAliasBody) -> dict[str, Any]:
+        from pantry.hub import rename_intent_alias
+
+        try:
+            target = rename_intent_alias(store, req.old_alias, req.new_alias)
+            svc.log_event(f"Renamed intent alias '{req.old_alias}' to '{req.new_alias}' (bound to {target.id})")
+            return {
+                "status": "ok",
+                "old_alias": req.old_alias,
+                "new_alias": req.new_alias,
+                "package_id": target.id,
+                "aliases": target.aliases,
+            }
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @app.post("/v1/packs/set-draft")
+    def pack_set_draft(req: SetDraftBody) -> dict[str, Any]:
+        from pantry.hub import set_package_draft
+
+        try:
+            target = set_package_draft(store, req.target_package_id, req.draft_package_id)
+            svc.log_event(
+                f"Updated speculative draft for '{req.target_package_id}' -> '{target.runtime.draft_package_id}'"
+            )
+            return {
+                "status": "ok",
+                "target_package_id": target.id,
+                "draft_package_id": target.runtime.draft_package_id,
             }
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
