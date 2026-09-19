@@ -2700,88 +2700,462 @@
       display: block;
     }
 
-    /* Floating pill rows matching the reference */
-    .req-pill-list {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      max-height: 200px;
+    /* Modern Request History Table */
+    .req-table-wrapper {
+      width: 100%;
+      max-height: 240px;
       overflow-y: auto;
-      padding-right: 4px;
-    }
-
-    .req-pill-item {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px 12px;
+      border: 1px solid var(--border-card-subtle);
       border-radius: 8px;
       background: var(--bg-card-inner);
-      border: 1px solid var(--border-card-subtle);
+    }
+
+    .req-modern-table {
+      width: 100%;
+      border-collapse: collapse;
       font-size: 11.5px;
-      transition: all 0.15s ease;
+      text-align: left;
     }
 
-    .req-pill-item:hover {
-      background: var(--bg-subtle);
-      border-color: var(--border-highlight);
+    .req-modern-table thead th {
+      position: sticky;
+      top: 0;
+      background: #101625;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--border-card);
+      z-index: 2;
     }
 
-    .req-pill-left {
+    .req-table-tr {
+      border-bottom: 1px solid var(--border-card-subtle);
+      transition: background 0.12s ease;
+    }
+
+    .req-table-tr:last-child {
+      border-bottom: none;
+    }
+
+    .req-table-tr:hover {
+      background: rgba(99, 102, 241, 0.06);
+    }
+
+    .req-table-tr td {
+      padding: 8px 12px;
+      vertical-align: middle;
+    }
+
+    .req-td-time {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .req-model-cell {
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 7px;
       min-width: 0;
     }
 
-    .req-pill-time {
-      font-family: var(--mono);
-      font-size: 10px;
-      color: var(--text-dim);
+    .req-model-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-primary);
+      box-shadow: 0 0 6px var(--accent-primary);
+      flex-shrink: 0;
     }
 
-    .req-pill-model {
+    .req-model-name {
       font-weight: 600;
       color: var(--text-title);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
+      max-width: 220px;
     }
 
-    .req-pill-right {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-
-    .req-pill-tokens {
+    .req-td-tokens {
       font-family: var(--mono);
       font-size: 11px;
+      white-space: nowrap;
       color: var(--text-muted);
     }
 
-    .req-pill-lat {
+    .req-tok-in {
+      color: #38bdf8;
+    }
+
+    .req-tok-arrow {
+      color: var(--text-dim);
+      margin: 0 3px;
+    }
+
+    .req-tok-out {
+      color: #a78bfa;
+    }
+
+    .req-tok-total {
+      color: var(--text-dim);
+      font-size: 10px;
+      margin-left: 4px;
+    }
+
+    .req-td-lat {
       font-family: var(--mono);
       font-size: 11px;
-      color: var(--text-body);
+      white-space: nowrap;
     }
 
-    .req-pill-status {
-      font-family: var(--mono);
-      font-size: 10px;
-      font-weight: 500;
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-
-    .req-pill-status.ok {
-      background: var(--accent-emerald-subtle);
+    .req-td-lat.lat-fast {
       color: var(--accent-emerald);
     }
 
-    .req-pill-status.err {
-      background: var(--accent-rose-subtle);
-      color: var(--accent-rose);
+    .req-td-lat.lat-med {
+      color: #38bdf8;
+    }
+
+    .req-td-lat.lat-slow {
+      color: var(--accent-amber);
+    }
+
+    .req-td-speed {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-body);
+      white-space: nowrap;
+    }
+
+    .req-status-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .req-status-chip.ok {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+
+    .req-status-chip.err {
+      background: rgba(244, 63, 94, 0.15);
+      color: #f87171;
+      border: 1px solid rgba(244, 63, 94, 0.3);
+    }
+
+    /* Professional Developer Terminal Log Console */
+    .log-terminal-card {
+      background: #070b13;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .log-terminal-header {
+      background: #0d1322;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+      padding: 8px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .log-terminal-dots {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .log-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #eab308; }
+    .dot-green { background: #22c55e; }
+
+    .log-terminal-title {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-left: 8px;
+    }
+
+    .log-terminal-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .log-filter-group {
+      display: flex;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-radius: 5px;
+      padding: 2px;
+      gap: 2px;
+    }
+
+    .log-filter-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 600;
+      padding: 3px 8px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: all 0.12s ease;
+    }
+
+    .log-filter-btn.active {
+      background: var(--accent-primary);
+      color: #ffffff;
+    }
+
+    .log-filter-btn:hover:not(.active) {
+      color: var(--text-title);
+    }
+
+    .log-search-box input {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 5px;
+      color: var(--text-primary);
+      font-family: var(--mono);
+      font-size: 10.5px;
+      padding: 4px 8px;
+      width: 120px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .log-search-box input:focus {
+      border-color: var(--accent-primary);
+    }
+
+    .log-action-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: var(--text-body);
+      font-family: var(--mono);
+      font-size: 10px;
+      padding: 4px 8px;
+      border-radius: 5px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.12s ease;
+    }
+
+    .log-action-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-title);
+    }
+
+    .log-autoscroll-toggle {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .log-autoscroll-toggle input {
+      accent-color: var(--accent-primary);
+      cursor: pointer;
+    }
+
+    .log-terminal-body {
+      padding: 12px 14px;
+      min-height: 220px;
+      max-height: 360px;
+      overflow-y: auto;
+      font-family: var(--mono);
+      font-size: 11.5px;
+      line-height: 1.6;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      background: #070b13;
+    }
+
+    .log-entry-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: background 0.1s;
+    }
+
+    .log-entry-row:hover {
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .log-num {
+      color: #334155;
+      font-size: 10px;
+      width: 20px;
+      text-align: right;
+      flex-shrink: 0;
+      user-select: none;
+    }
+
+    .log-timestamp {
+      color: #64748b;
+      font-size: 10.5px;
+      flex-shrink: 0;
+    }
+
+    .log-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 5px;
+      border-radius: 3px;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+      min-width: 44px;
+      text-align: center;
+    }
+
+    .log-badge.start {
+      background: rgba(99, 102, 241, 0.2);
+      color: #818cf8;
+      border: 1px solid rgba(99, 102, 241, 0.35);
+    }
+
+    .log-badge.done {
+      background: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+
+    .log-badge.stream {
+      background: rgba(6, 182, 212, 0.2);
+      color: #38bdf8;
+      border: 1px solid rgba(6, 182, 212, 0.35);
+    }
+
+    .log-badge.load {
+      background: rgba(168, 85, 247, 0.2);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.35);
+    }
+
+    .log-badge.info {
+      background: rgba(148, 163, 184, 0.15);
+      color: #94a3b8;
+      border: 1px solid rgba(148, 163, 184, 0.25);
+    }
+
+    .log-badge.warn {
+      background: rgba(245, 158, 11, 0.2);
+      color: #fbbf24;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+    }
+
+    .log-badge.error {
+      background: rgba(244, 63, 94, 0.2);
+      color: #f87171;
+      border: 1px solid rgba(244, 63, 94, 0.35);
+    }
+
+    .log-content {
+      color: #cbd5e1;
+      word-break: break-word;
+      flex: 1;
+    }
+
+    .log-model-tag {
+      color: #38bdf8;
+      font-weight: 600;
+    }
+
+    .log-dur-tag {
+      color: #f59e0b;
+      font-weight: 600;
+    }
+
+    .log-ip-tag {
+      color: #a78bfa;
+    }
+
+    .log-empty-state {
+      color: #64748b;
+      padding: 30px 0;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .log-prompt-char {
+      color: #22c55e;
+      font-weight: 700;
+    }
+
+    .log-terminal-footer {
+      background: #090e1a;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--text-dim);
+    }
+
+    .log-status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #22c55e;
+      font-weight: 600;
+    }
+
+    .log-live-pulse {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #22c55e;
+      box-shadow: 0 0 6px #22c55e;
+      animation: logPulse 2s infinite ease-in-out;
+    }
+
+    @keyframes logPulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
     }
 
     .help-section {
@@ -3193,18 +3567,6 @@
                 </div>
               </div>
 
-              <!-- <div class="card widget-requests"
-              style="background-color: transparent; border: none; box-shadow: none; padding: 0;">
-              <div class="card-header">
-                <div class="card-title"><span>🧾</span> Request Log</div>
-                <span class="chip font-mono" id="request-count-badge">0 requests</span>
-              </div>
-              <div class="request-table" id="request-log-list">
-                <div style="color: var(--text-muted); font-size: 11px; text-align: center; padding: 20px 0;">No requests
-                  logged yet</div>
-              </div>
-            </div> -->
-
               <div class="req-visual-card">
                 <div class="req-visual-header">
                   <div>
@@ -3238,10 +3600,10 @@
                 </div>
                 <div class="request-chart-caption"><span>Older</span><span>Latency per request</span><span>Now</span></div>
 
-                <!-- Itemized Request Pills -->
-                <div class="req-pill-list" id="request-log-list">
-                  <div style="color: var(--text-muted); font-size: 11px; text-align: center; padding: 20px 0;">
-                    No requests logged yet
+                <!-- Itemized Request Table -->
+                <div id="request-log-list">
+                  <div style="color: var(--text-muted); font-size: 11px; text-align: center; padding: 24px 0;">
+                    No requests recorded in this session yet
                   </div>
                 </div>
               </div>
@@ -3477,16 +3839,65 @@
             <section class="monitor-section">
               <div class="section-header">
                 <div class="section-header-left">
-                  <div class="section-tag">AUDIT</div>
+                  <div class="section-tag">AUDIT & TRACE</div>
                   <h2 class="section-title"><span>📜</span> Activity & Lifecycle Log</h2>
-                  <p class="section-desc">Real-time daemon events and trace stream</p>
+                  <p class="section-desc">Real-time daemon events, model weights loading, and inference stream traces</p>
                 </div>
                 <span class="chip font-mono" id="event-count-badge">0 events</span>
               </div>
-              <div class="observability-grid">
-                <div class="event-list" id="event-list">
-                  <div style="color: var(--text-muted); font-size: 11px; text-align: center; padding: 20px 0;">No events
-                    logged yet</div>
+
+              <!-- Professional Developer Log Console -->
+              <div class="log-terminal-card">
+                <!-- Terminal Header Bar -->
+                <div class="log-terminal-header">
+                  <div class="log-terminal-dots">
+                    <span class="log-dot dot-red"></span>
+                    <span class="log-dot dot-yellow"></span>
+                    <span class="log-dot dot-green"></span>
+                    <span class="log-terminal-title">pantry-daemon.log — stdout/trace stream</span>
+                  </div>
+                  <div class="log-terminal-controls">
+                    <!-- Level Filter Pills -->
+                    <div class="log-filter-group">
+                      <button class="log-filter-btn active" data-filter="all" onclick="filterLogs('all')">ALL</button>
+                      <button class="log-filter-btn" data-filter="info" onclick="filterLogs('info')">INFO</button>
+                      <button class="log-filter-btn" data-filter="ops" onclick="filterLogs('ops')">OPERATIONS</button>
+                      <button class="log-filter-btn" data-filter="warn" onclick="filterLogs('warn')">WARN / ERR</button>
+                    </div>
+                    <!-- Search Input -->
+                    <div class="log-search-box">
+                      <input type="text" id="log-search-input" placeholder="Filter logs..." oninput="handleLogSearch(this.value)">
+                    </div>
+                    <!-- Action Buttons -->
+                    <button class="log-action-btn" onclick="copyAllLogs()" title="Copy all logs to clipboard">
+                      <span>📋 Copy</span>
+                    </button>
+                    <button class="log-action-btn" onclick="clearLogDisplay()" title="Clear console view">
+                      <span>🧹 Clear</span>
+                    </button>
+                    <label class="log-autoscroll-toggle" title="Auto-scroll to latest log entries">
+                      <input type="checkbox" id="log-autoscroll" checked>
+                      <span>Auto-scroll</span>
+                    </label>
+                  </div>
+                </div>
+
+                <!-- Terminal Stream Body -->
+                <div class="log-terminal-body" id="event-list">
+                  <div class="log-empty-state">
+                    <span class="log-prompt-char">$</span> pantry daemon live event stream active...
+                  </div>
+                </div>
+
+                <!-- Terminal Footer / Live Status Bar -->
+                <div class="log-terminal-footer">
+                  <div class="log-status-indicator">
+                    <span class="log-live-pulse"></span>
+                    <span>LIVE STREAM</span>
+                  </div>
+                  <div class="log-footer-info" id="log-footer-stats">
+                    0 entries · Buffer: 30 events
+                  </div>
                 </div>
               </div>
             </section>
@@ -4878,6 +5289,11 @@ pantry prune</pre>
     let lastGpuPowerW = 0;
     let perfShowAllModels = false;
 
+    // Developer Log Console State
+    let currentLogFilter = 'all';
+    let currentLogSearch = '';
+    let rawActivityEvents = [];
+
     const netHistory = [];
     const gpuHistories = {};
 
@@ -4889,6 +5305,153 @@ pantry prune</pre>
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#039;');
+    }
+
+    function parseEventDetails(msg) {
+      if (!msg) return { badgeText: 'INFO', badgeClass: 'info', category: 'info', formattedMsg: '' };
+
+      const text = String(msg);
+      let badgeText = 'INFO';
+      let badgeClass = 'info';
+      let category = 'info';
+
+      const lower = text.toLowerCase();
+
+      if (lower.startsWith('started:') || lower.includes('stream initiated') || lower.includes('streaming')) {
+        badgeText = 'START';
+        badgeClass = 'start';
+        category = 'ops';
+      } else if (lower.startsWith('finished') || lower.includes('completed') || lower.includes('generated') || lower.includes('success')) {
+        badgeText = 'DONE';
+        badgeClass = 'done';
+        category = 'ops';
+      } else if (lower.includes('loading') || lower.includes('loaded') || lower.includes('initializing') || lower.includes('weights')) {
+        badgeText = 'LOAD';
+        badgeClass = 'load';
+        category = 'ops';
+      } else if (lower.includes('stream') || lower.includes('token') || lower.includes('prompt')) {
+        badgeText = 'STREAM';
+        badgeClass = 'stream';
+        category = 'ops';
+      } else if (lower.includes('warn') || lower.includes('timeout') || lower.includes('slow') || lower.includes('fall back') || lower.includes('exceeded')) {
+        badgeText = 'WARN';
+        badgeClass = 'warn';
+        category = 'warn';
+      } else if (lower.includes('error') || lower.includes('fail') || lower.includes('exception') || lower.includes('aborted') || lower.includes('crash')) {
+        badgeText = 'ERROR';
+        badgeClass = 'error';
+        category = 'warn';
+      }
+
+      // Escape HTML first
+      let formatted = escapeHtml(text);
+
+      // Highlight durations like (1.55s), (240ms), [14.2s]
+      formatted = formatted.replace(/\((\d+(?:\.\d+)?(?:s|ms|m|h))\)/gi, '(<span class="log-dur-tag">$1</span>)');
+
+      // Highlight model identifiers like (vdplabs.qwen25-1.5b.standard.v1) or vdplabs.*
+      formatted = formatted.replace(/\((vdplabs\.[a-zA-Z0-9_\.\-]+)\)/gi, '(<span class="log-model-tag">$1</span>)');
+      formatted = formatted.replace(/\b(vdplabs\.[a-zA-Z0-9_\.\-]+)\b/gi, '<span class="log-model-tag">$1</span>');
+
+      // Highlight IP:port like 127.0.0.1:53437
+      formatted = formatted.replace(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+)\b/g, '<span class="log-ip-tag">$1</span>');
+
+      return { badgeText, badgeClass, category, formattedMsg: formatted };
+    }
+
+    function filterLogs(level) {
+      currentLogFilter = level;
+      document.querySelectorAll('.log-filter-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-filter') === level);
+      });
+      renderLogStream();
+    }
+
+    function handleLogSearch(query) {
+      currentLogSearch = (query || '').toLowerCase().trim();
+      renderLogStream();
+    }
+
+    function copyAllLogs() {
+      if (!rawActivityEvents || rawActivityEvents.length === 0) return;
+      const text = rawActivityEvents.map(e => `[${e.time || ''}] ${e.message || ''}`).join('\n');
+      navigator.clipboard.writeText(text).then(() => {
+        const btns = document.querySelectorAll('.log-action-btn');
+        if (btns.length > 0) {
+          const btn = btns[0];
+          const orig = btn.innerHTML;
+          btn.innerHTML = '<span>✅ Copied!</span>';
+          setTimeout(() => { btn.innerHTML = orig; }, 1500);
+        }
+      }).catch(() => {});
+    }
+
+    function clearLogDisplay() {
+      rawActivityEvents = [];
+      renderLogStream();
+    }
+
+    function renderLogStream() {
+      const elList = document.getElementById('event-list');
+      const elCount = document.getElementById('event-count-badge');
+      const elFooter = document.getElementById('log-footer-stats');
+      if (!elList) return;
+
+      if (elCount) elCount.textContent = `${rawActivityEvents.length} events`;
+
+      const filtered = rawActivityEvents.filter(ev => {
+        const msg = ev.message || '';
+        const { category } = parseEventDetails(msg);
+
+        if (currentLogFilter === 'info' && category !== 'info') return false;
+        if (currentLogFilter === 'ops' && category !== 'ops') return false;
+        if (currentLogFilter === 'warn' && category !== 'warn') return false;
+
+        if (currentLogSearch) {
+          const searchTarget = `${ev.time || ''} ${msg}`.toLowerCase();
+          if (!searchTarget.includes(currentLogSearch)) return false;
+        }
+
+        return true;
+      });
+
+      if (elFooter) {
+        elFooter.textContent = `${filtered.length} entries · Total: ${rawActivityEvents.length} events`;
+      }
+
+      if (filtered.length === 0) {
+        if (rawActivityEvents.length === 0) {
+          elList.innerHTML = `
+            <div class="log-empty-state">
+              <span class="log-prompt-char">$</span> pantry daemon live event stream active...
+            </div>
+          `;
+        } else {
+          elList.innerHTML = `
+            <div class="log-empty-state">
+              No log entries matching the filter "${escapeHtml(currentLogSearch || currentLogFilter)}"
+            </div>
+          `;
+        }
+        return;
+      }
+
+      elList.innerHTML = filtered.map((ev, i) => {
+        const parsed = parseEventDetails(ev.message || '');
+        return `
+          <div class="log-entry-row">
+            <span class="log-num">${i + 1}</span>
+            <span class="log-timestamp">[${escapeHtml(ev.time || '')}]</span>
+            <span class="log-badge ${parsed.badgeClass}">${parsed.badgeText}</span>
+            <span class="log-content">${parsed.formattedMsg}</span>
+          </div>
+        `;
+      }).join('');
+
+      const autoscroll = document.getElementById('log-autoscroll');
+      if (autoscroll && autoscroll.checked) {
+        elList.scrollTop = elList.scrollHeight;
+      }
     }
 
     const THEME_KEY = 'pantry-theme-preference';
@@ -5337,39 +5900,9 @@ pantry prune</pre>
       }
 
       if (data.activity && data.activity.events) {
-        const elList = document.getElementById('event-list');
-        const elCount = document.getElementById('event-count-badge');
-        if (elList && data.activity.events.length > 0) {
-          if (elCount) elCount.textContent = `${data.activity.events.length} events`;
-          elList.innerHTML = data.activity.events.map(ev => `
-            <div class="event-entry">
-              <span class="event-time">[${escapeHtml(ev.time || '')}]</span>
-              <span class="event-msg">${escapeHtml(ev.message || '')}</span>
-            </div>
-          `).join('');
-        }
+        rawActivityEvents = data.activity.events || [];
+        renderLogStream();
       }
-
-      // if (data.requests && data.requests.length) {
-      //   const rl = document.getElementById('request-log-list');
-      //   const badge = document.getElementById('request-count-badge');
-      //   if (badge) badge.textContent = `${data.requests.length} requests`;
-      //   if (rl) {
-      //     rl.innerHTML = data.requests.map(r => {
-      //       const status = r.status != null ? r.status : 'OK';
-      //       const isErr = typeof status === 'number' && status >= 400;
-      //       return `
-      //         <div class="request-row">
-      //           <span class="req-time">${escapeHtml(r.time || '')}</span>
-      //           <span class="req-model">${escapeHtml(r.model || '')}</span>
-      //           <span class="req-tok">${r.tokens_in ?? 0}→${r.tokens_out ?? 0}</span>
-      //           <span class="req-dur">${r.duration_ms != null ? r.duration_ms + 'ms' : '—'}</span>
-      //           <span class="req-status ${isErr ? 'err' : 'ok'}">${status}</span>
-      //         </div>
-      //       `;
-      //     }).join('');
-      //   }
-      // }
 
       if (data.requests && data.requests.length) {
         const rl = document.getElementById('request-log-list');
@@ -5392,25 +5925,62 @@ pantry prune</pre>
         if (peakEl) peakEl.textContent = `${Math.round(peakLatency)} ms`;
         if (badge) badge.textContent = `${data.requests.length} requests`;
 
-        // Render pill items
+        // Render modern request history table
         if (rl) {
-          rl.innerHTML = data.requests.map(r => {
-            const status = r.status != null ? r.status : 200;
-            const isErr = typeof status === 'number' && status >= 400;
-            return `
-        <div class="req-pill-item">
-          <div class="req-pill-left">
-            <span class="req-pill-time">${escapeHtml(r.time || '')}</span>
-            <span class="req-pill-model">${escapeHtml(r.model || 'chat-standard')}</span>
-          </div>
-          <div class="req-pill-right">
-            <span class="req-pill-tokens">${r.tokens_in ?? 0}+${r.tokens_out ?? 0}</span>
-            <span class="req-pill-lat">${r.duration_ms != null ? r.duration_ms + 'ms' : '—'}</span>
-            <span class="req-pill-status ${isErr ? 'err' : 'ok'}">${status}</span>
-          </div>
-        </div>
-      `;
-          }).join('');
+          const reversedReqs = data.requests.slice().reverse();
+          rl.innerHTML = `
+            <div class="req-table-wrapper">
+              <table class="req-modern-table">
+                <thead>
+                  <tr>
+                    <th style="width: 75px;">TIME</th>
+                    <th>MODEL / ENDPOINT</th>
+                    <th style="width: 140px;">TOKENS (IN / OUT)</th>
+                    <th style="width: 90px;">LATENCY</th>
+                    <th style="width: 90px;">SPEED</th>
+                    <th style="width: 70px; text-align: right;">STATUS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${reversedReqs.map(r => {
+                    const status = r.status != null ? r.status : 200;
+                    const isErr = typeof status === 'number' && status >= 400;
+                    const lat = Number(r.duration_ms || 0);
+                    let latClass = 'lat-fast';
+                    if (lat > 2000) latClass = 'lat-slow';
+                    else if (lat > 800) latClass = 'lat-med';
+
+                    const tokIn = r.tokens_in ?? 0;
+                    const tokOut = r.tokens_out ?? 0;
+                    const totalTok = tokIn + tokOut;
+                    const speed = (tokOut > 0 && lat > 0) ? `${(tokOut / (lat / 1000)).toFixed(1)} t/s` : '—';
+                    const modelName = r.model || 'chat-standard';
+
+                    return `
+                      <tr class="req-table-tr">
+                        <td class="req-td-time">${escapeHtml(r.time || '')}</td>
+                        <td>
+                          <div class="req-model-cell">
+                            <span class="req-model-dot"></span>
+                            <span class="req-model-name" title="${escapeHtml(modelName)}">${escapeHtml(modelName)}</span>
+                          </div>
+                        </td>
+                        <td class="req-td-tokens">
+                          <span class="req-tok-in">${tokIn}</span><span class="req-tok-arrow">→</span><span class="req-tok-out">${tokOut}</span>
+                          <span class="req-tok-total">(${totalTok})</span>
+                        </td>
+                        <td class="req-td-lat ${latClass}">${lat > 0 ? lat + 'ms' : '—'}</td>
+                        <td class="req-td-speed">${speed}</td>
+                        <td style="text-align: right;">
+                          <span class="req-status-chip ${isErr ? 'err' : 'ok'}">${status}</span>
+                        </td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `;
         }
 
         // Redraw the trend spline & bars
@@ -5422,6 +5992,14 @@ pantry prune</pre>
         if (successEl) successEl.textContent = '—';
         if (averageEl) averageEl.textContent = '—';
         if (peakEl) peakEl.textContent = '—';
+        const rl = document.getElementById('request-log-list');
+        if (rl) {
+          rl.innerHTML = `
+            <div style="color: var(--text-muted); font-size: 11.5px; text-align: center; padding: 24px 0; font-family: var(--mono);">
+              No requests recorded in this session yet
+            </div>
+          `;
+        }
       }
 
       renderPerformance(data);
