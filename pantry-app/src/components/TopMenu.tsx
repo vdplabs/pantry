@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import {
   FiSettings, FiZap,
-  FiMessageSquare, FiCode, FiImage, FiMusic, FiMic, FiBox, FiCheckCircle, FiAlertCircle
+  FiMessageSquare, FiCode, FiImage, FiMusic, FiMic, FiBox, FiCheckCircle, FiAlertCircle,
+  FiSun, FiMoon
 } from 'react-icons/fi';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useApp } from '@/context/AppContext';
@@ -17,7 +18,7 @@ const navItems = [
 ];
 
 export default function TopMenu() {
-  const { state } = useApp();
+  const { state, toggleTheme } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [serverOnline, setServerOnline] = useState<boolean | null>(null);
@@ -102,6 +103,14 @@ export default function TopMenu() {
             )}
           </div>
         )}
+
+        <button 
+          className="topmenu-theme-btn"
+          onClick={toggleTheme}
+          title={`Switch to ${state.theme === 'dark' ? 'Light' : 'Dark'} mode`}
+        >
+          {state.theme === 'dark' ? <FiSun size={17} /> : <FiMoon size={17} />}
+        </button>
 
         <button 
           className={`topmenu-settings-btn ${pathTab === 'settings' ? 'active' : ''}`} 

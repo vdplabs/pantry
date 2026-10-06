@@ -26,7 +26,14 @@
   "runtime": {
     "primary": "ltx_video",
     "hf_repo": "Lightricks/LTX-Video",
-    "draft_package_id": null
+    "draft_package_id": null,
+    "ignore_patterns": [
+      "*13b*",
+      "*13B*",
+      "*upscaler*",
+      "*.gif",
+      "*.mp4"
+    ]
   },
   "eval": {
     "suite_id": "vbench-2025",

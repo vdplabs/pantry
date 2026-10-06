@@ -335,6 +335,7 @@ class LTXVideoRuntime:
     def _generate_neural(
         self,
         *,
+        manifest: PackageManifest | None = None,
         weights_path: Path,
         prompt: str,
         negative_prompt: str,
@@ -355,7 +356,7 @@ class LTXVideoRuntime:
         import cv2
 
         num_steps = int(steps) if steps and steps > 0 else 25
-        cfg_guidance = float(guidance) if guidance and guidance > 0 else 3.0
+        cfg_guidance = float(guidance) if guidance is not None and guidance >= 0 else 3.0
         neg = negative_prompt or "worst quality, inconsistent motion, blurry, jittery, distorted"
 
         source_bgr = _decode_source_image(image, w, h)
@@ -369,14 +370,22 @@ class LTXVideoRuntime:
         if self._pipe is None or self._loaded_path != str(weights_path) or not isinstance(self._pipe, target_pipeline):
             print(f"[pantry.video] Initializing {target_pipeline.__name__} from {weights_path}...", flush=True)
             if (weights_path / "model_index.json").is_file():
-                pipe = target_pipeline.from_pretrained(
-                    str(weights_path),
-                    torch_dtype=torch.bfloat16,
-                )
+                try:
+                    pipe = target_pipeline.from_pretrained(
+                        str(weights_path),
+                        torch_dtype=torch.bfloat16,
+                    )
+                except Exception as pe_err:
+                    pkg_id_str = f" for '{manifest.id}'" if manifest else ""
+                    raise RuntimeError(
+                        f"Failed to load model weights{pkg_id_str} from '{weights_path}': {pe_err}. "
+                        "Verify compatibility with diffusers LTXPipeline, or use 'vdplabs.ltx-video.standard.v1' ('video-standard') instead."
+                    ) from pe_err
             else:
-                safetensors = sorted(
-                    [f for f in weights_path.glob("*.safetensors") if f.stat().st_size > 100 * 1024 * 1024],
-                    key=lambda f: f.stat().st_size,
+                safetensors = list(weights_path.glob("*.safetensors")) + list(
+                    (weights_path / "transformer").glob("*.safetensors")
+                    if (weights_path / "transformer").is_dir()
+                    else []
                 )
                 preferred = None
                 for cand_name in ("ltx-video-2b-v0.9.5.safetensors", "ltx-video-2b-v0.9.1.safetensors", "ltx-video-2b-v0.9.safetensors"):
@@ -392,10 +401,13 @@ class LTXVideoRuntime:
                         from transformers import T5EncoderModel
                         snap = self.store.find_hf_snapshot("Lightricks/LTX-Video")
                         te_src = str(snap / "text_encoder") if (snap and (snap / "text_encoder").is_dir()) else "Lightricks/LTX-Video"
+                        if te_src == "Lightricks/LTX-Video":
+                            print("[pantry.video] Note: local text_encoder not found in pantry store; attempting to resolve from Hugging Face...", flush=True)
                         text_encoder = T5EncoderModel.from_pretrained(
                             te_src,
                             subfolder="text_encoder" if te_src == "Lightricks/LTX-Video" else None,
                             torch_dtype=torch.bfloat16,
+                            cache_dir=str(self.store.primary_hf_cache_dir()),
                         )
                     except Exception as te_err:
                         print(f"[pantry.video] Note: text_encoder auto-load: {te_err}", flush=True)
@@ -403,15 +415,30 @@ class LTXVideoRuntime:
                     single_file_kwargs: dict[str, Any] = {"torch_dtype": torch.bfloat16}
                     if text_encoder is not None:
                         single_file_kwargs["text_encoder"] = text_encoder
-                    pipe = target_pipeline.from_single_file(
-                        str(st_target),
-                        **single_file_kwargs,
-                    )
+                    try:
+                        pipe = target_pipeline.from_single_file(
+                            str(st_target),
+                            **single_file_kwargs,
+                        )
+                    except Exception as sfe_err:
+                        pkg_id_str = f" for '{manifest.id}'" if manifest else ""
+                        raise RuntimeError(
+                            f"Failed to load checkpoint '{st_target.name}'{pkg_id_str} into {target_pipeline.__name__}: {sfe_err}. "
+                            "If you are using an experimental or customized model architecture, verify compatibility with diffusers LTXPipeline, "
+                            "or use 'vdplabs.ltx-video.standard.v1' ('video-standard') instead."
+                        ) from sfe_err
                 else:
-                    pipe = target_pipeline.from_pretrained(
-                        str(weights_path),
-                        torch_dtype=torch.bfloat16,
-                    )
+                    try:
+                        pipe = target_pipeline.from_pretrained(
+                            str(weights_path),
+                            torch_dtype=torch.bfloat16,
+                        )
+                    except Exception as pe_err:
+                        pkg_id_str = f" for '{manifest.id}'" if manifest else ""
+                        raise RuntimeError(
+                            f"Failed to load model weights{pkg_id_str} from '{weights_path}': {pe_err}. "
+                            "Verify compatibility with diffusers LTXPipeline, or use 'vdplabs.ltx-video.standard.v1' ('video-standard') instead."
+                        ) from pe_err
             try:
                 pipe.enable_model_cpu_offload(device=device)
             except Exception:
@@ -487,6 +514,15 @@ class LTXVideoRuntime:
         prefix = "ltx-i2v" if image else "ltx"
         path = artifacts / f"{prefix}-{ts}-{w}x{h}-{n_frames}f.mp4"
 
+        primary = (manifest.runtime.primary or "").lower()
+        if primary in {"ltx_video_av", "ltx-video-av"} or "ltx-video-av" in manifest.id:
+            raise RuntimeError(
+                f"Package '{manifest.id}' uses the experimental LTX 2.3 Audio-Video architecture "
+                "(AVTransformer3DModel) which is not supported by diffusers LTXPipeline. "
+                "For neural video on Apple Silicon, please use 'vdplabs.ltx-video.standard.v1' "
+                "('video-standard') or 'video-compact' for instant testing."
+            )
+
         weights_path = self.store.resolve_weights_path(manifest)
 
         if _is_mock_weights(weights_path):
@@ -506,6 +542,7 @@ class LTXVideoRuntime:
         else:
             print(f"[pantry.video] Synthesizing video using weights from: {weights_path}...", flush=True)
             self._generate_neural(
+                manifest=manifest,
                 weights_path=weights_path,  # type: ignore[arg-type]
                 prompt=prompt,
                 negative_prompt=negative_prompt,

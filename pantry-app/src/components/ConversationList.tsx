@@ -59,17 +59,17 @@ export default function ConversationList() {
         <div className="studio-menu-container">
           <button
             onClick={() => setShowStudioMenu(!showStudioMenu)}
-            title="Start a specialized Studio session (Threat Modeling, Research, RFCs)"
+            title="Start an interactive Lenses Canvas session (ADRs, Threat Modeling, System Research)"
             className="new-studio-btn"
           >
             <FiShield size={14} />
-            <span>Studio</span>
+            <span>Lenses</span>
             <FiChevronDown size={11} />
           </button>
 
           {showStudioMenu && (
             <div className="studio-menu-dropdown">
-              <div className="studio-menu-header">Specialized Studio Canvases</div>
+              <div className="studio-menu-header">Lenses Canvases & Workspaces</div>
               {STUDIO_PLUGINS.map(plugin => (
                 <div key={plugin.id} className="studio-menu-plugin-group">
                   {(plugin.frameworks || [{ id: plugin.defaultFramework || 'default', name: plugin.name, description: plugin.description }]).map(fw => (

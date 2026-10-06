@@ -12,10 +12,14 @@ export interface StudioPlugin<TState = any> {
   getInitialState: (framework?: string) => TState;
   buildSystemPrompt: (canvasState: TState, framework?: string) => string;
   parseModelOutput: (text: string, currentState: TState, userPrompt?: string) => { cleanText: string; updatedState?: TState };
-  RendererComponent: React.ComponentType<{
+    RendererComponent: React.ComponentType<{
     state: TState;
     framework?: string;
     onChange: (newState: TState) => void;
     onSendPrompt: (prompt: string) => void;
+    sidebarOpen?: boolean;
+    onToggleSidebar?: () => void;
+    isChatCollapsed?: boolean;
+    onToggleChat?: () => void;
   }>;
 }

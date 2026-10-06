@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import time
 from pathlib import Path
@@ -172,6 +173,75 @@ def pull(
         raise typer.Exit(1) from e
     store.mark_loaded(result["package_id"], pin=False)
     typer.echo(json.dumps(result, indent=2))
+
+
+@app.command("rm")
+def rm_cmd(
+    package_id: str = typer.Argument(..., help="Package id or alias to remove"),
+    purge: bool = typer.Option(True, "--purge/--no-purge", help="Also purge cached Hugging Face weights from disk"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, "--data", help="Override PANTRY_DATA"),
+) -> None:
+    """Remove a package and reclaim its CAS storage and cached weights."""
+    from pantry.hub import delete_custom_pack
+
+    store = _store(home, data)
+    success = delete_custom_pack(store, package_id, purge_hf_cache=purge)
+    if success:
+        typer.secho(f"✔ Removed package '{package_id}' and reclaimed storage.", fg=typer.colors.GREEN)
+    else:
+        typer.secho(f"Failed to remove package '{package_id}'.", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1)
+
+
+@app.command("remove")
+def remove_cmd(
+    package_id: str = typer.Argument(..., help="Package id or alias to remove"),
+    purge: bool = typer.Option(True, "--purge/--no-purge", help="Also purge cached Hugging Face weights from disk"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, "--data", help="Override PANTRY_DATA"),
+) -> None:
+    """Alias for 'pantry rm'."""
+    rm_cmd(package_id=package_id, purge=purge, home=home, data=data)
+
+
+@app.command("adopt")
+def adopt_cmd(
+    source_path: Path = typer.Argument(..., help="Path to local model directory or weights file (.gguf, .safetensors)"),
+    package_id: str | None = typer.Option(None, "--id", help="Explicit Pantry package ID"),
+    alias: str | None = typer.Option(None, "--alias", "-a", help="Convenience alias to bind (e.g. 'chat-local')"),
+    title: str | None = typer.Option(None, "--title", help="Human-readable title"),
+    role: str | None = typer.Option(None, "--role", help="Model role: chat, image, video, audio, rerank, embed"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, "--data", help="Override PANTRY_DATA"),
+) -> None:
+    """Adopt existing weights on disk into Pantry with zero secondary disk copies."""
+    from pantry.adopt import AdoptError, adopt_local_model
+
+    store = _store(home, data)
+    try:
+        man, stats = adopt_local_model(
+            store,
+            source_path,
+            package_id=package_id,
+            alias=alias,
+            title=title,
+            role=role,
+        )
+    except AdoptError as e:
+        typer.secho(f"Error: {e.message}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from e
+
+    gb = round(stats["bytes_on_disk"] / (1024**3), 2)
+    typer.secho(f"✔ Adopted model package '{man.id}'", fg=typer.colors.GREEN, bold=True)
+    typer.echo(f"  • Source Path: {stats['source_path']}")
+    typer.echo(f"  • Primary Runtime: {man.runtime.primary}")
+    typer.echo(f"  • Modalities: {', '.join(man.modalities)} (role: {man.role})")
+    typer.echo(f"  • Size on disk: {gb} GB ({stats['bytes_duplicated']} bytes duplicated)")
+    if man.aliases:
+        typer.echo(f"  • Aliases: {', '.join(man.aliases)}")
+    typer.secho("  • Single-instance storage: indexed metadata into CAS without copying data blocks", fg=typer.colors.CYAN)
+
 
 
 @app.command("list")
@@ -609,8 +679,8 @@ def claims_command(
 
 @app.command()
 def serve(
-    host: str = typer.Option("127.0.0.1", "--host"),
-    port: int = typer.Option(18787, "--port"),
+    host: str = typer.Option("127.0.0.1", "--host", envvar="PANTRY_HOST", help="Bind host (default 127.0.0.1; use 0.0.0.0 for LAN/Wi-Fi devices like iPad)"),
+    port: int = typer.Option(18787, "--port", envvar="PANTRY_PORT", help="Port to listen on (default: 18787)"),
     uds: Path | None = typer.Option(
         None,
         "--uds",
@@ -781,8 +851,8 @@ service_app = typer.Typer(
 
 @service_app.command("install")
 def service_install_cmd(
-    host: str = typer.Option("127.0.0.1", "--host"),
-    port: int = typer.Option(18787, "--port"),
+    host: str = typer.Option("127.0.0.1", "--host", envvar="PANTRY_HOST", help="Bind host (default 127.0.0.1; use 0.0.0.0 for LAN/Wi-Fi devices like iPad)"),
+    port: int = typer.Option(18787, "--port", envvar="PANTRY_PORT", help="Port to listen on (default: 18787)"),
     home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
     data: Path | None = typer.Option(None, help="Override PANTRY_DATA"),
     menubar: bool = typer.Option(
@@ -1077,17 +1147,147 @@ def pack_create_cmd(
 @pack_app.command("delete")
 def pack_delete_cmd(
     package_id: str = typer.Argument(..., help="Package ID to delete"),
+    purge: bool = typer.Option(True, "--purge/--no-purge", help="Also purge cached Hugging Face weights from disk"),
     home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, "--data", help="Override PANTRY_DATA"),
 ) -> None:
     """Delete a custom local package from the library."""
     from pantry.hub import delete_custom_pack
 
-    store = _store(home)
-    delete_custom_pack(store, package_id)
+    store = _store(home, data)
+    delete_custom_pack(store, package_id, purge_hf_cache=purge)
     typer.secho(f"✔ Deleted package {package_id}", fg=typer.colors.GREEN)
 
 
 app.add_typer(pack_app, name="pack")
+
+cache_app = typer.Typer(
+    name="cache",
+    help="Manage local weight and CAS content-addressed caches.",
+    no_args_is_help=True,
+)
+
+
+@cache_app.command("clean")
+def cache_clean_cmd(
+    dry_run: bool = typer.Option(False, "--dry-run", help="Preview files to be cleaned without deleting"),
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override weights storage root directory (PANTRY_DATA)"),
+) -> None:
+    """Clean orphaned .incomplete downloads, locks, and unreferenced CAS storage chunks."""
+    store = _store(home, data)
+
+    cleaned_hf_bytes = 0
+    cleaned_hf_count = 0
+    seen_files: set[Path] = set()
+
+    for hf_root in store.hf_cache_roots():
+        if not hf_root.is_dir():
+            continue
+        for p in hf_root.rglob("*"):
+            if p in seen_files:
+                continue
+            seen_files.add(p)
+            if p.is_file() and (p.name.endswith(".incomplete") or p.name.endswith(".tmp") or p.name.endswith(".lock")):
+                try:
+                    size = p.stat().st_size
+                    cleaned_hf_bytes += size
+                    cleaned_hf_count += 1
+                    if not dry_run:
+                        p.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+    cleaned_cas_bytes = 0
+    cleaned_cas_count = 0
+    cas_chunks_dir = store.cas_dir / "chunks"
+    if cas_chunks_dir.is_dir():
+        referenced_hashes: set[str] = set()
+        for man in store.list_manifests():
+            for blob in man.blobs:
+                h = getattr(blob, "hash", None) or getattr(blob, "sha256", None)
+                if h:
+                    referenced_hashes.add(h.lower())
+
+        for chunk in cas_chunks_dir.glob("*"):
+            if chunk.is_file() and chunk.name.lower() not in referenced_hashes:
+                try:
+                    size = chunk.stat().st_size
+                    cleaned_cas_bytes += size
+                    cleaned_cas_count += 1
+                    if not dry_run:
+                        chunk.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+    total_bytes = cleaned_hf_bytes + cleaned_cas_bytes
+    total_count = cleaned_hf_count + cleaned_cas_count
+
+    mb_hf = round(cleaned_hf_bytes / (1024 * 1024), 2)
+    mb_cas = round(cleaned_cas_bytes / (1024 * 1024), 2)
+    mb_total = round(total_bytes / (1024 * 1024), 2)
+
+    action = "Would reclaim" if dry_run else "Reclaimed"
+    typer.secho(f"Cache Cleanup Summary ({'DRY RUN' if dry_run else 'EXECUTED'}):", bold=True)
+    typer.echo(f"  • Hugging Face incomplete/lock files: {cleaned_hf_count} files ({mb_hf} MB)")
+    typer.echo(f"  • Orphaned CAS chunks: {cleaned_cas_count} files ({mb_cas} MB)")
+    typer.secho(f"✔ {action} {mb_total} MB across {total_count} files", fg=typer.colors.GREEN if not dry_run else typer.colors.YELLOW)
+
+
+@cache_app.command("status")
+def cache_status_cmd(
+    home: Path | None = typer.Option(None, help="Override PANTRY_HOME"),
+    data: Path | None = typer.Option(None, help="Override weights storage root directory (PANTRY_DATA)"),
+) -> None:
+    """Report disk usage of Hugging Face cache and Pantry CAS content storage."""
+    store = _store(home, data)
+
+    hf_cache_raw = os.environ.get("HF_HUB_CACHE") or os.environ.get("HF_HOME")
+    if hf_cache_raw:
+        hf_dir = Path(hf_cache_raw)
+        if hf_dir.name != "hub" and (hf_dir / "hub").is_dir():
+            hf_dir = hf_dir / "hub"
+    else:
+        hf_dir = Path.home() / ".cache" / "huggingface" / "hub"
+
+    hf_bytes = 0
+    hf_count = 0
+    incomplete_bytes = 0
+    incomplete_count = 0
+    if hf_dir.is_dir():
+        for p in hf_dir.rglob("*"):
+            if p.is_file():
+                try:
+                    s = p.stat().st_size
+                    hf_bytes += s
+                    hf_count += 1
+                    if p.name.endswith(".incomplete") or p.name.endswith(".tmp") or p.name.endswith(".lock"):
+                        incomplete_bytes += s
+                        incomplete_count += 1
+                except Exception:
+                    pass
+
+    cas_bytes = 0
+    cas_count = 0
+    cas_chunks_dir = store.cas_dir / "chunks"
+    if cas_chunks_dir.is_dir():
+        for p in cas_chunks_dir.glob("*"):
+            if p.is_file():
+                try:
+                    cas_bytes += p.stat().st_size
+                    cas_count += 1
+                except Exception:
+                    pass
+
+    typer.secho("Pantry Cache Storage Status:", bold=True)
+    typer.echo(f"  • Weights Directory: {store.data_root}")
+    typer.echo(f"  • Hugging Face Cache: {hf_dir} ({round(hf_bytes / (1024**3), 2)} GB across {hf_count} files)")
+    if incomplete_count > 0:
+        typer.secho(f"    ↳ Incomplete/lock files: {incomplete_count} files ({round(incomplete_bytes / (1024*1024), 2)} MB) - run 'pantry cache clean'", fg=typer.colors.YELLOW)
+    typer.echo(f"  • Content-Addressed Storage (CAS): {store.cas_dir} ({round(cas_bytes / (1024**3), 2)} GB across {cas_count} chunks)")
+
+
+app.add_typer(cache_app, name="cache")
 
 speculative_app = typer.Typer(
     name="speculative",

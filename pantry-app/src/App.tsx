@@ -112,9 +112,11 @@ function AppContentInner() {
         <div className="app-content-wrapper">
           {state.activeTab === 'chat' ? (
             <div className="chat-layout">
-              <div className="chat-sidebar">
-                <ConversationList />
-              </div>
+              {state.sidebarOpen && (
+                <div className="chat-sidebar">
+                  <ConversationList />
+                </div>
+              )}
               <div className="chat-main">
                 <ChatPage />
               </div>

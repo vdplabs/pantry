@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   FiZap, FiChevronDown, FiSettings, FiLayers, FiCpu,
-  FiMessageSquare, FiSliders, FiArrowDown, FiTerminal, FiCode, FiCompass, FiColumns, FiShield
+  FiMessageSquare, FiSliders, FiArrowDown, FiTerminal, FiCode, FiCompass, FiColumns, FiShield,
+  FiMenu
 } from 'react-icons/fi';
 import { useApp, generateAutoTitle } from '@/context/AppContext';
 import ChatInput from '@/components/ChatInput';
@@ -39,10 +40,40 @@ export default function ChatPage() {
     createConversation,
     renameConversation,
     updateCanvasState,
+    setSidebarOpen,
   } = useApp();
   const [userScrolledUp, setUserScrolledUp] = useState(false);
   const [activeArtifact, setActiveArtifact] = useState<CanvasArtifact | null>(null);
   const [canvasCollapsed, setCanvasCollapsed] = useState(false);
+  const [chatWidth, setChatWidth] = useState<number>(() => {
+    if (typeof window !== 'undefined') {
+      return Math.max(380, Math.min(540, Math.round(window.innerWidth * 0.38)));
+    }
+    return 460;
+  });
+  const [isChatCollapsed, setIsChatCollapsed] = useState(false);
+
+  const handleSplitterMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = chatWidth;
+
+    const onMouseMove = (moveEvt: MouseEvent) => {
+      const deltaX = moveEvt.clientX - startX;
+      const minW = 280;
+      const maxW = Math.max(320, window.innerWidth - 380);
+      const newW = Math.max(minW, Math.min(maxW, startWidth + deltaX));
+      setChatWidth(newW);
+    };
+
+    const onMouseUp = () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }, [chatWidth]);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const userScrolledUpRef = useRef(false);
@@ -233,7 +264,9 @@ export default function ChatPage() {
 
           let displayContent = currentStreamContent;
           if (plugin) {
-            if (displayContent.includes('```threat_model_patch')) {
+            if (displayContent.includes('```lens_patch')) {
+              displayContent = displayContent.replace(/```lens_patch[\s\S]*$/, '✨ *Updating Lenses Architecture & Cards...*');
+            } else if (displayContent.includes('```threat_model_patch')) {
               displayContent = displayContent.replace(/```threat_model_patch[\s\S]*$/, '✨ *Updating Threat Model Canvas...*');
             } else if (displayContent.includes('```research_patch')) {
               displayContent = displayContent.replace(/```research_patch[\s\S]*$/, '✨ *Updating Research Canvas...*');
@@ -597,13 +630,38 @@ export default function ChatPage() {
   return (
     <div className={`chat-page-container ${activeArtifact ? 'with-canvas-workbench' : ''} ${activePlugin && !canvasCollapsed ? 'with-studio-layout' : ''}`}>
       {/* Left Chat Pane */}
-      <div className="chat-main-area">
+      <div
+        className="chat-main-area"
+        style={
+          activePlugin && !canvasCollapsed
+            ? { width: `${chatWidth}px`, flex: 'none' }
+            : undefined
+        }
+      >
         {/* Top Header Bar (Shown for active plugins/studios or active conversation) */}
         {(activePlugin || activeConv?.title) && (
           <div className="chat-header-bar">
             <div className="chat-header-left">
               {activePlugin ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <button
+                    onClick={() => setSidebarOpen(!state.sidebarOpen)}
+                    className="studio-chat-hamburger-btn"
+                    title={state.sidebarOpen ? "Hide Chat List" : "Show Chat List"}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      padding: '4px',
+                      borderRadius: '4px',
+                    }}
+                  >
+                    <FiMenu size={16} />
+                  </button>
                   <span style={{ fontSize: '15px' }}>{activePlugin.icon}</span>
                   <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-title)' }}>
                     {activeConv?.title || activePlugin.name}
@@ -730,14 +788,28 @@ export default function ChatPage() {
         />
       </div>
 
+      {/* Draggable Splitter between Chat and Studio Canvas */}
+      {activePlugin && !canvasCollapsed && activeConv?.canvas_state && (
+        <div
+          onMouseDown={handleSplitterMouseDown}
+          className="studio-split-resizer"
+          title="Drag left/right to resize chat and canvas"
+        />
+      )}
+
       {/* Living Studio Canvas Pane */}
       {activePlugin && !canvasCollapsed && activeConv?.canvas_state && (
-        <div className="studio-canvas-column">
+        <div
+          className="studio-canvas-column"
+          style={{ flex: 1, minWidth: 0 }}
+        >
           <activePlugin.RendererComponent
             state={activeConv.canvas_state}
             framework={activeConv.plugin_framework}
             onChange={(newState) => updateCanvasState(newState)}
             onSendPrompt={(prompt) => sendMessage(prompt)}
+            sidebarOpen={state.sidebarOpen}
+            onToggleSidebar={() => setSidebarOpen(!state.sidebarOpen)}
           />
         </div>
       )}

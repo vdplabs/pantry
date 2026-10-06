@@ -360,6 +360,52 @@ def test_cli_load_unload_by_alias(tmp_path):
     assert res_unload.exit_code == 0
 
 
+def test_video_generations_ltx_video_av_rejects_with_actionable_error(client, tmp_path):
+    # Simulate weights present for vdplabs.ltx-video-av.standard.v1
+    p_weights = tmp_path / "pantry-home" / "packages" / "vdplabs.ltx-video-av.standard.v1" / "weights"
+    p_weights.mkdir(parents=True, exist_ok=True)
+    (p_weights / "model_index.json").write_text("{}", encoding="utf-8")
+    (p_weights / "transformer").mkdir(parents=True, exist_ok=True)
+
+    r = client.post(
+        "/v1/video/generations",
+        json={
+            "model": "video-av",
+            "prompt": "futuristic flying car with engine hum",
+            "width": 256,
+            "height": 256,
+            "frames": 16,
+            "fps": 24,
+        },
+    )
+    assert r.status_code == 400, r.text
+    err_body = r.json()
+    msg = err_body["error"]["message"]
+    assert "AVTransformer3DModel" in msg
+    assert "video-standard" in msg
+    assert "video-compact" in msg
+
+
+def test_ltx_video_runtime_rejects_av_architecture(tmp_path, catalog_dir):
+    import json
+    from pantry.video_runtime import LTXVideoRuntime
+
+    store = PackageStore(tmp_path / "home", data_root=tmp_path / "data")
+    av_manifest_path = catalog_dir / "vdplabs.ltx-video-av.standard.v1" / "manifest.json"
+    manifest = PackageManifest.model_validate_json(av_manifest_path.read_text(encoding="utf-8"))
+
+    runtime = LTXVideoRuntime(store)
+    with pytest.raises(RuntimeError, match="AVTransformer3DModel"):
+        runtime.generate(
+            manifest,
+            prompt="test cinematic video",
+            width=256,
+            height=256,
+            frames=16,
+            fps=24,
+        )
+
+
 
 
 

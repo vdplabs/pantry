@@ -31,6 +31,11 @@ class RerankRuntime(ABC):
         """
         raise NotImplementedError
 
+    def unload(self, package_id: str | None = None) -> None:
+        """Unload cached rerank models and reclaim memory."""
+        pass
+
+
 
 class EchoRerankRuntime(RerankRuntime):
     """Deterministic semantic cross-encoder scorer for smoke testing and offline verification."""
@@ -116,6 +121,26 @@ class MLXRerankRuntime(RerankRuntime):
         self.store = store
         self._models: dict[str, tuple[object, object]] = {}
 
+    def unload(self, package_id: str | None = None) -> None:
+        if package_id is None:
+            self._models.clear()
+        elif self.store is not None:
+            path = str(self.store.weights_dir(package_id))
+            self._models.pop(path, None)
+            man = self.store.load_manifest(package_id)
+            if man:
+                resolved = self.store.resolve_weights_path(man)
+                if resolved:
+                    self._models.pop(str(resolved), None)
+            self.store.mark_unloaded(package_id)
+        try:
+            import mlx.core as mx  # type: ignore
+            mx.clear_cache()
+        except Exception:
+            pass
+        import gc
+        gc.collect()
+
     def rank(
         self,
         manifest: PackageManifest,
@@ -173,6 +198,29 @@ class TransformersRerankRuntime(RerankRuntime):
         self.store = store
         self._models: dict[str, tuple[object, object]] = {}
 
+    def unload(self, package_id: str | None = None) -> None:
+        if package_id is None:
+            self._models.clear()
+        elif self.store is not None:
+            path = str(self.store.weights_dir(package_id))
+            self._models.pop(path, None)
+            man = self.store.load_manifest(package_id)
+            if man:
+                resolved = self.store.resolve_weights_path(man)
+                if resolved:
+                    self._models.pop(str(resolved), None)
+            self.store.mark_unloaded(package_id)
+        try:
+            import torch  # type: ignore
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            if hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+                torch.mps.empty_cache()
+        except Exception:
+            pass
+        import gc
+        gc.collect()
+
     def rank(
         self,
         manifest: PackageManifest,
@@ -195,8 +243,9 @@ class TransformersRerankRuntime(RerankRuntime):
 
         if model_ref not in self._models:
             device = "cuda" if torch.cuda.is_available() else "cpu"
-            tokenizer = AutoTokenizer.from_pretrained(model_ref)
-            model = AutoModelForSequenceClassification.from_pretrained(model_ref).to(device)
+            cache_dir = str(self.store.primary_hf_cache_dir()) if self.store else None
+            tokenizer = AutoTokenizer.from_pretrained(model_ref, cache_dir=cache_dir)
+            model = AutoModelForSequenceClassification.from_pretrained(model_ref, cache_dir=cache_dir).to(device)
             model.eval()
             self._models[model_ref] = (model, tokenizer)
         else:

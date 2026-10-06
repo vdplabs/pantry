@@ -36,10 +36,14 @@ interface AppState {
   generations: Generation[];
   enabledToolIds: string[];
   customToolsJson: string;
+  theme: 'dark' | 'light';
 }
 
 interface AppContextType {
   state: AppState;
+  theme: 'dark' | 'light';
+  setTheme: (theme: 'dark' | 'light') => void;
+  toggleTheme: () => void;
   setMessages: React.Dispatch<React.SetStateAction<Message[]>>;
   addUserMessage: (text: string) => void;
   setAssistantContent: (content: string) => void;
@@ -101,7 +105,12 @@ const defaultState: AppState = {
   generations: [],
   enabledToolIds: ['fetch_weather', 'get_stock_price', 'calculate'],
   customToolsJson: '',
+  theme: (typeof window !== 'undefined' && (localStorage.getItem('pantry_theme') as 'dark' | 'light')) || 'dark',
 };
+
+if (typeof document !== 'undefined') {
+  document.documentElement.setAttribute('data-theme', defaultState.theme);
+}
 
 export function generateAutoTitle(text: string): string {
   const cleaned = text
@@ -153,6 +162,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           preferSpeculative,
           enabledToolIds,
           customToolsJson,
+          savedTheme,
         ] = await Promise.all([
           loadConversationsFromDb(),
           loadGenerationsFromDb(),
@@ -169,6 +179,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           getSetting('pantry_prefer_speculative'),
           getSetting('pantry_enabled_tool_ids'),
           getSetting('pantry_custom_tools_json'),
+          getSetting('pantry_theme'),
         ]);
         if (cancelled) return;
         setConversations(sortConversations(loadedConvs));
@@ -218,6 +229,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
         if (customToolsJson !== null && customToolsJson !== undefined) {
           partial.customToolsJson = customToolsJson;
+        }
+        if (savedTheme === 'light' || savedTheme === 'dark') {
+          partial.theme = savedTheme;
         }
 
         if (Object.keys(partial).length > 0) {
@@ -303,6 +317,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [state.customToolsJson, dbReady]);
 
   useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.setAttribute('data-theme', state.theme);
+    }
+    try {
+      localStorage.setItem('pantry_theme', state.theme);
+    } catch {}
+    if (dbReady) {
+      setSetting('pantry_theme', state.theme).catch(e => console.error('save theme failed:', e));
+    }
+  }, [state.theme, dbReady]);
+
+  useEffect(() => {
     setState(prev => ({ ...prev, messages }));
   }, [messages]);
 
@@ -370,6 +396,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const updateState = useCallback((partial: Partial<AppState>) => {
     setState(prev => ({ ...prev, ...partial }));
+  }, []);
+
+  const setTheme = useCallback((theme: 'dark' | 'light') => {
+    updateState({ theme });
+  }, [updateState]);
+
+  const toggleTheme = useCallback(() => {
+    setState(prev => {
+      const nextTheme = prev.theme === 'light' ? 'dark' : 'light';
+      return { ...prev, theme: nextTheme };
+    });
   }, []);
 
   const addUserMessage = useCallback((text: string) => {
@@ -526,6 +563,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     <AppContext.Provider
       value={{
         state,
+        theme: state.theme,
+        setTheme,
+        toggleTheme,
         setMessages,
         addUserMessage,
         setAssistantContent,

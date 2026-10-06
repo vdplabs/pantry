@@ -223,6 +223,29 @@ class MLXVisionRuntime(VisionRuntime):
         self.store = store
         self._models: dict[str, tuple[object, object]] = {}
 
+    def unload(self, package_id: str | None = None) -> None:
+        """Unload loaded VLM weights from memory and clear Metal cache."""
+        import gc
+
+        if package_id is None:
+            self._models.clear()
+        elif self.store is not None:
+            path = str(self.store.weights_dir(package_id))
+            self._models.pop(path, None)
+            man = self.store.load_manifest(package_id)
+            if man:
+                resolved = self.store.resolve_weights_path(man)
+                if resolved:
+                    self._models.pop(str(resolved), None)
+            self.store.mark_unloaded(package_id)
+        gc.collect()
+        try:
+            import mlx.core as mx
+
+            mx.clear_cache()
+        except Exception:
+            pass
+
     def _resolve_weights_path(self, manifest: PackageManifest) -> str:
         if self.store is not None:
             resolved = self.store.resolve_weights_path(manifest)

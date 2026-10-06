@@ -360,6 +360,13 @@ def test_server_pack_rename_and_draft_endpoints(tmp_path: Path):
     })
     assert r.status_code == 200
     assert r.json()["draft_package_id"] == "vdplabs.qwen25-0.5b.compact.v1"
+    assert "chat-fast" in r.json()["aliases"]
+
+    # Verify disk manifest persisted the alias along with the draft pairing
+    reloaded = store.load_manifest("vdplabs.qwen25-1.5b.standard.v1")
+    assert reloaded is not None
+    assert "chat-fast" in reloaded.aliases
+    assert reloaded.runtime.draft_package_id == "vdplabs.qwen25-0.5b.compact.v1"
 
 
 def test_cli_pack_rename_and_draft_commands(tmp_path: Path):
@@ -385,5 +392,26 @@ def test_cli_pack_rename_and_draft_commands(tmp_path: Path):
     ])
     assert res.exit_code == 0
     assert "Set speculative draft" in res.stdout
+
+
+def test_cli_rm_and_remove_command(tmp_path: Path):
+    store = PackageStore(tmp_path)
+    store.seed_from_catalog(bundled_catalog_dir())
+    runner = CliRunner()
+
+    pkg_id = "vdplabs.demo-chat.compact.v1"
+    assert store.load_manifest(pkg_id) is not None
+
+    # Test pantry rm
+    res = runner.invoke(cli_app, [
+        "rm",
+        pkg_id,
+        "--home", str(tmp_path),
+        "--no-purge",
+    ])
+    assert res.exit_code == 0
+    assert "Removed package" in res.stdout
+    assert store.load_manifest(pkg_id) is None
+
 
 

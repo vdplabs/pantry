@@ -9,7 +9,7 @@ import threading
 import time
 import uuid
 from collections.abc import AsyncIterator
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -161,6 +161,8 @@ class Service:
         self._start_time: float = time.time()
         self._active_operations: dict[str, dict[str, Any]] = {}
         self._lock = threading.Lock()
+        self._idle_reaper_task: asyncio.Task[None] | None = None
+        self._stop_reaper: asyncio.Event = asyncio.Event()
 
         # Telemetry & activity persistence across daemon restarts
         self._persistence = TelemetryPersistenceManager.get(self.store.root)
@@ -182,6 +184,97 @@ class Service:
     def touch_model(self, model_id: str) -> None:
         with self._lock:
             self._model_last_used[model_id] = time.time()
+        try:
+            state = self.store.read_state()
+            if model_id not in state.get("loaded", []):
+                self.store.mark_loaded(model_id)
+        except Exception:
+            pass
+
+    def reap_idle_models(self) -> list[str]:
+        """Evict loaded models whose idle time exceeds PANTRY_IDLE_TIMEOUT, unless pinned."""
+        if self._idle_timeout_seconds <= 0:
+            return []
+        now = time.time()
+        evicted: list[str] = []
+        try:
+            state = self.store.read_state()
+            loaded = list(state.get("loaded", []))
+            pinned = set(state.get("pinned", []))
+        except Exception:
+            return []
+
+        with self._lock:
+            active_models = {
+                str(op.get("model")) for op in self._active_operations.values() if op.get("model")
+            }
+
+        # Pressure-aware threshold: if system memory is under critical pressure (>85%),
+        # aggressively evict idle models that haven't been touched in 30 seconds to prevent OS lockup.
+        effective_timeout = self._idle_timeout_seconds
+        try:
+            from pantry.memory import snapshot as mem_snap
+
+            snap = mem_snap(max_age=5.0)
+            if snap.get("pressure") == "critical":
+                effective_timeout = min(30.0, self._idle_timeout_seconds)
+        except Exception:
+            pass
+
+        for model_id in loaded:
+            if model_id in pinned:
+                continue
+            if model_id in active_models:
+                continue
+            last_used = self._model_last_used.get(model_id, self._start_time)
+            if (now - last_used) >= effective_timeout:
+                try:
+                    self.runtimes.unload(model_id)
+                except Exception as exc:
+                    import logging
+
+                    logging.getLogger("pantry").warning("Error unloading idle model %s: %s", model_id, exc)
+                self.store.mark_unloaded(model_id)
+                with self._lock:
+                    self._model_last_used.pop(model_id, None)
+                reason = (
+                    "Critical memory pressure"
+                    if effective_timeout < self._idle_timeout_seconds
+                    else "Idle TTL expired"
+                )
+                self.log_event(f"{reason}: evicted {model_id} after {int(now - last_used)}s idle")
+                evicted.append(model_id)
+        return evicted
+
+    def start_idle_reaper(self) -> None:
+        self._stop_reaper.clear()
+        if self._idle_reaper_task is None or self._idle_reaper_task.done():
+            try:
+                loop = asyncio.get_running_loop()
+                self._idle_reaper_task = loop.create_task(self._idle_reaper_loop())
+            except RuntimeError:
+                pass
+
+    async def _idle_reaper_loop(self) -> None:
+        while not self._stop_reaper.is_set():
+            try:
+                poll_interval = max(1.0, min(15.0, self._idle_timeout_seconds / 2 if self._idle_timeout_seconds > 0 else 15.0))
+                await asyncio.sleep(poll_interval)
+                if self._idle_timeout_seconds > 0:
+                    self.reap_idle_models()
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                pass
+
+    async def stop_idle_reaper(self) -> None:
+        self._stop_reaper.set()
+        if self._idle_reaper_task and not self._idle_reaper_task.done():
+            self._idle_reaper_task.cancel()
+            try:
+                await self._idle_reaper_task
+            except asyncio.CancelledError:
+                pass
 
     def get_idle_countdown(self, model_id: str) -> float | None:
         with self._lock:
@@ -190,6 +283,7 @@ class Service:
             last_used = self._model_last_used.get(model_id, self._start_time)
             elapsed = time.time() - last_used
             return max(0.0, round(self._idle_timeout_seconds - elapsed, 1))
+
 
     def log_event(self, message: str) -> None:
         with self._lock:
@@ -302,11 +396,21 @@ class Service:
             raise HTTPException(status_code=404, detail=f"unknown model: {model}")
         return pkg
 
-
 def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
     svc = Service(store, worker_isolation=worker_isolation)
-    app = FastAPI(title="pantry", version=__version__)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+        svc.start_idle_reaper()
+
+        try:
+            yield
+        finally:
+            await svc.stop_idle_reaper()
+
+    app = FastAPI(title="pantry", version=__version__, lifespan=lifespan)
     app.state.svc = svc
+
     # Soft Metal cache/memory caps so serve starts protecting unified RAM immediately.
     app.state.memory_limits = apply_protection_limits()
     # Local browser UIs (Open WebUI, etc.) hit loopback from another origin.
@@ -715,11 +819,69 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.post("/v1/pull")
-    def pull(req: PullBody) -> dict[str, Any]:
-        try:
-            return pull_package(store, req.package_id)
-        except PullError as e:
-            raise HTTPException(status_code=400, detail=e.message) from e
+    async def pull(req: PullBody) -> Any:
+        pkg_id = req.package_id
+        if not req.stream:
+            try:
+                res = await asyncio.to_thread(pull_package, store, pkg_id)
+                svc.touch_model(pkg_id)
+                svc.log_event(f"Pulled model package: {pkg_id}")
+                return res
+            except PullError as e:
+                raise HTTPException(status_code=400, detail=e.message) from e
+
+        async def _stream_pull_events() -> AsyncIterator[str]:
+            queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+            loop = asyncio.get_running_loop()
+
+            def _callback(evt: dict[str, Any]) -> None:
+                loop.call_soon_threadsafe(queue.put_nowait, evt)
+
+            def _safe_put(item: Any) -> None:
+                try:
+                    if not loop.is_closed():
+                        loop.call_soon_threadsafe(queue.put_nowait, item)
+                except RuntimeError:
+                    pass
+
+            def _worker() -> None:
+                try:
+                    res = pull_package(store, pkg_id, progress_callback=_callback)
+                    svc.touch_model(pkg_id)
+                    svc.log_event(f"Pulled model package: {pkg_id}")
+                    _safe_put(None)
+                except Exception as exc:
+                    err_msg = exc.message if hasattr(exc, "message") else str(exc)
+                    _safe_put({"status": "error", "package_id": pkg_id, "error": err_msg})
+                    _safe_put(None)
+
+            threading.Thread(target=_worker, daemon=True).start()
+
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield f"data: {json.dumps(item)}\n\n"
+                if item.get("status") in {"ready", "error"}:
+                    break
+
+        return StreamingResponse(_stream_pull_events(), media_type="text/event-stream")
+
+    @app.get("/v1/pull/{package_id:path}")
+    def pull_status(package_id: str) -> dict[str, Any]:
+        man = store.load_manifest(package_id)
+        if man is None:
+            raise HTTPException(status_code=404, detail=f"package not found: {package_id}")
+        is_ready = store.weights_ready(man)
+        weights_path = store.resolve_weights_path(man)
+        return {
+            "package_id": man.id,
+            "status": "ready" if is_ready else "not_pulled",
+            "weights_ready": is_ready,
+            "weights_path": str(weights_path) if weights_path else None,
+            "hf_repo": man.runtime.hf_repo,
+        }
+
 
     @app.post("/v1/load")
     def load(req: LoadBody) -> dict[str, Any]:
@@ -1732,6 +1894,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
     @app.post("/v1/embeddings")
     async def embeddings(req: EmbeddingRequest) -> dict[str, Any]:
         pkg = svc.resolve_model(req.model)
+        svc.touch_model(pkg.id)
         if not _is_embed_package(pkg):
             raise HTTPException(
                 status_code=400,
@@ -1745,9 +1908,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 status_code=409,
                 detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
             )
-        from pantry.embed_runtime import embed_runtime_for
-
-        runtime = embed_runtime_for(pkg, store)
+        runtime = svc.runtimes.embed_runtime(pkg)
         inputs = [req.input] if isinstance(req.input, str) else list(req.input)
 
         def _run_embed() -> tuple[list[list[float]], dict[str, int]]:
@@ -1798,9 +1959,8 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
             )
 
-        from pantry.rerank import rerank_runtime_for
+        runtime = svc.runtimes.rerank_runtime(pkg)
 
-        runtime = rerank_runtime_for(pkg, store)
 
         doc_strings: list[str] = []
         for d in req.documents:
@@ -2121,6 +2281,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         req: AudioGenerateRequest, request: Request
     ) -> dict[str, Any]:
         pkg = svc.resolve_model(req.model)
+        svc.touch_model(pkg.id)
         if not _is_music_package(pkg):
             raise HTTPException(
                 status_code=400,
@@ -2134,9 +2295,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 status_code=409,
                 detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
             )
-        from pantry.music_runtime import music_runtime_for
-
-        runtime = music_runtime_for(pkg, store)
+        runtime = svc.runtimes.music_runtime(pkg)
 
         def _audio_fn() -> list[dict]:
             with svc.tracking_load(pkg.id, "Generating music / loading weights…", modality="audio"):
@@ -2199,6 +2358,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             flush=True,
         )
         pkg = svc.resolve_model(req.model)
+        svc.touch_model(pkg.id)
         if not _is_video_package(pkg):
             raise HTTPException(
                 status_code=400,
@@ -2212,9 +2372,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 status_code=409,
                 detail=f"weights not pulled for {pkg.id}; run: pantry pull {pkg.id}",
             )
-        from pantry.video_runtime import video_runtime_for
-
-        runtime = video_runtime_for(pkg, store)
+        runtime = svc.runtimes.video_runtime(pkg)
 
         def _video_fn() -> list[dict]:
             with svc.tracking_load(pkg.id, "Generating video / rendering frames…", modality="video"):
@@ -2260,6 +2418,26 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
                 f"[pantry.server] POST /v1/video/generations completed successfully in {elapsed}s for '{pkg.id}'",
                 flush=True,
             )
+        except (ValueError, RuntimeError) as err:
+            dur_ms = int(max(0.01, time.time() - t0) * 1000)
+            RequestLogTracker.get().record_request(
+                model=req.model,
+                tokens_in=0,
+                tokens_out=0,
+                duration_ms=dur_ms,
+                status=400,
+            )
+            raise HTTPException(status_code=400, detail=str(err)) from err
+        except HTTPException as exc:
+            dur_ms = int(max(0.01, time.time() - t0) * 1000)
+            RequestLogTracker.get().record_request(
+                model=req.model,
+                tokens_in=0,
+                tokens_out=0,
+                duration_ms=dur_ms,
+                status=exc.status_code,
+            )
+            raise
         except Exception as exc:
             dur_ms = int(max(0.01, time.time() - t0) * 1000)
             RequestLogTracker.get().record_request(
@@ -2335,6 +2513,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         timestamp_granularities: list[str] | None = Form(None),
     ) -> Any:
         pkg = svc.resolve_model(model)
+        svc.touch_model(pkg.id)
         if not _is_stt_package(pkg):
             raise HTTPException(
                 status_code=400,
@@ -2350,12 +2529,11 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             )
 
         from pantry.audio_runtime import (
-            audio_transcription_runtime_for,
             format_srt,
             format_vtt,
         )
 
-        runtime = audio_transcription_runtime_for(pkg, store)
+        runtime = svc.runtimes.audio_runtime(pkg)
 
         import shutil
         import tempfile
@@ -2443,6 +2621,7 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
         temperature: float | None = Form(None),
     ) -> Any:
         pkg = svc.resolve_model(model)
+        svc.touch_model(pkg.id)
         if not _is_stt_package(pkg):
             raise HTTPException(
                 status_code=400,
@@ -2458,12 +2637,11 @@ def create_app(store: PackageStore, worker_isolation: bool = False) -> FastAPI:
             )
 
         from pantry.audio_runtime import (
-            audio_transcription_runtime_for,
             format_srt,
             format_vtt,
         )
 
-        runtime = audio_transcription_runtime_for(pkg, store)
+        runtime = svc.runtimes.audio_runtime(pkg)
 
         import shutil
         import tempfile

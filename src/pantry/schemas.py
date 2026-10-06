@@ -38,6 +38,11 @@ class RuntimeInfo(BaseModel):
     # Hugging Face repo for `pantry pull` (MLX safetensors trees).
     hf_repo: str | None = None
     hf_revision: str | None = None
+    ignore_patterns: list[str] = Field(default_factory=list)
+    allow_patterns: list[str] = Field(default_factory=list)
+    local_path: str | None = None
+
+
 
 
 class PackageManifest(BaseModel):
@@ -349,6 +354,7 @@ class SpeculativeBenchmarkResponse(BaseModel):
 
 class PullBody(BaseModel):
     package_id: str = Field(..., min_length=1)
+    stream: bool = False
 
 
 class LoadBody(BaseModel):

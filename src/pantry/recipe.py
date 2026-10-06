@@ -168,7 +168,7 @@ class RecipeAssembler:
         source_dir: Path,
         cas: CasManager,
         *,
-        store_chunks: bool = True,
+        store_chunks: bool = False,
     ) -> PackageRecipe:
         """Scan source_dir, chunk files, insert novel chunks into CAS, and generate PackageRecipe."""
         source_dir = source_dir.resolve()
@@ -236,13 +236,14 @@ class RecipeAssembler:
             files=recipe_files,
         )
 
-        # Record in index
-        cas.index.record_package_refs(
-            package_id=package_id,
-            apparent_size=total_uncompressed_bytes,
-            physical_size=unique_cas_bytes,
-            refs=cas_refs,
-        )
+        # Record in index only if chunks were stored
+        if store_chunks:
+            cas.index.record_package_refs(
+                package_id=package_id,
+                apparent_size=total_uncompressed_bytes,
+                physical_size=unique_cas_bytes,
+                refs=cas_refs,
+            )
 
         return recipe
 

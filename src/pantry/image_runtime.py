@@ -423,7 +423,13 @@ class MFluxImageRuntime:
         elif host is not None and host <= 36:
             max_pixels = 2048 * 2048
         else:
-            max_pixels = 4096 * 4096
+            # Default cap at ~4.2 MP (2048x2048) across all high-memory Macs (>36 GB).
+            # Z-Image and FLUX are 1 MP models; diffusing above 2048px causes extreme O(N^2)
+            # attention memory spikes and compositional degradation. Higher requested resolutions
+            # (e.g. 4K) are cleanly and sharply upscaled via the built-in Lanczos + unsharp pipeline.
+            # Allow explicit opt-in for unconstrained native diffusion via PANTRY_IMAGE_ALLOW_4K=1.
+            allow_4k = os.environ.get("PANTRY_IMAGE_ALLOW_4K", "").lower() in {"1", "true", "yes"}
+            max_pixels = (4096 * 4096) if allow_4k else (2048 * 2048)
 
         if total_pixels > max_pixels:
             import math
@@ -572,12 +578,24 @@ class MFluxImageRuntime:
                                         latents=latents, height=config.height, width=config.width
                                     )
 
+                                # For intermediate thumbnails (512x512 max), subsample large latents to prevent
+                                # O(N^2) VAE self-attention buffer blowup (e.g. 106 GB allocation crash on 4K latents).
+                                try:
+                                    import math
+
+                                    h_lat = int(unpacked.shape[-2])
+                                    w_lat = int(unpacked.shape[-1])
+                                    stride = max(1, math.ceil(max(h_lat, w_lat) / 64.0))
+                                    preview_latent = unpacked[:, :, ::stride, ::stride] if stride > 1 else unpacked
+                                except (AttributeError, IndexError, TypeError, ValueError):
+                                    preview_latent = unpacked
+
                                 from mflux.models.common.vae.vae_util import VAEUtil
 
                                 # Fast preview: untiled decode (tiling_config=None) for intermediate thumbnails
                                 decoded = VAEUtil.decode(
                                     vae=self.model.vae,
-                                    latent=unpacked,
+                                    latent=preview_latent,
                                     tiling_config=None,
                                 )
                                 mx.eval(decoded)

@@ -6980,8 +6980,21 @@ pantry prune</pre>
       document.getElementById('insp-repo-id').textContent = active.package_id || 'No local package bound';
       document.getElementById('insp-desc').textContent = it.description || `Capability provider for intent alias '${it.alias}'`;
 
+      const rawQuant = (active.quantization || active.quant_method || '').toLowerCase();
+      let quantDisplay = '4-bit (mlx)';
+      if (rawQuant.includes('8bit') || rawQuant.includes('8-bit') || rawQuant === '8bit') {
+        quantDisplay = '8-bit (mlx)';
+      } else if (rawQuant.includes('4bit') || rawQuant.includes('4-bit') || rawQuant === '4bit') {
+        quantDisplay = '4-bit (mlx)';
+      } else if (rawQuant.includes('gguf')) {
+        quantDisplay = 'GGUF';
+      } else if (rawQuant === 'none' || rawQuant === 'fp16' || rawQuant === 'bf16') {
+        quantDisplay = 'FP16 (Full Precision)';
+      } else if (active.quantization) {
+        quantDisplay = active.quantization;
+      }
       document.getElementById('insp-arch').textContent = active.architecture || 'CausalLM';
-      document.getElementById('insp-quant').textContent = active.quantization || '4-bit (mlx)';
+      document.getElementById('insp-quant').textContent = quantDisplay;
       document.getElementById('insp-context').textContent = `${(active.context_max || 32768).toLocaleString()} ctx`;
       document.getElementById('insp-size').textContent = sizeGb !== '—' ? `${sizeGb} GB` : 'On Demand';
 
@@ -7134,7 +7147,13 @@ pantry prune</pre>
       const it = studioState.selectedIntent;
       const selectEl = document.getElementById('insp-intent-remap-select');
       const draftSelectEl = document.getElementById('insp-intent-draft-select');
+      const btn = document.getElementById('btn-insp-apply-remap');
       if (!selectEl) return;
+      const prevText = btn ? btn.textContent : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Saving...';
+      }
       try {
         const res = await fetch('/v1/packs/rebind', {
           method: 'POST',
@@ -7149,11 +7168,23 @@ pantry prune</pre>
           const err = await res.json();
           throw new Error(err.detail || 'Remap failed');
         }
-        alert('Intent remapped successfully!');
         await loadIntentBindings();
         selectIntentForInspectorByAlias(it.alias);
+        if (btn) {
+          btn.textContent = '✓ Saved!';
+          btn.style.background = '#10b981';
+          setTimeout(() => {
+            btn.textContent = prevText || '🔄 Save Remap';
+            btn.style.background = '';
+            btn.disabled = false;
+          }, 1800);
+        }
       } catch (err) {
         alert(`Remap error: ${err.message}`);
+        if (btn) {
+          btn.textContent = prevText || '🔄 Save Remap';
+          btn.disabled = false;
+        }
       }
     }
 

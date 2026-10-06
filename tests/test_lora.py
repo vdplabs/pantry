@@ -148,3 +148,55 @@ def test_cli_lora_subcommands(tmp_path: Path, catalog_dir: Path):
     )
     assert res_chat.exit_code == 0
     assert "[active lora: coder-lora]" in res_chat.output
+
+
+def test_resolve_adapter_path_and_discovery(tmp_path: Path):
+    import os
+
+    test_dir = tmp_path / "adapters"
+    test_dir.mkdir(parents=True, exist_ok=True)
+    ana_file = test_dir / "AnaDeArmas_KREA2.safetensors"
+    ana_file.write_bytes(b"dummy safetensors content")
+
+    os.environ["PANTRY_ADAPTERS_PATH"] = str(test_dir)
+    try:
+        mgr = LoRAAdapterManager()
+
+        # 1. Resolve AnaDeArmas_KREA2 present in PANTRY_ADAPTERS_PATH
+        resolved = mgr.resolve_adapter_path("AnaDeArmas_KREA2")
+        assert resolved is not None
+        assert Path(resolved).is_file()
+        assert "AnaDeArmas_KREA2.safetensors" in resolved
+
+        # 2. Case and variation handling
+        assert Path(mgr.resolve_adapter_path("anadearmas_krea2")).samefile(resolved)
+        assert Path(mgr.resolve_adapter_path("AnaDeArmas_KREA2.safetensors")).samefile(resolved)
+        assert Path(mgr.resolve_adapter_path("AnaDeArmas-KREA2")).samefile(resolved)
+
+        # 3. file:// URI handling
+        file_uri = f"file://{resolved}"
+        assert mgr.resolve_adapter_path(file_uri) == resolved
+
+        # 4. Custom folder path resolution
+        custom_dir = tmp_path / "custom_loras"
+        custom_dir.mkdir()
+        dummy_lora = custom_dir / "my_custom_lora.safetensors"
+        dummy_lora.write_bytes(b"dummy")
+
+        os.environ["PANTRY_ADAPTERS_PATH"] = f"{test_dir}:{custom_dir}"
+        custom_resolved = mgr.resolve_adapter_path("my_custom_lora")
+        assert custom_resolved == str(dummy_lora.resolve())
+
+        # 5. Non-existent returns None
+        assert mgr.resolve_adapter_path("non_existent_lora_xyz_123") is None
+
+        # 6. Auto-discovery surfaces AnaDeArmas_KREA2 in list_adapters
+        adapters = mgr.list_adapters()
+        adapter_ids = [a.id for a in adapters]
+        assert "AnaDeArmas_KREA2" in adapter_ids
+        ana_record = mgr.get_adapter("AnaDeArmas_KREA2")
+        assert ana_record is not None
+        assert ana_record.path == resolved
+    finally:
+        os.environ.pop("PANTRY_ADAPTERS_PATH", None)
+

@@ -6,8 +6,6 @@ import re
 import uuid
 from typing import Any, Callable
 
-import jsonschema
-
 logger = logging.getLogger("pantry.grammar")
 
 
@@ -87,12 +85,16 @@ def extract_json_block(text: str) -> str:
 def validate_json_schema(data: Any, schema: dict[str, Any]) -> tuple[bool, str | None]:
     """Validates data against a JSON Schema, returning (is_valid, error_message)."""
     try:
+        import jsonschema
+
         jsonschema.validate(instance=data, schema=schema)
         return True, None
     except jsonschema.ValidationError as exc:
         return False, exc.message
     except Exception as exc:  # noqa: BLE001
         return False, str(exc)
+
+
 
 
 def generate_schema_mock(schema: dict[str, Any] | None) -> dict[str, Any]:

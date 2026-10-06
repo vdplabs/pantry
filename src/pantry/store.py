@@ -20,6 +20,7 @@ class PackageStore:
 
     def __init__(self, root: Path, data_root: Path | None = None) -> None:
         self.root = root
+        self._explicit_data_root = data_root is not None
         self.data_root = (data_root or root).resolve()
         self.blobs = self.data_root / "blobs"
         self.packages = self.root / "packages"
@@ -82,10 +83,10 @@ class PackageStore:
         except Exception:
             return None
 
-    def ingest_package_into_cas(self, package_id: str, weights_dir: Path):
+    def ingest_package_into_cas(self, package_id: str, weights_dir: Path, *, store_chunks: bool = False):
         from pantry.recipe import RecipeAssembler
 
-        recipe = RecipeAssembler.build_recipe(package_id, weights_dir, self.cas, store_chunks=True)
+        recipe = RecipeAssembler.build_recipe(package_id, weights_dir, self.cas, store_chunks=store_chunks)
         recipe.save(self.recipe_path(package_id))
         return recipe
 
@@ -258,19 +259,38 @@ class PackageStore:
         # Honor HF override isolation: do not fall through to the user default
         # cache when tests / operators pin HF_HUB_CACHE or HF_HOME.
         if not hub_cache and not hf_home:
-            _add(Path.home() / ".cache" / "huggingface" / "hub")
             # Common external-SSD layout: PANTRY_DATA=$SSD/huggingface/pantry
             # with the shared hub at $SSD/huggingface/hub (sibling, not nested).
+            # Prioritize external storage so downloads land on the external volume.
             if self.data_root.name == "pantry":
                 sibling = self.data_root.parent / "hub"
                 _add(sibling)
             if self.data_root != self.root:
                 _add(self.data_root / "huggingface" / "hub")
+            _add(Path.home() / ".cache" / "huggingface" / "hub")
         elif self.data_root != self.root and self.data_root.name == "pantry":
             # Even with HF_* set, also see the sibling hub next to PANTRY_DATA.
             _add(self.data_root.parent / "hub")
 
         return cache_roots
+
+    def primary_hf_cache_dir(self) -> Path:
+        """Return the primary directory where new Hugging Face downloads should be stored."""
+        import os
+
+        hub_cache = os.environ.get("HF_HUB_CACHE")
+        if hub_cache:
+            return Path(hub_cache).expanduser()
+        hf_home = os.environ.get("HF_HOME")
+        if hf_home:
+            return (Path(hf_home) / "hub").expanduser()
+
+        if self.data_root.name == "pantry":
+            return (self.data_root.parent / "hub").expanduser()
+        if self.data_root != self.root:
+            return (self.data_root / "huggingface" / "hub").expanduser()
+
+        return (Path.home() / ".cache" / "huggingface" / "hub").expanduser()
 
     def hf_repo_cache_dirs(self, repo_id: str) -> list[Path]:
         """Return unique Hugging Face cache dirs for a repo_id in search order.
@@ -371,7 +391,23 @@ class PackageStore:
 
         # return None
 
+    def check_dynamic_data_root(self) -> None:
+        """Dynamically refresh data_root if an external drive was mounted or dismounted."""
+        if getattr(self, "_explicit_data_root", False):
+            return
+        import os
+
+        if not os.environ.get("PANTRY_DATA") and not os.environ.get("PANTRY_BLOBS"):
+            from pantry.config import default_data
+
+            current_default = default_data(self.root)
+            if current_default != self.data_root:
+                self.data_root = current_default
+                self.blobs = self.data_root / "blobs"
+
     def _is_dir_weights_complete(self, path: Path, manifest: PackageManifest) -> bool:
+        if path.is_file():
+            return path.suffix.lower() in {".gguf", ".safetensors", ".bin"}
         if not path.is_dir():
             return False
         primary = (manifest.runtime.primary or "echo").lower()
@@ -386,6 +422,10 @@ class PackageStore:
             if st_files:
                 return True
 
+        # Single GGUF checkpoint in directory
+        if any(path.glob("*.gguf")):
+            return True
+
         # Root / nested config (mlx-lm, diffusers, classic HF).
         has_config = (
             (path / "config.json").is_file()
@@ -398,6 +438,7 @@ class PackageStore:
             any(path.glob("*.safetensors"))
             or any(path.glob("*.npz"))
             or any(path.glob("*.bin"))
+            or any(path.glob("*.gguf"))
         )
         # Multi-component trees (mflux Z-Image / FLUX / LTX-Video): shards live under
         # transformer/ / text_encoder/ / vae/ and often have no root config.json.
@@ -438,9 +479,16 @@ class PackageStore:
         return has_config and (has_root_weights or has_component_weights)
 
     def resolve_weights_path(self, manifest: PackageManifest) -> Path | None:
+        self.check_dynamic_data_root()
         primary = (manifest.runtime.primary or "echo").lower()
         if primary == "echo" or primary.startswith("echo_"):
             return None
+
+        # 0. Check explicit local_path (e.g. from pantry adopt)
+        if getattr(manifest.runtime, "local_path", None):
+            lp = Path(manifest.runtime.local_path)
+            if lp.exists() and self._is_dir_weights_complete(lp, manifest):
+                return lp
 
         # 1. Prefer shared Hugging Face cache snapshot with complete pipeline structure
         if manifest.runtime.hf_repo:
@@ -470,9 +518,15 @@ class PackageStore:
         return None
 
     def weights_ready(self, manifest: PackageManifest) -> bool:
+        self.check_dynamic_data_root()
         primary = (manifest.runtime.primary or "echo").lower()
         if primary == "echo" or primary.startswith("echo_"):
             return True
+
+        if getattr(manifest.runtime, "local_path", None):
+            lp = Path(manifest.runtime.local_path)
+            if lp.exists() and self._is_dir_weights_complete(lp, manifest):
+                return True
 
         if manifest.runtime.hf_repo:
             snap = self.find_hf_snapshot(manifest.runtime.hf_repo, manifest.runtime.hf_revision)

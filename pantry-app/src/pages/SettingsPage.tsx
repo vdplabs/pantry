@@ -1,14 +1,15 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import {
   FiSave, FiRefreshCw, FiTrash2, FiActivity, FiServer,
-  FiCpu, FiHardDrive, FiCheck, FiAlertCircle, FiSliders, FiZap
+  FiCpu, FiHardDrive, FiCheck, FiAlertCircle, FiSliders, FiZap,
+  FiSun, FiMoon
 } from 'react-icons/fi';
 import { useApp } from '@/context/AppContext';
 import api from '@/services/api';
 import type { HealthResponse, StorageInfo } from '@/types';
 
 export default function SettingsPage() {
-  const { state, setTemperature, setMaxTokens, setSystemPrompt, setPreferSpeculative, setApiUrl: setContextApiUrl } = useApp();
+  const { state, setTheme, setTemperature, setMaxTokens, setSystemPrompt, setPreferSpeculative, setApiUrl: setContextApiUrl } = useApp();
   const [apiUrl, setApiUrl] = useState(state.apiUrl || 'http://127.0.0.1:18787');
   const [saving, setSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -355,6 +356,63 @@ export default function SettingsPage() {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                <label className="gen-label">Application Theme</label>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--accent-primary)', textTransform: 'capitalize' }}>
+                  {state.theme} Mode
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => setTheme('dark')}
+                  className="gen-canvas-action"
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    background: state.theme === 'dark' ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+                    color: state.theme === 'dark' ? '#ffffff' : 'var(--text-secondary)',
+                    border: `1px solid ${state.theme === 'dark' ? 'var(--accent-primary)' : 'var(--border-medium)'}`,
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: 12,
+                  }}
+                >
+                  <FiMoon size={14} />
+                  <span>Dark</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTheme('light')}
+                  className="gen-canvas-action"
+                  style={{
+                    flex: 1,
+                    padding: '8px 12px',
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    background: state.theme === 'light' ? 'var(--accent-primary)' : 'var(--bg-tertiary)',
+                    color: state.theme === 'light' ? '#ffffff' : 'var(--text-secondary)',
+                    border: `1px solid ${state.theme === 'light' ? 'var(--accent-primary)' : 'var(--border-medium)'}`,
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    fontSize: 12,
+                  }}
+                >
+                  <FiSun size={14} />
+                  <span>Light</span>
+                </button>
+              </div>
+            </div>
+
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
                 <label className="gen-label">Default Temperature</label>

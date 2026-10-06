@@ -22,7 +22,7 @@
     "ltx-video-av",
     "ltx23-av"
   ],
-  "listable": true,
+  "listable": false,
   "runtime": {
     "primary": "ltx_video_av",
     "hf_repo": "notapalindrome/ltx23-mlx-av",

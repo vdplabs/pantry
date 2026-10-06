@@ -181,7 +181,7 @@ def test_cross_quantization_dedup_and_reconstitution(tmp_path: Path):
     (pkg8_dir / "tokenizer.json").write_text('{"vocab": "test"}')
 
     # Ingest package 4-bit
-    recipe4 = store.ingest_package_into_cas("model.q4", pkg4_dir)
+    recipe4 = store.ingest_package_into_cas("model.q4", pkg4_dir, store_chunks=True)
     assert recipe4.package_id == "model.q4"
     assert recipe4.unique_cas_bytes > 0
 
@@ -189,7 +189,7 @@ def test_cross_quantization_dedup_and_reconstitution(tmp_path: Path):
     assert stats_after_q4["total_packages"] == 1
 
     # Ingest package 8-bit
-    recipe8 = store.ingest_package_into_cas("model.q8", pkg8_dir)
+    recipe8 = store.ingest_package_into_cas("model.q8", pkg8_dir, store_chunks=True)
     assert recipe8.package_id == "model.q8"
     # Shared bytes must be >= length of shared embeddings
     assert recipe8.shared_cas_bytes >= len(shared_embeddings)
@@ -219,7 +219,7 @@ def test_cas_prune_and_lifecycle(tmp_path: Path):
     src_dir.mkdir(parents=True)
     (src_dir / "blob.bin").write_bytes(b"temp data" * 1000)
 
-    store.ingest_package_into_cas("temp.pkg", src_dir)
+    store.ingest_package_into_cas("temp.pkg", src_dir, store_chunks=True)
     stats1 = store.cas.get_stats()
     assert stats1["total_packages"] == 1
     assert stats1["total_chunks"] >= 1
@@ -256,7 +256,7 @@ def test_storage_server_endpoints(tmp_path: Path):
     pkg_dir = tmp_path / "pkg"
     pkg_dir.mkdir(parents=True)
     (pkg_dir / "weights.bin").write_bytes(b"data" * 10000)
-    store.ingest_package_into_cas("test.storage.pkg", pkg_dir)
+    store.ingest_package_into_cas("test.storage.pkg", pkg_dir, store_chunks=True)
 
     app = create_app(store)
     client = TestClient(app)

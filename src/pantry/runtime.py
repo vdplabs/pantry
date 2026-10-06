@@ -376,12 +376,39 @@ def resolve_draft_path(
     return str(store.weights_dir(draft_man.id)), draft_man.id
 
 
+def warmup_mlx_model(model: Any) -> None:
+    """Pre-page model weights into unified memory chunk-by-chunk to prevent Metal GPU watchdog timeouts.
+
+    When weights are stored on external SSDs or large models (>15 GB) are loaded,
+    paging all weights into unified memory during a single forward pass can exceed the macOS Metal
+    GPU watchdog timer (5-10s), causing kIOGPUCommandBufferCallbackErrorTimeout.
+    Evaluating layer-by-layer keeps each command buffer execution fast (<0.5s) and safe.
+    """
+    try:
+        import mlx.core as mx
+
+        layers = []
+        if hasattr(model, "layers"):
+            layers = model.layers
+        elif hasattr(model, "model") and hasattr(model.model, "layers"):
+            layers = model.model.layers
+        elif hasattr(model, "language_model") and hasattr(model.language_model, "model"):
+            layers = getattr(model.language_model.model, "layers", [])
+
+        for layer in layers:
+            mx.eval(layer.parameters())
+        mx.eval(model.parameters())
+    except Exception as e:
+        logger.debug("Layer warmup skipped or encountered error: %s", e)
+
+
 def load_mlx_model(
     path_or_hf_repo: str,
     tokenizer_config: dict[str, Any] | None = None,
     model_config: dict[str, Any] | None = None,
     adapter_path: str | None = None,
     lazy: bool = True,
+    warmup: bool = True,
 ) -> tuple[Any, Any]:
     """Load model and tokenizer using mlx-lm, supporting strict=False fallback for FP8/MoE weights."""
     import pathlib
@@ -410,6 +437,9 @@ def load_mlx_model(
         model = load_adapters(model, adapter_path)
         model.eval()
 
+    if warmup:
+        warmup_mlx_model(model)
+
     tokenizer = load_tokenizer(
         model_path, tok_cfg, eos_token_ids=config.get("eos_token_id", None)
     )
@@ -434,6 +464,16 @@ class MLXRuntime(Runtime):
                 resolved = self.store.resolve_weights_path(man)
                 if resolved:
                     self._models.pop(str(resolved), None)
+                if man.runtime and man.runtime.draft_package_id:
+                    draft_id = man.runtime.draft_package_id
+                    draft_path = str(self.store.weights_dir(draft_id))
+                    self._models.pop(draft_path, None)
+                    draft_man = self.store.load_manifest(draft_id)
+                    if draft_man:
+                        d_resolved = self.store.resolve_weights_path(draft_man)
+                        if d_resolved:
+                            self._models.pop(str(d_resolved), None)
+                    self.store.mark_unloaded(draft_id)
             self.store.mark_unloaded(package_id)
         gc.collect()
         try:
@@ -635,8 +675,6 @@ class MLXRuntime(Runtime):
 
                 if active_cache is None:
                     active_cache = make_prompt_cache(model)
-                    if draft_model_obj is not None:
-                        active_cache += make_prompt_cache(draft_model_obj)
 
                 sampler = make_sampler(temp=temp)
                 # Small instruct / R1-distill models often skip EOS and restate CoT;
@@ -1134,6 +1172,10 @@ class RuntimeHub:
             self.mlx = MLXRuntime(store)
         self.cuda = CUDARuntime(store)
         self._mflux_image: object | None = None
+        self._mlx_vision: object | None = None
+        self._whisper_audio: object | None = None
+        self._rerank_runtime: object | None = None
+        self._embed_runtime: object | None = None
 
     def for_manifest(self, manifest: PackageManifest) -> Runtime:
         primary = (manifest.runtime.primary or "echo").lower()
@@ -1156,12 +1198,54 @@ class RuntimeHub:
 
             return EchoVisionRuntime(self.store)
         if primary in {"mlx_vlm", "mlx-vlm"}:
-            from pantry.vision import vision_runtime_for
-
-            return vision_runtime_for(manifest, self.store)
+            return self.vision_runtime(manifest)  # type: ignore[return-value]
         if primary in {"cuda", "vllm", "transformers", "pytorch"}:
             return self.cuda
         return self.echo
+
+    def vision_runtime(self, manifest: PackageManifest) -> object:
+        """Shared MLX vision runtime so VLM models stay warm across requests."""
+        from pantry.vision import vision_runtime_for
+
+        primary = (manifest.runtime.primary or "echo_vlm").lower()
+        if primary in {"mlx_vlm", "mlx-vlm"}:
+            if self._mlx_vision is None:
+                self._mlx_vision = vision_runtime_for(manifest, self.store)
+            return self._mlx_vision
+        return vision_runtime_for(manifest, self.store)
+
+    def audio_runtime(self, manifest: PackageManifest) -> object:
+        """Shared audio transcription runtime."""
+        from pantry.audio_runtime import audio_transcription_runtime_for
+
+        primary = (manifest.runtime.primary or "").lower()
+        if primary in {"mlx_whisper", "mlx-whisper", "whisper", "mlx"}:
+            if self._whisper_audio is None:
+                self._whisper_audio = audio_transcription_runtime_for(manifest, self.store)
+            return self._whisper_audio
+        return audio_transcription_runtime_for(manifest, self.store)
+
+    def rerank_runtime(self, manifest: PackageManifest) -> object:
+        """Shared cross-encoder rerank runtime."""
+        from pantry.rerank import rerank_runtime_for
+
+        primary = (manifest.runtime.primary or "echo_rerank").lower()
+        if primary in {"mlx", "mlx_lm", "mlx-lm", "cuda", "transformers", "pytorch"}:
+            if self._rerank_runtime is None:
+                self._rerank_runtime = rerank_runtime_for(manifest, self.store)
+            return self._rerank_runtime
+        return rerank_runtime_for(manifest, self.store)
+
+    def embed_runtime(self, manifest: PackageManifest) -> object:
+        """Shared embedding runtime."""
+        from pantry.embed_runtime import embed_runtime_for
+
+        primary = (manifest.runtime.primary or "echo_embed").lower()
+        if primary in {"mlx", "mlx_lm", "mlx-lm"}:
+            if self._embed_runtime is None:
+                self._embed_runtime = embed_runtime_for(manifest, self.store)
+            return self._embed_runtime
+        return embed_runtime_for(manifest, self.store)
 
     def image_runtime(self, manifest: PackageManifest) -> object:
         """Shared mflux/echo image runtime so models stay warm across HTTP requests."""
@@ -1174,6 +1258,19 @@ class RuntimeHub:
             return self._mflux_image
         return image_runtime_for(manifest, self.store)
 
+    def video_runtime(self, manifest: PackageManifest) -> object:
+        """Video generation runtime."""
+        from pantry.video_runtime import video_runtime_for
+
+        return video_runtime_for(manifest, self.store)
+
+    def music_runtime(self, manifest: PackageManifest) -> object:
+        """Music generation runtime."""
+        from pantry.music_runtime import music_runtime_for
+
+        return music_runtime_for(manifest, self.store)
+
+
     def unload(self, package_id: str | None = None) -> None:
         if hasattr(self.mlx, "unload"):
             self.mlx.unload(package_id)
@@ -1181,10 +1278,29 @@ class RuntimeHub:
             self.cuda.unload(package_id)
         if self._mflux_image is not None and hasattr(self._mflux_image, "unload"):
             self._mflux_image.unload(package_id)
-            # Drop the hub handle when nothing remains cached (full unload or last pack).
             models = getattr(self._mflux_image, "_models", None)
             if package_id is None or not models:
                 self._mflux_image = None
+        if self._mlx_vision is not None and hasattr(self._mlx_vision, "unload"):
+            self._mlx_vision.unload(package_id)
+            models = getattr(self._mlx_vision, "_models", None)
+            if package_id is None or not models:
+                self._mlx_vision = None
+        if self._whisper_audio is not None and hasattr(self._whisper_audio, "unload"):
+            self._whisper_audio.unload(package_id)
+            models = getattr(self._whisper_audio, "_models", None)
+            if package_id is None or not models:
+                self._whisper_audio = None
+        if self._rerank_runtime is not None and hasattr(self._rerank_runtime, "unload"):
+            self._rerank_runtime.unload(package_id)
+            models = getattr(self._rerank_runtime, "_models", None)
+            if package_id is None or not models:
+                self._rerank_runtime = None
+        if self._embed_runtime is not None and hasattr(self._embed_runtime, "unload"):
+            self._embed_runtime.unload(package_id)
+            models = getattr(self._embed_runtime, "_models", None)
+            if package_id is None or not models:
+                self._embed_runtime = None
         try:
             from pantry.video_runtime import _shared_ltx_video_runtime
 

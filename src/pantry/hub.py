@@ -221,6 +221,82 @@ CURATED_MODELS: list[dict[str, Any]] = [
         "approx_bytes": 8800000000,  # ~8.8 GB
     },
     {
+        "repo_id": "mlx-community/Qwen2.5-32B-Instruct-4bit",
+        "title": "Qwen2.5 32B Instruct",
+        "description": "Flagship 32B instruction-tuned conversational model. Frontier reasoning, general knowledge, and multilingual performance.",
+        "modality": "text",
+        "role": "chat",
+        "family": "qwen2.5",
+        "architecture": "Qwen2ForCausalLM",
+        "quant_method": "mlx_4bit",
+        "quant_label": "4-bit (mlx)",
+        "params_b": 32.5,
+        "context_max": 32768,
+        "license": "apache-2.0",
+        "chat_template_id": "qwen2.5-instruct-v1",
+        "template_family": "chatml",
+        "aliases": ["chat-extreme", "qwen-32b"],
+        "quality_tier": "extreme",
+        "approx_bytes": 18400000000,  # ~17.2 GB weights
+    },
+    {
+        "repo_id": "mlx-community/Qwen2.5-Coder-32B-Instruct-4bit",
+        "title": "Qwen2.5 Coder 32B",
+        "description": "Frontier 32B coding model rivaling proprietary models in code generation, debugging, refactoring, and tool calling.",
+        "modality": "text",
+        "role": "coder",
+        "family": "qwen2.5-coder",
+        "architecture": "Qwen2ForCausalLM",
+        "quant_method": "mlx_4bit",
+        "quant_label": "4-bit (mlx)",
+        "params_b": 32.5,
+        "context_max": 32768,
+        "license": "apache-2.0",
+        "chat_template_id": "qwen2.5-coder-instruct-v1",
+        "template_family": "chatml",
+        "aliases": ["coder-extreme", "qwen-coder-32b"],
+        "quality_tier": "extreme",
+        "approx_bytes": 18400000000,  # ~17.2 GB weights
+    },
+    {
+        "repo_id": "mlx-community/Qwen2.5-14B-Instruct-4bit",
+        "title": "Qwen2.5 14B Instruct",
+        "description": "High-speed 14B conversational model balancing deep capability with ultra-low latency and low memory footprint.",
+        "modality": "text",
+        "role": "chat",
+        "family": "qwen2.5",
+        "architecture": "Qwen2ForCausalLM",
+        "quant_method": "mlx_4bit",
+        "quant_label": "4-bit (mlx)",
+        "params_b": 14.7,
+        "context_max": 32768,
+        "license": "apache-2.0",
+        "chat_template_id": "qwen2.5-instruct-v1",
+        "template_family": "chatml",
+        "aliases": ["chat-balanced", "qwen-14b"],
+        "quality_tier": "standard",
+        "approx_bytes": 8300000000,  # ~7.7 GB weights
+    },
+    {
+        "repo_id": "mlx-community/DeepSeek-R1-Distill-Qwen-32B-4bit",
+        "title": "DeepSeek R1 32B",
+        "description": "Frontier-level chain-of-thought deep reasoning model distilled from DeepSeek R1 into Qwen 32B.",
+        "modality": "text",
+        "role": "reasoning",
+        "family": "deepseek-r1",
+        "architecture": "Qwen2ForCausalLM",
+        "quant_method": "mlx_4bit",
+        "quant_label": "4-bit (mlx)",
+        "params_b": 32.5,
+        "context_max": 32768,
+        "license": "mit",
+        "chat_template_id": "deepseek-r1-distill-qwen",
+        "template_family": "chatml",
+        "aliases": ["reasoning-extreme", "r1-32b"],
+        "quality_tier": "extreme",
+        "approx_bytes": 18400000000,  # ~17.2 GB weights
+    },
+    {
         "repo_id": "black-forest-labs/FLUX.1-schnell",
         "title": "FLUX.1 Schnell",
         "description": "12B parameter 4-step rectified flow transformer model for ultra-high fidelity text-to-image.",
@@ -295,6 +371,25 @@ CURATED_MODELS: list[dict[str, Any]] = [
         "aliases": ["transcribe-compact", "whisper-tiny"],
         "quality_tier": "compact",
         "approx_bytes": 150000000,  # ~0.15 GB
+    },
+    {
+        "repo_id": "mlx-community/Qwen2.5-VL-7B-Instruct-4bit",
+        "title": "Qwen2.5 VL 7B",
+        "description": "Frontier vision-language model with native dynamic resolution, visual OCR, and detailed image-to-prompt comprehension.",
+        "modality": "vision",
+        "role": "vision",
+        "family": "qwen2.5-vl",
+        "architecture": "Qwen2_5_VLForConditionalGeneration",
+        "quant_method": "mlx_4bit",
+        "quant_label": "4-bit (mlx)",
+        "params_b": 7.6,
+        "context_max": 32768,
+        "license": "apache-2.0",
+        "chat_template_id": "qwen2-vl",
+        "template_family": "chatml",
+        "aliases": ["vision-standard", "vision-extreme", "qwen-vl-7b"],
+        "quality_tier": "standard",
+        "approx_bytes": 5600000000,  # ~5.3 GB
     },
 ]
 
@@ -742,8 +837,13 @@ def generate_manifest_template(
     if not title:
         title = clean_repo.split("/")[-1].replace("-", " ")
 
+    is_vision = "vl" in clean_slug.split("-") or "vl" in clean_slug or "vision" in clean_slug or "vlm" in clean_slug
+
     family = "custom"
-    if "coder" in clean_slug and "qwen3" in clean_slug:
+    if is_vision:
+        family = "qwen2.5-vl" if "2.5" in clean_slug else "qwen2-vl" if "qwen" in clean_slug else "vision"
+        role = "vision"
+    elif "coder" in clean_slug and "qwen3" in clean_slug:
         family = "qwen3-coder"
     elif "coder" in clean_slug and "qwen" in clean_slug:
         family = "qwen2.5-coder"
@@ -764,7 +864,9 @@ def generate_manifest_template(
 
     template_family = "chatml"
     chat_template_id = "chatml-v1"
-    if "deepseek" in clean_slug:
+    if is_vision:
+        chat_template_id = "qwen2-vl" if "qwen" in clean_slug else "chatml-v1"
+    elif "deepseek" in clean_slug:
         template_family = "chatml"
         chat_template_id = "deepseek-r1-distill-qwen"
     elif "llama" in clean_slug:
@@ -777,8 +879,8 @@ def generate_manifest_template(
         template_family = "chatml"
         chat_template_id = "qwen2.5-instruct-v1"
 
-    mod_list = [modality]
-    if modality == "chat":
+    mod_list = ["text", "vision"] if is_vision else [modality]
+    if modality == "chat" and not is_vision:
         mod_list = ["text"]
 
     params_b = 7.0
@@ -789,8 +891,18 @@ def generate_manifest_template(
         except Exception:  # noqa: BLE001, S110
             pass
 
-    ram_min = max(1.0, round(params_b * 0.6, 1))
-    ram_comf = max(2.0, round(ram_min * 1.5, 1))
+    quant_method = (
+        "mlx_4bit"
+        if "4bit" in clean_slug
+        else "mlx_8bit"
+        if "8bit" in clean_slug
+        else "bfloat16"
+    )
+    bits_approx = 4.0 if "4bit" in clean_slug else 8.0 if "8bit" in clean_slug else 16.0
+    bytes_per_param = bits_approx / 8.0
+    # Include weight bytes plus ~15-20% headroom for KV cache and activations
+    ram_min = max(1.0, round(params_b * bytes_per_param * 1.15, 1))
+    ram_comf = max(2.0, round(ram_min * 1.35, 1))
 
     q_tier = QualityTier.standard
     if tier.lower() == "compact":
@@ -805,14 +917,8 @@ def generate_manifest_template(
         role=role,
         params_b=params_b,
         quality_tier=q_tier,
-        quant_method=(
-            "mlx_4bit" 
-            if "4bit" in clean_slug 
-            else "mlx_8bit"
-            if "8bit" in clean_slug
-            else "bfloat16"
-        ),
-        bits_approx=4.0 if "4bit" in clean_slug else 8.0 if "8bit" in clean_slug else 16.0,
+        quant_method=quant_method,
+        bits_approx=bits_approx,
         ram_gb_min=ram_min,
         ram_gb_comfortable=ram_comf,
         modalities=mod_list,
@@ -822,7 +928,7 @@ def generate_manifest_template(
         template_family=template_family,
         aliases=aliases or [],
         runtime=RuntimeInfo(
-            primary="mlx",
+            primary="mlx_vlm" if is_vision else "mlx",
             hf_repo=clean_repo,
             hf_revision=None,
         ),
@@ -893,6 +999,8 @@ def get_intent_bindings(store: PackageStore) -> list[dict[str, Any]]:
                     "ram_gb_min": m.ram_gb_min,
                     "draft_package_id": getattr(m.runtime, "draft_package_id", None),
                     "modalities": list(m.modalities),
+                    "architecture": m.role or "CausalLM",
+                    "quantization": m.quant_method or "none",
                 })
 
         active_info = None
@@ -912,6 +1020,8 @@ def get_intent_bindings(store: PackageStore) -> list[dict[str, Any]]:
                 "draft_package_id": getattr(active_pkg.runtime, "draft_package_id", None),
                 "aliases": list(active_pkg.aliases),
                 "modalities": list(active_pkg.modalities),
+                "architecture": active_pkg.role or "CausalLM",
+                "quantization": active_pkg.quant_method or "none",
             }
 
         results.append({
@@ -954,6 +1064,8 @@ def get_intent_bindings(store: PackageStore) -> list[dict[str, Any]]:
                         "ram_gb_min": cand.ram_gb_min,
                         "draft_package_id": getattr(cand.runtime, "draft_package_id", None),
                         "modalities": list(cand.modalities),
+                        "architecture": cand.role or "CausalLM",
+                        "quantization": cand.quant_method or "none",
                     })
 
             results.append({
@@ -975,6 +1087,8 @@ def get_intent_bindings(store: PackageStore) -> list[dict[str, Any]]:
                     "draft_package_id": getattr(m.runtime, "draft_package_id", None),
                     "aliases": list(m.aliases),
                     "modalities": list(m.modalities),
+                    "architecture": m.role or "CausalLM",
+                    "quantization": m.quant_method or "none",
                 },
                 "candidates": candidates,
                 "is_custom": True,
@@ -985,16 +1099,19 @@ def get_intent_bindings(store: PackageStore) -> list[dict[str, Any]]:
 
 def set_package_draft(
     store: PackageStore,
-    target_package_id: str,
+    target_package_id: str | PackageManifest,
     draft_package_id: str | None = None,
 ) -> PackageManifest:
     """Set, auto-recommend, or clear the speculative draft package pairing on a target package."""
-    target_clean = target_package_id.strip()
-    target = store.load_manifest(target_clean)
-    if target is None:
-        target = store.install_from_bundled_catalog(target_clean)
-    if target is None:
-        raise ValueError(f"Target package not found: {target_clean}")
+    if isinstance(target_package_id, PackageManifest):
+        target = target_package_id
+    else:
+        target_clean = target_package_id.strip()
+        target = store.load_manifest(target_clean)
+        if target is None:
+            target = store.install_from_bundled_catalog(target_clean)
+        if target is None:
+            raise ValueError(f"Target package not found: {target_clean}")
 
     draft_clean = draft_package_id.strip() if draft_package_id else None
     if draft_clean in (None, "", "none", "null"):
@@ -1058,12 +1175,11 @@ def rebind_intent_alias(
     # Step 3: Add alias to target
     if alias_clean not in target.aliases:
         target.aliases.append(alias_clean)
+    store.write_manifest(target)
 
     # Step 4: Optionally update speculative draft pairing if specified
     if draft_package_id is not None:
-        set_package_draft(store, target.id, draft_package_id)
-    else:
-        store.write_manifest(target)
+        target = set_package_draft(store, target, draft_package_id)
 
     # Invalidate store cache
     store._manifests_cache = None
@@ -1187,10 +1303,19 @@ def create_custom_pack(
 
 
 def delete_custom_pack(store: PackageStore, package_id: str, *, purge_hf_cache: bool = False) -> bool:
-    """Delete a custom package from store."""
-    """ When `purge_hf_cache` is true, also remove the shared Hugging Face repository cache unless another register package refrences it """
+    """Delete a package from store.
 
+    When `purge_hf_cache` is true, also remove the shared Hugging Face repository cache
+    unless another registered package references it.
+    """
     manifest = store.load_manifest(package_id)
+    if manifest is None:
+        from pantry.resolve import find_by_model_string
+
+        manifest = find_by_model_string(package_id, store.list_manifests(max_age=0))
+    if manifest is not None:
+        package_id = manifest.id
+
     hf_repo = manifest.runtime.hf_repo if manifest is not None else None
     repo_is_shared = bool(
         hf_repo
@@ -1215,9 +1340,22 @@ def delete_custom_pack(store: PackageStore, package_id: str, *, purge_hf_cache: 
         logger.warning("Could not prune CAS data for %s", package_id, exc_info=True)
 
     if purge_hf_cache and hf_repo and not repo_is_shared:
-        for cache_dir in store.hf_repo_cache_dirs(hf_repo):
-            if cache_dir.is_dir():
-                shutil.rmtree(cache_dir, ignore_errors=True)
+        purged = False
+        try:
+            from huggingface_hub import scan_cache_dir
+
+            report = scan_cache_dir()
+            for r in report.repos:
+                if r.repo_id == hf_repo:
+                    strategy = report.delete_revisions(*[rev.commit_hash for rev in r.revisions])
+                    strategy.execute()
+                    purged = True
+        except Exception:  # noqa: BLE001, S110
+            pass
+        if not purged:
+            for cache_dir in store.hf_repo_cache_dirs(hf_repo):
+                if cache_dir.is_dir():
+                    shutil.rmtree(cache_dir, ignore_errors=True)
 
     store._manifests_cache = None
     return True

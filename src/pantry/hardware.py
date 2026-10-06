@@ -34,6 +34,11 @@ _APPLE_SILICON_BANDWIDTH_GBPS: dict[str, float] = {
     "m4 pro": 273.0,
     "m4 max": 410.0,
     "m4 ultra": 820.0,
+    # M5 Series
+    "m5": 150.0,
+    "m5 pro": 300.0,
+    "m5 max": 460.0,
+    "m5 ultra": 920.0,
 }
 
 # NVIDIA GPU Bandwidth specifications (GB/s)

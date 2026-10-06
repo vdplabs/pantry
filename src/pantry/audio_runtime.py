@@ -60,6 +60,10 @@ def format_srt(segments: list[dict[str, Any]]) -> str:
 
 
 class AudioTranscriptionRuntime(ABC):
+    def unload(self, package_id: str | None = None) -> None:
+        """Optional hook to unload speech models and clear memory."""
+        pass
+
     @abstractmethod
     def transcribe(
         self,
@@ -177,6 +181,20 @@ class MLXWhisperRuntime(AudioTranscriptionRuntime):
 
     def __init__(self, store: PackageStore | None = None) -> None:
         self.store = store
+
+    def unload(self, package_id: str | None = None) -> None:
+        """Clear cached whisper weights and Metal memory."""
+        import gc
+
+        gc.collect()
+        try:
+            import mlx.core as mx
+
+            mx.clear_cache()
+        except Exception:
+            pass
+        if package_id and self.store:
+            self.store.mark_unloaded(package_id)
 
     def _ensure_cache_env(self) -> None:
         if os.environ.get("HF_HOME") or os.environ.get("HF_HUB_CACHE"):

@@ -804,6 +804,181 @@ def test_cli_image_with_adapter(tmp_path: Path, catalog_dir: Path):
     assert out_img.is_file()
 
 
+def test_mflux_step_callback_subsamples_large_latents(tmp_path, monkeypatch):
+    """Verify that _MFluxStepCallback strides down large latents (e.g. 480x480) for thumbnail decode."""
+    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 0.0)
+    monkeypatch.setattr("pantry.image_runtime._host_ram_gb", lambda: 64.0)
+    monkeypatch.setattr("pantry.image_runtime._enable_mflux_low_ram", lambda *_a, **_k: None)
+
+    store = PackageStore(tmp_path / "home")
+    store.ensure()
+    man = PackageManifest(
+        id="vdplabs.z-image-turbo.standard.v1",
+        family="z-image",
+        modalities=["image_gen"],
+        ram_gb_min=10.0,
+        bits_approx=4.0,
+        quant_method="mflux-4bit",
+        runtime={"primary": "mflux", "hf_repo": "test/z-image"},
+    )
+
+    class MockCallbacks:
+        def __init__(self):
+            self.in_loop = []
+
+        def register(self, cb):
+            self.in_loop.append(cb)
+
+    mock_callbacks = MockCallbacks()
+
+    class MockLatentArray:
+        def __init__(self, shape):
+            self.shape = shape
+
+        def __getitem__(self, key):
+            # key: (slice, slice, slice, slice)
+            stride_h = key[2].step or 1
+            stride_w = key[3].step or 1
+            new_h = len(range(0, self.shape[2], stride_h))
+            new_w = len(range(0, self.shape[3], stride_w))
+            return MockLatentArray((1, 16, new_h, new_w))
+
+    decoded_latents = []
+
+    class MockVAEUtil:
+        @staticmethod
+        def decode(vae, latent, tiling_config=None):
+            decoded_latents.append(latent)
+            return MagicMock()
+
+    class MockModel:
+        def __init__(self):
+            self.text_encoder = object()
+            self.transformer = object()
+            self.vae = object()
+            self.callbacks = mock_callbacks
+
+        def generate_image(self, **kwargs):
+            for t in range(kwargs.get("num_inference_steps", 1)):
+                for cb in list(self.callbacks.in_loop):
+                    cfg = MagicMock()
+                    cfg.num_inference_steps = 1
+                    cfg.height = 3840
+                    cfg.width = 3840
+                    cb.call_in_loop(t, 42, "prompt", MagicMock(), cfg, None)
+            from PIL import Image
+            return Image.new("RGB", (64, 64), color="blue")
+
+    from unittest.mock import MagicMock, patch
+
+    mock_pil_img = MagicMock()
+    mock_pil_img.size = (64, 64)
+    mock_pil_img.width = 64
+    mock_pil_img.height = 64
+    mock_pil_img.copy.return_value = mock_pil_img
+
+    class DummyInLoop:
+        pass
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "mflux": MagicMock(),
+            "mflux.callbacks.callback": MagicMock(InLoopCallback=DummyInLoop),
+            "mflux.models.common.config.model_config": MagicMock(),
+            "mflux.models.z_image.variants.z_image": MagicMock(ZImage=lambda **_k: MockModel()),
+            "mflux.models.z_image.latent_creator.z_image_latent_creator": MagicMock(
+                ZImageLatentCreator=MagicMock(
+                    unpack_latents=lambda _lat, _h, _w: MockLatentArray((1, 16, 480, 480))
+                )
+            ),
+            "mflux.models.common.vae.vae_util": MagicMock(VAEUtil=MockVAEUtil),
+            "mflux.utils.image_util": MagicMock(ImageUtil=MagicMock(to_pil=lambda _dec: mock_pil_img)),
+            "mlx.core": MagicMock(),
+        },
+    ):
+        rt = MFluxImageRuntime(store)
+        res = rt.generate(
+            man,
+            prompt="test 4k prompt",
+            size="3840x3840",
+            num_inference_steps=1,
+            step_callback=lambda *args: None,
+        )
+
+    assert len(res) == 1
+    assert len(decoded_latents) >= 1
+    # Verify the preview latent was strided down so max dimension is <= 64 (avoiding 106 GB allocation)
+    preview_lat = decoded_latents[-1]
+    assert preview_lat.shape[2] <= 64
+    assert preview_lat.shape[3] <= 64
+
+
+def test_high_ram_mac_budget_and_upscaling(tmp_path, monkeypatch):
+    """Verify that >36GB Macs default to 2048x2048 diffusion + Lanczos upscale, with PANTRY_IMAGE_ALLOW_4K opt-in."""
+    from PIL import Image
+
+    monkeypatch.setattr("pantry.image_runtime._swap_used_gb", lambda: 0.0)
+    monkeypatch.setattr("pantry.image_runtime._host_ram_gb", lambda: 64.0)
+    monkeypatch.setattr("pantry.image_runtime._enable_mflux_low_ram", lambda *_a, **_k: None)
+
+    store = PackageStore(tmp_path / "home")
+    store.ensure()
+    man = PackageManifest(
+        id="vdplabs.z-image-turbo.standard.v1",
+        family="z-image",
+        modalities=["image_gen"],
+        ram_gb_min=10.0,
+        bits_approx=4.0,
+        quant_method="mflux-4bit",
+        runtime={"primary": "mflux", "hf_repo": "test/z-image"},
+    )
+
+    recorded_kwargs = []
+
+    class MockModel:
+        def __init__(self):
+            self.text_encoder = object()
+            self.transformer = object()
+            self.vae = object()
+
+        def generate_image(self, **kwargs):
+            recorded_kwargs.append(kwargs)
+            return Image.new("RGB", (kwargs.get("width", 1024), kwargs.get("height", 1024)), color="green")
+
+    from unittest.mock import MagicMock, patch
+
+    with patch.dict(
+        "sys.modules",
+        {
+            "mflux": MagicMock(),
+            "mflux.models.common.config.model_config": MagicMock(),
+            "mflux.models.z_image.variants.z_image": MagicMock(ZImage=lambda **_k: MockModel()),
+            "mflux.models.z_image.latent_creator.z_image_latent_creator": MagicMock(),
+            "mflux.models.common.vae.vae_util": MagicMock(),
+            "mlx.core": MagicMock(),
+        },
+    ):
+        rt = MFluxImageRuntime(store)
+
+        # 1. Default on 64 GB Mac: capped at 2048x2048 for diffusion, upscaled to 3840x3840
+        monkeypatch.delenv("PANTRY_IMAGE_ALLOW_4K", raising=False)
+        res = rt.generate(man, prompt="4k studio prompt", size="3840x3840", num_inference_steps=4)
+        assert recorded_kwargs[-1]["width"] == 2048
+        assert recorded_kwargs[-1]["height"] == 2048
+        assert res[0]["width"] == 3840
+        assert res[0]["height"] == 3840
+
+        # 2. Opt-in via PANTRY_IMAGE_ALLOW_4K=1: native 3840x3840 diffusion
+        monkeypatch.setenv("PANTRY_IMAGE_ALLOW_4K", "1")
+        res_4k = rt.generate(man, prompt="4k native prompt", size="3840x3840", num_inference_steps=4)
+        assert recorded_kwargs[-1]["width"] == 3840
+        assert recorded_kwargs[-1]["height"] == 3840
+        assert res_4k[0]["width"] == 3840
+        assert res_4k[0]["height"] == 3840
+
+
+
 
 
 
