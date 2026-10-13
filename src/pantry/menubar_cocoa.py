@@ -101,17 +101,9 @@ def _title_for_body(body: Any) -> str:
 class PantryBar(NSObject):
     """Owns the NSStatusItem, the NSPopover, and the native bridge."""
 
-    def configure(
-        self,
-        host: str,
-        port: int,
-        embedded: bool,
-        on_quit: Callable[[], None] | None,
-        serve_cmd: str,
-        total_ram_gb: float,
-        health_fn: Callable[[], dict | None],
-        notify_fn: Callable[[str, str], None],
-    ) -> "PantryBar":
+    def configureWithHost_port_embedded_onQuit_serveCmd_totalRamGb_healthFn_notifyFn_(
+        self, host, port, embedded, on_quit, serve_cmd, total_ram_gb, health_fn, notify_fn
+    ):
         self.host = host
         self.port = port
         self.embedded = embedded
@@ -284,14 +276,7 @@ def run_popover(
     """Create the status item + popover and run the Cocoa event loop."""
     app = NSApplication.sharedApplication()
     bar = PantryBar.alloc().init()
-    bar.configure(
-        host=host,
-        port=port,
-        embedded=embedded,
-        on_quit=on_quit,
-        serve_cmd=serve_cmd,
-        total_ram_gb=total_ram_gb,
-        health_fn=health_fn,
-        notify_fn=notify_fn,
+    bar.configureWithHost_port_embedded_onQuit_serveCmd_totalRamGb_healthFn_notifyFn_(
+        host, port, embedded, on_quit, serve_cmd, total_ram_gb, health_fn, notify_fn
     )
     app.run()
