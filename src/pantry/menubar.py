@@ -662,7 +662,7 @@ def run_menubar(
             )
 
         def on_open_chat(self, _: rumps.MenuItem) -> None:
-            subprocess.Popen(["open", "http://localhost:3000"])
+            subprocess.Popen(["open", f"http://{self._host}:{self._port}/"])
 
         def on_open_memory(self, _: rumps.MenuItem) -> None:
             subprocess.Popen(
