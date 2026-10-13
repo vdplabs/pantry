@@ -89,6 +89,17 @@
   }
   .footer .actions { display: flex; gap: 8px; }
   .empty { color: var(--sub); font-size: 12.5px; padding: 6px; }
+  .section-head { display: flex; align-items: center; justify-content: space-between; margin: 4px 0 6px; }
+  .section-head .section-title { margin: 0; }
+  .linkbtn { color: var(--accent); font-size: 12.5px; cursor: pointer; }
+  .mem { display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-radius: 8px; cursor: pointer; }
+  .mem:hover { background: var(--hover); }
+  .memdot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .memdot.ok { background: var(--ok); }
+  .memdot.elevated { background: var(--warn); }
+  .memdot.critical { background: #ff453a; }
+  .memdetails { margin: 2px 0 4px 26px; font-size: 12px; color: var(--sub); }
+  .memdetails div { padding: 2px 0; }
   .offline { text-align: center; padding: 36px 20px; color: var(--sub); }
   .offline h2 { color: var(--text); font-size: 15px; margin-bottom: 8px; }
   .offline p { font-size: 12.5px; margin-bottom: 14px; }
@@ -115,7 +126,7 @@
 
   var state = {
     booted: false, health: null, models: [],
-    installing: {}, busy: {}, expanded: {}, offline: false
+    installing: {}, busy: {}, expanded: {}, memOpen: false, offline: false
   };
 
   function esc(s) {
@@ -193,19 +204,45 @@
     }).slice(0, 6);
   }
 
-  async function toggleLoad(m) {
-    var pid = m.package_id;
-    var loaded = (state.health && state.health.loaded || []).indexOf(pid) >= 0;
+  async function setLoaded(pid, wantLoaded) {
     state.busy[pid] = true; render();
     try {
-      await api(loaded ? "/v1/unload" : "/v1/load", {
+      await api(wantLoaded ? "/v1/load" : "/v1/unload", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ package_id: pid })
       });
     } catch (e) {
-      bridge("notify", { title: (loaded ? "Unload" : "Load") + " failed", body: String(e).slice(0, 120) });
+      bridge("notify", { title: (wantLoaded ? "Load" : "Unload") + " failed", body: String(e).slice(0, 120) });
     }
     delete state.busy[pid];
+    refresh();
+  }
+
+  async function toggleLoad(m) {
+    var pid = m.package_id;
+    var loaded = (state.health && state.health.loaded || []).indexOf(pid) >= 0;
+    setLoaded(pid, !loaded);
+  }
+
+  async function unloadAll() {
+    try {
+      await api("/v1/unload", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: "{}"
+      });
+      bridge("notify", { title: "Unloaded", body: "All models unloaded" });
+    } catch (e) {
+      bridge("notify", { title: "Unload failed", body: String(e).slice(0, 120) });
+    }
+    refresh();
+  }
+
+  async function clearCache() {
+    try {
+      await api("/v1/memory/clear", { method: "POST" });
+      bridge("notify", { title: "Cleared", body: "Metal / MLX free cache" });
+    } catch (e) {
+      bridge("notify", { title: "Clear failed", body: String(e).slice(0, 120) });
+    }
     refresh();
   }
 
@@ -263,8 +300,8 @@
     var busy = state.busy[pid];
     var right;
     if (busy) right = '<div class="spinner"></div>';
-    else if (loaded) right = '<div class="dot" title="loaded"></div>';
-    else right = "";
+    else if (loaded) right = '<button class="btn" data-unload="' + esc(pid) + '">Unload</button>';
+    else right = '<button class="btn primary" data-load="' + esc(pid) + '">Load</button>';
     return '<div class="row" data-pid="' + esc(pid) + '">' +
       '<div class="icon" style="background:hsl(' + hueFor(m.family || "?") + ',55%,45%)">' +
       esc((m.family || "?").charAt(0).toUpperCase()) + "</div>" +
@@ -287,9 +324,40 @@
     var html = '<div class="header"><h1>pantry</h1>' +
       '<span class="webui" id="webui">WebUI</span></div>' +
       '<div class="baseurl">Base URL: ' + esc(P.host) + ":" + esc(P.port) + '/v1 ' +
-      '<span class="copy" id="copyurl" title="Copy base URL">⧉</span></div><hr>' +
+      '<span class="copy" id="copyurl" title="Copy base URL">⧉</span></div>';
 
-      '<div class="section-title">Installed <span class="link" id="modelslink">models</span></div><div id="installed">';
+    var mem = h.memory || {};
+    var pressure = String(mem.pressure || "ok");
+    var dotCls = pressure === "critical" ? "critical" : pressure === "elevated" ? "elevated" : "ok";
+    html += '<div class="mem" id="memrow">' +
+      '<div class="memdot ' + dotCls + '"></div>' +
+      '<div class="main"><div class="name">Memory · ' + esc(pressure) + "</div>" +
+      '<div class="sub">' + esc(mem.active_human || "—") + " active · " +
+      esc(mem.peak_human || "—") + " peak</div></div>" +
+      '<button class="btn" id="clearcache">Clear cache</button></div>';
+    if (state.memOpen) {
+      var limits = mem.limits || {};
+      var dlines = [
+        ["Pressure", pressure],
+        ["Active heap", mem.active_human || "—"],
+        ["Peak heap", mem.peak_human || "—"],
+        ["Free cache", mem.cache_human || "—"]
+      ];
+      if (limits.cache_limit_human) dlines.push(["Cache cap", limits.cache_limit_human]);
+      if (limits.memory_limit_human) dlines.push(["Memory guideline", limits.memory_limit_human]);
+      if (mem.message) dlines.push(["Note", String(mem.message).slice(0, 80)]);
+      html += '<div class="memdetails">' + dlines.map(function (l) {
+        return "<div>" + esc(l[0]) + ": " + esc(l[1]) + "</div>";
+      }).join("") + "</div>";
+    }
+
+    html += "<hr>";
+
+    var anyLoaded = installed.some(function (m) { return !!loadedSet[m.package_id]; });
+    html += '<div class="section-head"><div class="section-title">Installed ' +
+      '<span class="link" id="modelslink">models</span></div>' +
+      (anyLoaded ? '<span class="linkbtn" id="unloadall">Unload all</span>' : "") +
+      '</div><div id="installed">';
     if (!installed.length) html += '<div class="empty">Nothing installed yet — pick one below.</div>';
     installed.forEach(function (m) {
       html += rowHtml(m, !!loadedSet[m.package_id]);
@@ -352,11 +420,31 @@
     on("#settings", "click", function () { bridge("open", { url: BASE + "/dashboard" }); });
     on("#quit", "click", function () { bridge("quit", {}); });
     on("#startserve", "click", function () { bridge("serve-start", {}); });
+    on("#unloadall", "click", function () { unloadAll(); });
+    on("#clearcache", "click", function (e) { e.stopPropagation(); clearCache(); });
+    on("#memrow", "click", function (e) {
+      if (e.target.closest("button")) return;
+      state.memOpen = !state.memOpen;
+      render();
+    });
     el.querySelectorAll("#installed .row").forEach(function (row) {
-      row.addEventListener("click", function () {
+      row.addEventListener("click", function (e) {
+        if (e.target.closest("button")) return;
         var pid = row.getAttribute("data-pid");
         var m = state.models.filter(function (x) { return x.package_id === pid; })[0];
         if (m) toggleLoad(m);
+      });
+    });
+    el.querySelectorAll("[data-load]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        setLoaded(btn.getAttribute("data-load"), true);
+      });
+    });
+    el.querySelectorAll("[data-unload]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        setLoaded(btn.getAttribute("data-unload"), false);
       });
     });
     el.querySelectorAll(".row.fam").forEach(function (row) {
