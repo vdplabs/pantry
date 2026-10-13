@@ -29,8 +29,11 @@ def _health(host: str, port: int, timeout: float = 4.5) -> dict | None:
     return body if isinstance(body, dict) else None
 
 
-def _models(host: str, port: int, timeout: float = 4.5) -> list[dict[str, Any]]:
-    body = _get(f"http://{host}:{port}/v1/models?ready_only=1", timeout=timeout)
+def _models(
+    host: str, port: int, timeout: float = 4.5, *, ready_only: bool = True
+) -> list[dict[str, Any]]:
+    qs = "?ready_only=1" if ready_only else ""
+    body = _get(f"http://{host}:{port}/v1/models{qs}", timeout=timeout)
     if not isinstance(body, dict):
         return []
     data = body.get("data") or []
@@ -76,6 +79,53 @@ def _copy(text: str) -> None:
         )
     except OSError:
         pass
+
+
+def _total_ram_gb() -> float:
+    """Total physical RAM in GiB. The menubar is macOS-only, so sysctl is fine."""
+    try:
+        out = subprocess.check_output(
+            ["sysctl", "-n", "hw.memsize"], text=True, stderr=subprocess.DEVNULL
+        )
+        return int(out.strip()) / (1024**3)
+    except Exception:  # noqa: BLE001
+        return 0.0
+
+
+_RECOMMENDED_ROLES = ("chat", "reasoning", "code")
+_TIER_RANK = {"standard": 0, "compact": 1}
+
+
+def _pick_recommended(
+    models: list[dict[str, Any]], total_ram_gb: float, limit: int = 3
+) -> list[dict[str, Any]]:
+    """Pick models worth recommending for one-click install.
+
+    Llama-macOS-style: only models not yet pulled, whose comfortable RAM
+    footprint fits in a conservative slice of this Mac's unified memory.
+    One pick per role, preferring the higher quality tier.
+    """
+    if total_ram_gb <= 0:
+        return []
+    budget = total_ram_gb * 0.6
+    picks: list[dict[str, Any]] = []
+    for role in _RECOMMENDED_ROLES:
+        cands = [
+            m
+            for m in models
+            if not m.get("weights_ready")
+            and m.get("role") == role
+            and 0 < (m.get("ram_gb_comfortable") or 0) <= budget
+        ]
+        cands.sort(
+            key=lambda m: (
+                _TIER_RANK.get(str(m.get("quality_tier")), 9),
+                -(m.get("params_b") or 0),
+            )
+        )
+        if cands:
+            picks.append(cands[0])
+    return picks[:limit]
 
 
 def rumps_available() -> bool:
@@ -144,12 +194,16 @@ def run_menubar(
             self._is_refreshing = False
             self._serve_proc: subprocess.Popen[bytes] | None = None
             self._loaded: set[str] = set()
+            self._installing: set[str] = set()
+            self._total_ram_gb = _total_ram_gb()
 
             self.status_item = rumps.MenuItem("Status: …")
             self.memory_item = rumps.MenuItem("Memory: …")
             self.memory_menu = rumps.MenuItem("Unified memory")
+            self.recommended_menu = rumps.MenuItem("Recommended for this Mac")
             self.models_menu = rumps.MenuItem("Models")
             self.loaded_menu = rumps.MenuItem("Loaded")
+            self.open_chat = rumps.MenuItem("Open Chat", callback=self.on_open_chat)
             self.open_health = rumps.MenuItem(
                 "Open /v1/health", callback=self.on_open_health
             )
@@ -175,14 +229,17 @@ def run_menubar(
             self.models_menu.add(rumps.MenuItem("(loading…)"))
             self.loaded_menu.add(rumps.MenuItem("(loading…)"))
             self.memory_menu.add(rumps.MenuItem("(loading…)"))
+            self.recommended_menu.add(rumps.MenuItem("(loading…)"))
 
             self.menu = [
                 self.status_item,
                 self.memory_item,
                 self.memory_menu,
+                self.recommended_menu,
                 self.models_menu,
                 self.loaded_menu,
                 None,
+                self.open_chat,
                 self.open_health,
                 self.open_memory,
                 self.serve_item,
@@ -262,6 +319,99 @@ def run_menubar(
                 return
             rumps.notification("pantry", "Cleared", "Metal / MLX free cache")
             self.refresh()
+
+        @staticmethod
+        def _on_main(fn: Callable[[], None]) -> None:
+            """Run fn on the Cocoa main thread (rumps is not thread-safe)."""
+            try:
+                from PyObjCTools.AppHelper import callAfter
+
+                callAfter(fn)
+            except Exception:  # noqa: BLE001
+                fn()
+
+        def _pull(self, package_id: str, alias: str) -> None:
+            """One-click install: pull a model package in the background."""
+            if package_id in self._installing:
+                return
+            self._installing.add(package_id)
+            rumps.notification("pantry", "Installing", f"{alias} — this can take a while")
+            self.refresh()
+
+            def _worker() -> None:
+                try:
+                    r = httpx.post(
+                        f"http://{self._host}:{self._port}/v1/pull",
+                        json={"package_id": package_id},
+                        timeout=1800.0,
+                    )
+                    r.raise_for_status()
+                except Exception as e:  # noqa: BLE001
+                    err = str(e)[:140]
+
+                    def _fail() -> None:
+                        rumps.notification(
+                            "pantry", "Install failed", f"{alias}: {err}"
+                        )
+
+                    self._on_main(_fail)
+                else:
+
+                    def _done() -> None:
+                        rumps.notification(
+                            "pantry",
+                            "Installed",
+                            f"{alias} — open Models to load it",
+                        )
+
+                    self._on_main(_done)
+                finally:
+                    self._installing.discard(package_id)
+                    self._on_main(self.refresh)
+
+            import threading
+
+            threading.Thread(
+                target=_worker, daemon=True, name="pantry-menubar-pull"
+            ).start()
+
+        def _refresh_recommended(self, models: list[dict[str, Any]] | None) -> None:
+            self._clear_submenu(self.recommended_menu)
+            if models is None:
+                self._placeholder(self.recommended_menu, "(offline)")
+                return
+            if self._total_ram_gb <= 0:
+                self._placeholder(self.recommended_menu, "(unavailable)")
+                return
+            picks = _pick_recommended(models, self._total_ram_gb)
+            if not picks:
+                row = rumps.MenuItem("Everything recommended is installed ✓")
+                row.set_callback(None)
+                self.recommended_menu.add(row)
+                return
+            for m in picks:
+                alias = str(m.get("id") or "?")
+                package_id = str(m.get("package_id") or alias)
+                gb = m.get("ram_gb_comfortable") or 0
+                params = m.get("params_b") or 0
+                root = rumps.MenuItem(f"{alias} · {params:g}B · ~{gb:g} GB")
+                if package_id in self._installing:
+                    busy = rumps.MenuItem("Installing…")
+                    busy.set_callback(None)
+                    root.add(busy)
+                else:
+                    install = rumps.MenuItem("Install")
+
+                    def on_install(
+                        _: rumps.MenuItem,
+                        pid: str = package_id,
+                        name: str = alias,
+                    ) -> None:
+                        self._pull(pid, name)
+
+                    install.set_callback(on_install)
+                    root.add(install)
+                self.recommended_menu.add(root)
 
         def _model_submenu(
             self, *, alias: str, package_id: str, loaded: bool
@@ -348,11 +498,15 @@ def run_menubar(
             def _worker() -> None:
                 body = None
                 models = None
+                models_all = None
                 listening = False
                 try:
                     body = _health(self._host, self._port, timeout=4.5)
                     if body is not None:
                         models = _models(self._host, self._port, timeout=4.5)
+                        models_all = _models(
+                            self._host, self._port, timeout=4.5, ready_only=False
+                        )
                     else:
                         listening = bool(self._embedded or _pids_on_port(self._port))
                 except Exception:
@@ -360,7 +514,7 @@ def run_menubar(
 
                 def _ui() -> None:
                     try:
-                        self._apply_refresh(body, models, listening)
+                        self._apply_refresh(body, models, models_all, listening)
                     finally:
                         self._is_refreshing = False
 
@@ -381,6 +535,7 @@ def run_menubar(
             self,
             body: dict | None,
             models: list[dict[str, Any]] | None,
+            models_all: list[dict[str, Any]] | None,
             listening: bool,
         ) -> None:
             if body is None:
@@ -409,6 +564,7 @@ def run_menubar(
                     self.serve_item.title = "Start pantry serve"
                 self._placeholder(self.models_menu, "(offline)")
                 self._placeholder(self.loaded_menu, "(offline)")
+                self._placeholder(self.recommended_menu, "(offline)")
                 return
 
             self._consecutive_failures = 0
@@ -449,6 +605,8 @@ def run_menubar(
                 self.serve_item.title = f"Serving on {self._host}:{self._port}"
             else:
                 self.serve_item.title = "Stop pantry serve"
+
+            self._refresh_recommended(models_all)
 
             if models is not None:
                 self._clear_submenu(self.models_menu)
@@ -502,6 +660,9 @@ def run_menubar(
             subprocess.Popen(
                 ["open", f"http://{self._host}:{self._port}/v1/health"]
             )
+
+        def on_open_chat(self, _: rumps.MenuItem) -> None:
+            subprocess.Popen(["open", f"http://{self._host}:{self._port}/"])
 
         def on_open_memory(self, _: rumps.MenuItem) -> None:
             subprocess.Popen(

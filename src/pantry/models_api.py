@@ -55,6 +55,9 @@ def list_model_entries(
             "template_family": p.template_family,
             "runtime": p.runtime.primary,
             "weights_ready": ready,
+            "params_b": p.params_b,
+            "ram_gb_min": p.ram_gb_min,
+            "ram_gb_comfortable": p.ram_gb_comfortable,
         }
         data.append(row)
         if include_package_ids and p.id != primary:
