@@ -35,7 +35,7 @@ from AppKit import (
     NSPopover,
     NSPopoverBehaviorApplicationDefined,
 )
-from Foundation import NSURL
+from Foundation import NSObject, NSURL
 from WebKit import WKWebView, WKWebViewConfiguration
 
 from pantry.menubar import _pids_on_port, _stop_serve
