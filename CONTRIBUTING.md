@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing to **Pantry**! Pantry is an open-source local and cluster AI model host built for Apple Silicon and Linux (NVIDIA CUDA).
 
-Pantry is released under the [MIT License](LICENSE). We welcome contributions of all kinds: bug fixes, performance optimizations, new model manifests in the catalog, new inference runtime adapters, and documentation improvements.
+Pantry is released under the [Apache License 2.0](LICENSE). We welcome contributions of all kinds: bug fixes, performance optimizations, new model manifests in the catalog, new inference runtime adapters, and documentation improvements.
 
 ---
 

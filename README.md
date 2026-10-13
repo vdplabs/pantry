@@ -5,7 +5,7 @@
 # pantry
 
 <p align="center">
-  <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT" /></a>
+  <a href="https://opensource.org/licenses/Apache-2.0"><img src="https://img.shields.io/badge/License-Apache_2.0-blue.svg" alt="License: Apache 2.0" /></a>
   <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/Python-3.11+-blue.svg" alt="Python: 3.11+" /></a>
   <a href="https://github.com/vdplabs/pantry/actions"><img src="https://img.shields.io/badge/CI-Passing-brightgreen.svg" alt="CI: Passing" /></a>
   <a href="#cross-platform-execution"><img src="https://img.shields.io/badge/Hardware-Apple%20Silicon%20%7C%20CUDA%20DGX-success.svg" alt="Hardware: Apple Silicon & CUDA" /></a>
@@ -211,11 +211,11 @@ We welcome contributions from the community! Check out our [Contributing Guide](
 
 ## 📄 License & Patent Notice
 
-Pantry is licensed under the **[MIT License](LICENSE)**:
+Pantry is licensed under the **[Apache License 2.0](LICENSE)**:
 
 ```
-MIT License
-Copyright (c) 2026 VDP Labs
+Apache License 2.0
+Copyright 2026 VDP Labs
 ```
 
-The underlying technical architecture is subject to **U.S. Provisional Patent Application # 64/148,883** (*Shared Unified Memory Storage & Host Model Management for Local and Edge Intelligence*). VDP Labs grants royalty-free permission to use, copy, modify, and distribute this software under the terms of the MIT License.
+The underlying technical architecture is subject to **U.S. Provisional Patent Application # 64/148,883** (*Shared Unified Memory Storage & Host Model Management for Local and Edge Intelligence*). VDP Labs grants royalty-free permission to use, copy, modify, and distribute this software under the terms of the Apache License 2.0.
