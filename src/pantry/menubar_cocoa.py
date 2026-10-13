@@ -103,7 +103,6 @@ class PantryBar(NSObject):
 
     def configure(
         self,
-        *,
         host: str,
         port: int,
         embedded: bool,
