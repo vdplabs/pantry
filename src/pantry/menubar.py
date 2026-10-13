@@ -128,7 +128,13 @@ def run_menubar(
 
     import rumps
 
-    from pantry.menubar_cocoa import run_popover
+    try:
+        from pantry.menubar_cocoa import run_popover
+    except ImportError as e:
+        raise SystemExit(
+            "Menu bar needs the WebKit bindings: pip install 'pyobjc-framework-WebKit'"
+            f" (or reinstall with: pip install 'pantry[menubar]'). Details: {e}"
+        ) from e
 
     def _notify(title: str, body: str) -> None:
         try:
