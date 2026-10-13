@@ -553,7 +553,7 @@ def _patent_impl(
                 "Docs/Patent/Pantry Patent Specification.pdf",
                 "Docs/Patent/Pantry Patent Drawings.pdf",
             ],
-            "license": "MIT License (Open Source Reference Implementation)",
+            "license": "Apache License 2.0 (Open Source Reference Implementation)",
             "specification_doc": "Docs/Patent-Claims.md",
         },
         "claims": [

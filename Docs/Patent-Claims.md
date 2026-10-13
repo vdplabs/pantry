@@ -6,7 +6,7 @@
 | **Filing Type** | U.S. Patent Application |
 | **Assignee** | VDP Labs |
 | **Formal Documents** | [`Docs/Patent/Pantry Patent Specification.pdf`](Patent/Pantry%20Patent%20Specification.pdf) · [`Docs/Patent/Pantry Patent Drawings.pdf`](Patent/Pantry%20Patent%20Drawings.pdf) |
-| **Open Source Reference Implementation** | [Pantry](https://github.com/vdplabs/pantry) (Released under the [MIT License](../LICENSE)) |
+| **Open Source Reference Implementation** | [Pantry](https://github.com/vdplabs/pantry) (Released under the [Apache License 2.0](../LICENSE)) |
 | **Related Specifications** | [RFC-0004](https://github.com/vdplabs/sink/blob/main/Docs/RFC-0004-mac-model-host.md), [RFC-0005](https://github.com/vdplabs/sink/blob/main/Docs/RFC-0005-capability-resolve-pull-run.md), [RFC-0006](https://github.com/vdplabs/sink/blob/main/Docs/RFC-0006-chunked-cas-quantization-dedup.md) |
 
 ---
@@ -167,11 +167,11 @@ pantry patent --json
 
 ## Open Source Licensing & Public Implementation Rights
 
-The Pantry codebase is distributed under the permissive **[MIT License](../LICENSE)**:
+The Pantry codebase is distributed under the **[Apache License 2.0](../LICENSE)**:
 
 ```
-MIT License
-Copyright (c) 2026 VDP Labs
+Apache License 2.0
+Copyright 2026 VDP Labs
 ```
 
-VDP Labs grants royalty-free permission to any person obtaining a copy of this software to use, copy, modify, merge, publish, distribute, sublicense, and sell copies of the Software in accordance with the MIT License terms.
+VDP Labs grants royalty-free permission to any person obtaining a copy of this software to use, copy, modify, merge, publish, distribute, sublicense, and sell copies of the Software in accordance with the Apache License 2.0 terms.
