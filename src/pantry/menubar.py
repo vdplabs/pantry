@@ -1,9 +1,14 @@
 from __future__ import annotations
 
-"""Mac menu bar status item for pantry.
+"""Mac menu bar popover for pantry (LlamaBarn-style dropdown).
 
-Opened automatically by ``pantry serve`` when rumps is installed
+Opened automatically by ``pantry serve`` when the menubar extra is installed
 (``pip install 'pantry[menubar]'``). Pass ``--no-menubar`` for HTTP-only.
+
+The dropdown is a native NSPopover hosting a WKWebView that renders
+``static/menubar.html`` and talks to the daemon over HTTP — see
+``pantry.menubar_cocoa``. Python owns the status item, the popover
+lifecycle, and a small native bridge; all UI state lives in the page.
 """
 
 import signal
@@ -27,17 +32,6 @@ def _get(url: str, timeout: float = 4.5) -> dict | list | None:
 def _health(host: str, port: int, timeout: float = 4.5) -> dict | None:
     body = _get(f"http://{host}:{port}/v1/health", timeout=timeout)
     return body if isinstance(body, dict) else None
-
-
-def _models(
-    host: str, port: int, timeout: float = 4.5, *, ready_only: bool = True
-) -> list[dict[str, Any]]:
-    qs = "?ready_only=1" if ready_only else ""
-    body = _get(f"http://{host}:{port}/v1/models{qs}", timeout=timeout)
-    if not isinstance(body, dict):
-        return []
-    data = body.get("data") or []
-    return [m for m in data if isinstance(m, dict)]
 
 
 def _pids_on_port(port: int) -> list[int]:
@@ -70,17 +64,6 @@ def _stop_serve(port: int) -> int:
     return killed
 
 
-def _copy(text: str) -> None:
-    try:
-        subprocess.run(
-            ["pbcopy"],
-            input=text.encode("utf-8"),
-            check=False,
-        )
-    except OSError:
-        pass
-
-
 def _total_ram_gb() -> float:
     """Total physical RAM in GiB. The menubar is macOS-only, so sysctl is fine."""
     try:
@@ -92,43 +75,8 @@ def _total_ram_gb() -> float:
         return 0.0
 
 
-_RECOMMENDED_ROLES = ("chat", "reasoning", "code")
-_TIER_RANK = {"standard": 0, "compact": 1}
-
-
-def _pick_recommended(
-    models: list[dict[str, Any]], total_ram_gb: float, limit: int = 3
-) -> list[dict[str, Any]]:
-    """Pick models worth recommending for one-click install.
-
-    Llama-macOS-style: only models not yet pulled, whose comfortable RAM
-    footprint fits in a conservative slice of this Mac's unified memory.
-    One pick per role, preferring the higher quality tier.
-    """
-    if total_ram_gb <= 0:
-        return []
-    budget = total_ram_gb * 0.6
-    picks: list[dict[str, Any]] = []
-    for role in _RECOMMENDED_ROLES:
-        cands = [
-            m
-            for m in models
-            if not m.get("weights_ready")
-            and m.get("role") == role
-            and 0 < (m.get("ram_gb_comfortable") or 0) <= budget
-        ]
-        cands.sort(
-            key=lambda m: (
-                _TIER_RANK.get(str(m.get("quality_tier")), 9),
-                -(m.get("params_b") or 0),
-            )
-        )
-        if cands:
-            picks.append(cands[0])
-    return picks[:limit]
-
-
 def rumps_available() -> bool:
+    """Whether the menubar UI can run (the ``pantry[menubar]`` extra)."""
     try:
         import rumps  # noqa: F401
 
@@ -166,555 +114,35 @@ def run_menubar(
     on_quit: Callable[[], None] | None = None,
     serve_cmd: str | None = None,
 ) -> None:
-    """Run the status item.
+    """Run the status item + popover.
 
     *embedded*: serve is already running in this process (default path via
     ``pantry serve``). Quit stops serve via *on_quit*.
     """
     set_accessory_activation_policy()
 
-    try:
-        import rumps
-    except ImportError as e:
+    if not rumps_available():
         raise SystemExit(
-            "Menu bar requires rumps. Install with: pip install 'pantry[menubar]'"
-        ) from e
-
-    class PantryMenuApp(rumps.App):
-        def __init__(self) -> None:
-            set_accessory_activation_policy()
-            super().__init__("pantry", title="P", quit_button=None)
-            self._host = host
-            self._port = port
-            self._embedded = embedded
-            self._on_quit = on_quit
-            self._serve_cmd = serve_cmd or "pantry"
-            self._online = False
-            self._consecutive_failures = 0
-            self._is_refreshing = False
-            self._serve_proc: subprocess.Popen[bytes] | None = None
-            self._loaded: set[str] = set()
-            self._installing: set[str] = set()
-            self._total_ram_gb = _total_ram_gb()
-
-            self.status_item = rumps.MenuItem("Status: …")
-            self.memory_item = rumps.MenuItem("Memory: …")
-            self.memory_menu = rumps.MenuItem("Unified memory")
-            self.recommended_menu = rumps.MenuItem("Recommended for this Mac")
-            self.models_menu = rumps.MenuItem("Models")
-            self.loaded_menu = rumps.MenuItem("Loaded")
-            self.open_chat = rumps.MenuItem("Open Chat", callback=self.on_open_chat)
-            self.open_health = rumps.MenuItem(
-                "Open /v1/health", callback=self.on_open_health
-            )
-            self.open_memory = rumps.MenuItem(
-                "Open /v1/memory", callback=self.on_open_memory
-            )
-
-            if embedded:
-                self.serve_item = rumps.MenuItem(
-                    f"Serving on {host}:{port}", callback=None
-                )
-                self.quit_item = rumps.MenuItem(
-                    "Quit pantry", callback=self.on_quit
-                )
-            else:
-                self.serve_item = rumps.MenuItem(
-                    "Start pantry serve", callback=self.on_serve_toggle
-                )
-                self.quit_item = rumps.MenuItem(
-                    "Quit Pantry Menu", callback=self.on_quit
-                )
-
-            self.models_menu.add(rumps.MenuItem("(loading…)"))
-            self.loaded_menu.add(rumps.MenuItem("(loading…)"))
-            self.memory_menu.add(rumps.MenuItem("(loading…)"))
-            self.recommended_menu.add(rumps.MenuItem("(loading…)"))
-
-            self.menu = [
-                self.status_item,
-                self.memory_item,
-                self.memory_menu,
-                self.recommended_menu,
-                self.models_menu,
-                self.loaded_menu,
-                None,
-                self.open_chat,
-                self.open_health,
-                self.open_memory,
-                self.serve_item,
-                None,
-                self.quit_item,
-            ]
-            self.refresh()
-
-        @staticmethod
-        def _clear_submenu(menu: rumps.MenuItem) -> None:
-            if getattr(menu, "_menu", None) is None:
-                return
-            menu.clear()
-
-        def _placeholder(self, menu: rumps.MenuItem, title: str) -> None:
-            self._clear_submenu(menu)
-            item = rumps.MenuItem(title)
-            item.set_callback(None)
-            menu.add(item)
-
-        def _copy_id(self, text: str, label: str) -> None:
-            _copy(text)
-            rumps.notification("pantry", "Copied", f"{label}: {text}")
-
-        def _load(self, package_id: str) -> None:
-            try:
-                r = httpx.post(
-                    f"http://{self._host}:{self._port}/v1/load",
-                    json={"package_id": package_id},
-                    timeout=5.0,
-                )
-                r.raise_for_status()
-            except Exception as e:  # noqa: BLE001
-                rumps.notification(
-                    "pantry",
-                    "Load failed",
-                    f"{package_id}: {e}",
-                )
-                return
-            rumps.notification(
-                "pantry",
-                "Loaded",
-                package_id,
-            )
-            self.refresh()
-
-        def _unload(self, package_id: str | None) -> None:
-            try:
-                r = httpx.post(
-                    f"http://{self._host}:{self._port}/v1/unload",
-                    json={"package_id": package_id},
-                    timeout=3.0,
-                )
-                r.raise_for_status()
-            except Exception as e:  # noqa: BLE001
-                rumps.notification(
-                    "pantry",
-                    "Unload failed",
-                    f"{package_id or 'all'}: {e}",
-                )
-                return
-            rumps.notification(
-                "pantry",
-                "Unloaded",
-                package_id or "all loaded packages",
-            )
-            self.refresh()
-
-        def _clear_memory(self) -> None:
-            try:
-                httpx.post(
-                    f"http://{self._host}:{self._port}/v1/memory/clear",
-                    timeout=5.0,
-                )
-            except Exception:  # noqa: BLE001
-                rumps.notification("pantry", "Clear failed", "Metal cache")
-                return
-            rumps.notification("pantry", "Cleared", "Metal / MLX free cache")
-            self.refresh()
-
-        @staticmethod
-        def _on_main(fn: Callable[[], None]) -> None:
-            """Run fn on the Cocoa main thread (rumps is not thread-safe)."""
-            try:
-                from PyObjCTools.AppHelper import callAfter
-
-                callAfter(fn)
-            except Exception:  # noqa: BLE001
-                fn()
-
-        def _pull(self, package_id: str, alias: str) -> None:
-            """One-click install: pull a model package in the background."""
-            if package_id in self._installing:
-                return
-            self._installing.add(package_id)
-            rumps.notification("pantry", "Installing", f"{alias} — this can take a while")
-            self.refresh()
-
-            def _worker() -> None:
-                try:
-                    r = httpx.post(
-                        f"http://{self._host}:{self._port}/v1/pull",
-                        json={"package_id": package_id},
-                        timeout=1800.0,
-                    )
-                    r.raise_for_status()
-                except Exception as e:  # noqa: BLE001
-                    err = str(e)[:140]
-
-                    def _fail() -> None:
-                        rumps.notification(
-                            "pantry", "Install failed", f"{alias}: {err}"
-                        )
-
-                    self._on_main(_fail)
-                else:
-
-                    def _done() -> None:
-                        rumps.notification(
-                            "pantry",
-                            "Installed",
-                            f"{alias} — open Models to load it",
-                        )
-
-                    self._on_main(_done)
-                finally:
-                    self._installing.discard(package_id)
-                    self._on_main(self.refresh)
-
-            import threading
-
-            threading.Thread(
-                target=_worker, daemon=True, name="pantry-menubar-pull"
-            ).start()
-
-        def _refresh_recommended(self, models: list[dict[str, Any]] | None) -> None:
-            self._clear_submenu(self.recommended_menu)
-            if models is None:
-                self._placeholder(self.recommended_menu, "(offline)")
-                return
-            if self._total_ram_gb <= 0:
-                self._placeholder(self.recommended_menu, "(unavailable)")
-                return
-            picks = _pick_recommended(models, self._total_ram_gb)
-            if not picks:
-                row = rumps.MenuItem("Everything recommended is installed ✓")
-                row.set_callback(None)
-                self.recommended_menu.add(row)
-                return
-            for m in picks:
-                alias = str(m.get("id") or "?")
-                package_id = str(m.get("package_id") or alias)
-                gb = m.get("ram_gb_comfortable") or 0
-                params = m.get("params_b") or 0
-                root = rumps.MenuItem(f"{alias} · {params:g}B · ~{gb:g} GB")
-                if package_id in self._installing:
-                    busy = rumps.MenuItem("Installing…")
-                    busy.set_callback(None)
-                    root.add(busy)
-                else:
-                    install = rumps.MenuItem("Install")
-
-                    def on_install(
-                        _: rumps.MenuItem,
-                        pid: str = package_id,
-                        name: str = alias,
-                    ) -> None:
-                        self._pull(pid, name)
-
-                    install.set_callback(on_install)
-                    root.add(install)
-                self.recommended_menu.add(root)
-
-        def _model_submenu(
-            self, *, alias: str, package_id: str, loaded: bool
-        ) -> rumps.MenuItem:
-            title = f"{alias} ●" if loaded else alias
-            root = rumps.MenuItem(title)
-
-            copy_alias = rumps.MenuItem(f"Copy “{alias}”")
-
-            def on_copy_alias(_: rumps.MenuItem, value: str = alias) -> None:
-                self._copy_id(value, "model")
-
-            copy_alias.set_callback(on_copy_alias)
-            root.add(copy_alias)
-
-            if package_id and package_id != alias:
-                copy_pkg = rumps.MenuItem("Copy package id")
-
-                def on_copy_pkg(_: rumps.MenuItem, value: str = package_id) -> None:
-                    self._copy_id(value, "package")
-
-                copy_pkg.set_callback(on_copy_pkg)
-                root.add(copy_pkg)
-
-            if loaded:
-                unload = rumps.MenuItem("Unload")
-
-                def on_unload(_: rumps.MenuItem, value: str = package_id) -> None:
-                    self._unload(value)
-
-                unload.set_callback(on_unload)
-                root.add(unload)
-            else:
-                load_item = rumps.MenuItem("Load")
-
-                def on_load(_: rumps.MenuItem, value: str = package_id) -> None:
-                    self._load(value)
-
-                load_item.set_callback(on_load)
-                root.add(load_item)
-
-            return root
-
-        def _refresh_memory(self, body: dict) -> None:
-            mem = body.get("memory") if isinstance(body.get("memory"), dict) else {}
-            pressure = str(mem.get("pressure") or "unknown")
-            active = mem.get("active_human") or "—"
-            cache = mem.get("cache_human") or "—"
-            self.memory_item.title = f"Memory: {pressure} · {active} active"
-
-            self._clear_submenu(self.memory_menu)
-            lines = [
-                f"Pressure: {pressure}",
-                f"Active heap: {active}",
-                f"Peak heap: {mem.get('peak_human') or '—'}",
-                f"Free cache: {cache}",
-            ]
-            limits = mem.get("limits") if isinstance(mem.get("limits"), dict) else {}
-            if limits.get("cache_limit_human"):
-                lines.append(f"Cache cap: {limits['cache_limit_human']}")
-            if limits.get("memory_limit_human"):
-                lines.append(f"Memory guideline: {limits['memory_limit_human']}")
-            if mem.get("message"):
-                lines.append(str(mem["message"])[:80])
-
-            for line in lines:
-                row = rumps.MenuItem(line)
-                row.set_callback(None)
-                self.memory_menu.add(row)
-
-            clear = rumps.MenuItem("Clear Metal cache…")
-
-            def on_clear(_: rumps.MenuItem) -> None:
-                self._clear_memory()
-
-            clear.set_callback(on_clear)
-            self.memory_menu.add(clear)
-
-        def refresh(self, *_: object) -> None:
-            if self._is_refreshing:
-                return
-            self._is_refreshing = True
-
-            def _worker() -> None:
-                body = None
-                models = None
-                models_all = None
-                listening = False
-                try:
-                    body = _health(self._host, self._port, timeout=4.5)
-                    if body is not None:
-                        models = _models(self._host, self._port, timeout=4.5)
-                        models_all = _models(
-                            self._host, self._port, timeout=4.5, ready_only=False
-                        )
-                    else:
-                        listening = bool(self._embedded or _pids_on_port(self._port))
-                except Exception:
-                    pass
-
-                def _ui() -> None:
-                    try:
-                        self._apply_refresh(body, models, models_all, listening)
-                    finally:
-                        self._is_refreshing = False
-
-                try:
-                    from PyObjCTools.AppHelper import callAfter
-
-                    callAfter(_ui)
-                except Exception:
-                    _ui()
-
-            import threading
-
-            threading.Thread(
-                target=_worker, daemon=True, name="pantry-menubar-refresh"
-            ).start()
-
-        def _apply_refresh(
-            self,
-            body: dict | None,
-            models: list[dict[str, Any]] | None,
-            models_all: list[dict[str, Any]] | None,
-            listening: bool,
-        ) -> None:
-            if body is None:
-                if listening:
-                    self._consecutive_failures += 1
-                    if self._consecutive_failures < 4:
-                        # Server is running/listening on port, just temporarily busy or loading
-                        self._online = True
-                        self.title = "P…"
-                        self.status_item.title = (
-                            f"Status: busy / loading ({self._host}:{self._port})"
-                        )
-                        self.memory_item.title = "Memory: (busy)"
-                        if self._embedded:
-                            self.serve_item.title = f"Serving on {self._host}:{self._port}"
-                        return
-
-                self._online = False
-                self._consecutive_failures = 0
-                self._loaded = set()
-                self.title = "P·"
-                self.status_item.title = f"Status: offline ({self._host}:{self._port})"
-                self.memory_item.title = "Memory: —"
-                self._placeholder(self.memory_menu, "(offline)")
-                if not self._embedded:
-                    self.serve_item.title = "Start pantry serve"
-                self._placeholder(self.models_menu, "(offline)")
-                self._placeholder(self.loaded_menu, "(offline)")
-                self._placeholder(self.recommended_menu, "(offline)")
-                return
-
-            self._consecutive_failures = 0
-            self._online = True
-            loaded_list = [str(x) for x in (body.get("loaded") or [])]
-            self._loaded = set(loaded_list)
-            pressure = "ok"
-            mem = body.get("memory")
-            if isinstance(mem, dict) and mem.get("pressure"):
-                pressure = str(mem["pressure"])
-
-            status_str = str(body.get("status") or "ok")
-            loading_name = body.get("loading")
-            activity_str = body.get("activity")
-
-            if loading_name or status_str == "loading":
-                short_name = str(loading_name or "model").split("/")[-1]
-                self.title = "P…"
-                if activity_str:
-                    self.status_item.title = f"Status: {activity_str} ({short_name})"
-                else:
-                    self.status_item.title = f"Status: loading {short_name}…"
-            else:
-                # Title hint: P / P! / P!! for ok / elevated / critical
-                if pressure == "critical":
-                    self.title = "P!!"
-                elif pressure == "elevated":
-                    self.title = "P!"
-                else:
-                    self.title = "P"
-                self.status_item.title = (
-                    f"Status: ok · v{body.get('version', '?')} · "
-                    f"{body.get('packages', 0)} packages"
-                )
-
-            self._refresh_memory(body)
-            if self._embedded:
-                self.serve_item.title = f"Serving on {self._host}:{self._port}"
-            else:
-                self.serve_item.title = "Stop pantry serve"
-
-            self._refresh_recommended(models_all)
-
-            if models is not None:
-                self._clear_submenu(self.models_menu)
-                if not models:
-                    self._placeholder(self.models_menu, "(none ready)")
-                else:
-                    for m in models:
-                        alias = str(m.get("id") or "?")
-                        package_id = str(m.get("package_id") or m.get("owned_by") or alias)
-                        is_loaded = package_id in self._loaded or alias in self._loaded
-                        self.models_menu.add(
-                            self._model_submenu(
-                                alias=alias, package_id=package_id, loaded=is_loaded
-                            )
-                        )
-
-            self._clear_submenu(self.loaded_menu)
-            if not loaded_list:
-                self._placeholder(self.loaded_menu, "(none)")
-            else:
-                for pid in loaded_list:
-                    row = rumps.MenuItem(pid)
-
-                    copy_item = rumps.MenuItem("Copy package id")
-
-                    def on_copy(_: rumps.MenuItem, value: str = pid) -> None:
-                        self._copy_id(value, "package")
-
-                    copy_item.set_callback(on_copy)
-                    row.add(copy_item)
-
-                    unload = rumps.MenuItem("Unload")
-
-                    def on_unload(_: rumps.MenuItem, value: str = pid) -> None:
-                        self._unload(value)
-
-                    unload.set_callback(on_unload)
-                    row.add(unload)
-
-                    self.loaded_menu.add(row)
-
-                self.loaded_menu.add(
-                    rumps.MenuItem("Unload all…", callback=self.on_unload_all)
-                )
-
-        @rumps.timer(5)
-        def on_tick(self, _: rumps.Timer) -> None:
-            self.refresh()
-
-        def on_open_health(self, _: rumps.MenuItem) -> None:
-            subprocess.Popen(
-                ["open", f"http://{self._host}:{self._port}/v1/health"]
-            )
-
-        def on_open_chat(self, _: rumps.MenuItem) -> None:
-            subprocess.Popen(["open", f"http://{self._host}:{self._port}/"])
-
-        def on_open_memory(self, _: rumps.MenuItem) -> None:
-            subprocess.Popen(
-                ["open", f"http://{self._host}:{self._port}/v1/memory"]
-            )
-
-        def on_unload_all(self, _: rumps.MenuItem) -> None:
-            self._unload(None)
-
-        def on_serve_toggle(self, _: rumps.MenuItem) -> None:
-            if self._embedded:
-                return
-            if self._online or _pids_on_port(self._port):
-                n = _stop_serve(self._port)
-                if self._serve_proc is not None and self._serve_proc.poll() is None:
-                    try:
-                        self._serve_proc.terminate()
-                    except OSError:
-                        pass
-                self._serve_proc = None
-                rumps.notification(
-                    "pantry",
-                    "Stopped",
-                    f"signaled {n or 'listener'} on :{self._port}",
-                )
-                self.refresh()
-                return
-
-            self._serve_proc = subprocess.Popen(
-                [
-                    self._serve_cmd,
-                    "serve",
-                    "--host",
-                    self._host,
-                    "--port",
-                    str(self._port),
-                    "--no-menubar",
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
-            )
-            rumps.notification(
-                "pantry", "Starting", f"serve on {self._host}:{self._port}"
-            )
-
-        def on_quit(self, _: rumps.MenuItem) -> None:
-            if self._on_quit is not None:
-                try:
-                    self._on_quit()
-                except Exception:  # noqa: BLE001, S110
-                    pass
-            rumps.quit_application()
-
-    PantryMenuApp().run()
+            "Menu bar requires the menubar extra. Install with: pip install 'pantry[menubar]'"
+        )
+
+    import rumps
+
+    from pantry.menubar_cocoa import run_popover
+
+    def _notify(title: str, body: str) -> None:
+        try:
+            rumps.notification("pantry", title, body)
+        except Exception:  # noqa: BLE001
+            pass
+
+    run_popover(
+        host,
+        port,
+        embedded=embedded,
+        on_quit=on_quit,
+        serve_cmd=serve_cmd or "pantry",
+        total_ram_gb=_total_ram_gb(),
+        health_fn=lambda: _health(host, port, timeout=4.0),
+        notify_fn=_notify,
+    )

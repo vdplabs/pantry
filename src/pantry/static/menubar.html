@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pantry</title>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --card: #ffffff;
+    --text: #1d1d1f;
+    --sub: #6e6e73;
+    --line: #e5e5ea;
+    --accent: #0a84ff;
+    --hover: #f0f0f4;
+    --ok: #30d158;
+    --warn: #ff9f0a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1c1c1e;
+      --card: #2c2c2e;
+      --text: #f5f5f7;
+      --sub: #a1a1a6;
+      --line: #3a3a3c;
+      --accent: #0a84ff;
+      --hover: #38383a;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    font-size: 13px;
+    color: var(--text);
+    background: var(--bg);
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
+  }
+  body { padding: 14px 14px 10px; width: 380px; }
+  .header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
+  .header h1 { font-size: 17px; font-weight: 700; }
+  .header .webui { color: var(--accent); font-size: 13px; cursor: pointer; }
+  .baseurl { color: var(--sub); font-size: 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+  .baseurl .copy { cursor: pointer; opacity: 0.7; }
+  .baseurl .copy:hover { opacity: 1; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 10px -14px; }
+  .section-title { font-size: 13px; font-weight: 600; color: var(--text); margin: 4px 0 6px; }
+  .section-title .link { color: var(--accent); font-weight: 400; cursor: pointer; }
+  .row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 6px; border-radius: 8px; cursor: pointer;
+  }
+  .row:hover { background: var(--hover); }
+  .icon {
+    width: 34px; height: 34px; border-radius: 50%; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 15px;
+  }
+  .row .main { flex: 1; min-width: 0; }
+  .row .name { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .sub { font-size: 12px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); flex: none; }
+  .chev { color: var(--sub); font-size: 16px; flex: none; }
+  .spinner {
+    width: 14px; height: 14px; flex: none; border-radius: 50%;
+    border: 2px solid var(--line); border-top-color: var(--accent);
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .variants { margin: 2px 0 6px 44px; }
+  .variant {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 8px; border-radius: 8px; font-size: 12.5px;
+  }
+  .variant:hover { background: var(--hover); }
+  .variant .meta { color: var(--sub); font-size: 11.5px; }
+  .btn {
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    border-radius: 7px; padding: 4px 12px; font-size: 12.5px; cursor: pointer;
+  }
+  .btn:hover { background: var(--hover); }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn:disabled { opacity: 0.5; cursor: default; }
+  .phase { font-size: 11.5px; color: var(--accent); }
+  .footer {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 6px; padding-top: 8px; font-size: 12px; color: var(--sub);
+  }
+  .footer .actions { display: flex; gap: 8px; }
+  .empty { color: var(--sub); font-size: 12.5px; padding: 6px; }
+  .offline { text-align: center; padding: 36px 20px; color: var(--sub); }
+  .offline h2 { color: var(--text); font-size: 15px; margin-bottom: 8px; }
+  .offline p { font-size: 12.5px; margin-bottom: 14px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  "use strict";
+  var P = window.PANTRY || { host: "127.0.0.1", port: 18787, totalRamGb: 32, embedded: true };
+  var BASE = "http://" + P.host + ":" + P.port;
+  var ROLES = ["chat", "reasoning", "code"];
+  var TIER_RANK = { standard: 0, compact: 1 };
+  var ROLE_BLURB = {
+    chat: "Chat and instruction following",
+    reasoning: "Step-by-step reasoning",
+    code: "Code generation and completion"
+  };
+  var FAMILY_NAMES = {
+    llama32: "Llama 3.2", llama31: "Llama 3.1", qwen25: "Qwen 2.5", qwen3: "Qwen 3",
+    "deepseek-r1": "DeepSeek R1", gemma3: "Gemma 3", phi4: "Phi 4", mistral: "Mistral"
+  };
+
+  var state = {
+    booted: false, health: null, models: [],
+    installing: {}, busy: {}, expanded: {}, offline: false
+  };
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function bridge(action, payload) {
+    var msg = Object.assign({ action: action }, payload || {});
+    try {
+      if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.pantry) {
+        window.webkit.messageHandlers.pantry.postMessage(msg);
+      } else {
+        console.log("[pantry-bridge]", JSON.stringify(msg));
+      }
+    } catch (e) { console.log("[pantry-bridge-fail]", e); }
+  }
+  function fmtCtx(n) {
+    n = Number(n) || 0;
+    if (n >= 1000) { var k = n / 1000; return (k >= 100 ? Math.round(k) : k.toFixed(k % 1 ? 1 : 0)) + "k"; }
+    return String(n);
+  }
+  function fmtParams(b) {
+    b = Number(b) || 0;
+    return (b % 1 ? b.toFixed(1) : b) + "B";
+  }
+  function hueFor(s) {
+    var h = 0;
+    for (var i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+    return h;
+  }
+  function familyName(f) { return FAMILY_NAMES[f] || String(f).replace(/[-_]/g, " "); }
+
+  async function api(path, opts) {
+    var r = await fetch(BASE + path, opts);
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    return r.json();
+  }
+
+  function pickRecommended(models) {
+    var budget = (Number(P.totalRamGb) || 0) * 0.6;
+    if (budget <= 0) return [];
+    var out = [];
+    ROLES.forEach(function (role) {
+      var cands = models.filter(function (m) {
+        var need = Number(m.ram_gb_comfortable) || 0;
+        return !m.weights_ready && m.role === role && need > 0 && need <= budget;
+      });
+      cands.sort(function (a, b) {
+        var ta = TIER_RANK[a.quality_tier] != null ? TIER_RANK[a.quality_tier] : 9;
+        var tb = TIER_RANK[b.quality_tier] != null ? TIER_RANK[b.quality_tier] : 9;
+        return ta - tb || (Number(b.params_b) || 0) - (Number(a.params_b) || 0);
+      });
+      if (cands.length) out.push(cands[0]);
+    });
+    return out.slice(0, 3);
+  }
+
+  function groupFamilies(models) {
+    var budget = (Number(P.totalRamGb) || 0) * 0.6;
+    var byFam = {};
+    models.forEach(function (m) {
+      var need = Number(m.ram_gb_comfortable) || 0;
+      if (m.weights_ready || ROLES.indexOf(m.role) < 0 || need <= 0 || need > budget) return;
+      var f = m.family || "other";
+      (byFam[f] = byFam[f] || []).push(m);
+    });
+    return Object.keys(byFam).map(function (f) {
+      var vs = byFam[f].slice().sort(function (a, b) {
+        var ta = TIER_RANK[a.quality_tier] != null ? TIER_RANK[a.quality_tier] : 9;
+        var tb = TIER_RANK[b.quality_tier] != null ? TIER_RANK[b.quality_tier] : 9;
+        return ta - tb || (Number(b.params_b) || 0) - (Number(a.params_b) || 0);
+      });
+      return { family: f, role: vs[0].role, variants: vs };
+    }).slice(0, 6);
+  }
+
+  async function toggleLoad(m) {
+    var pid = m.package_id;
+    var loaded = (state.health && state.health.loaded || []).indexOf(pid) >= 0;
+    state.busy[pid] = true; render();
+    try {
+      await api(loaded ? "/v1/unload" : "/v1/load", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ package_id: pid })
+      });
+    } catch (e) {
+      bridge("notify", { title: (loaded ? "Unload" : "Load") + " failed", body: String(e).slice(0, 120) });
+    }
+    delete state.busy[pid];
+    refresh();
+  }
+
+  async function install(pkgId, alias) {
+    if (state.installing[pkgId]) return;
+    state.installing[pkgId] = { phase: "starting", alias: alias };
+    render();
+    try {
+      var r = await fetch(BASE + "/v1/pull", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ package_id: pkgId, stream: true })
+      });
+      if (!r.ok || !r.body) throw new Error("HTTP " + r.status);
+      var reader = r.body.getReader(), dec = new TextDecoder(), buf = "";
+      for (;;) {
+        var chunk = await reader.read();
+        if (chunk.done) break;
+        buf += dec.decode(chunk.value, { stream: true });
+        var idx;
+        while ((idx = buf.indexOf("\n\n")) >= 0) {
+          var part = buf.slice(0, idx); buf = buf.slice(idx + 2);
+          part.split("\n").forEach(function (line) {
+            if (line.indexOf("data: ") !== 0) return;
+            try {
+              var evt = JSON.parse(line.slice(6));
+              if (evt.status === "error") throw new Error(evt.error || "pull failed");
+              state.installing[pkgId] = { phase: evt.status, message: evt.message, alias: alias };
+              render();
+              if (evt.status === "ready") {
+                delete state.installing[pkgId];
+                bridge("notify", { title: "Installed", body: alias + " — click it to load" });
+                refresh();
+              }
+            } catch (e) { /* keep waiting for well-formed events */ }
+          });
+        }
+      }
+      delete state.installing[pkgId];
+      refresh();
+    } catch (e) {
+      delete state.installing[pkgId];
+      bridge("notify", { title: "Install failed", body: alias + ": " + String(e && e.message || e).slice(0, 120) });
+      refresh();
+    }
+  }
+
+  function phaseText(ph, msg) {
+    if (msg) return msg.length > 60 ? msg.slice(0, 60) + "…" : msg;
+    return { starting: "Starting…", resolving: "Resolving…", downloading: "Downloading weights…" }[ph] || ph || "Working…";
+  }
+
+  function rowHtml(m, loaded) {
+    var alias = m.aliases && m.aliases[0] ? m.aliases[0] : m.id;
+    var pid = m.package_id;
+    var busy = state.busy[pid];
+    var right;
+    if (busy) right = '<div class="spinner"></div>';
+    else if (loaded) right = '<div class="dot" title="loaded"></div>';
+    else right = "";
+    return '<div class="row" data-pid="' + esc(pid) + '">' +
+      '<div class="icon" style="background:hsl(' + hueFor(m.family || "?") + ',55%,45%)">' +
+      esc((m.family || "?").charAt(0).toUpperCase()) + "</div>" +
+      '<div class="main"><div class="name">' + esc(alias) + " " + esc(fmtParams(m.params_b)) + "</div>" +
+      '<div class="sub">' + esc(fmtParams(m.params_b)) + " · " + esc(fmtCtx(m.context_max)) + " ctx · ~" +
+      esc(Number(m.ram_gb_comfortable) || "?") + " GB mem</div></div>" + right + "</div>";
+  }
+
+  function render() {
+    var el = document.getElementById("app");
+    if (state.offline) { el.innerHTML = offlineHtml(); wire(el); return; }
+    var h = state.health || {};
+    var models = state.models || [];
+    var loadedSet = {};
+    (h.loaded || []).forEach(function (p) { loadedSet[p] = true; });
+
+    var installed = models.filter(function (m) { return m.weights_ready; });
+    var fams = groupFamilies(models);
+
+    var html = '<div class="header"><h1>pantry</h1>' +
+      '<span class="webui" id="webui">WebUI</span></div>' +
+      '<div class="baseurl">Base URL: ' + esc(P.host) + ":" + esc(P.port) + '/v1 ' +
+      '<span class="copy" id="copyurl" title="Copy base URL">⧉</span></div><hr>' +
+
+      '<div class="section-title">Installed <span class="link" id="modelslink">models</span></div><div id="installed">';
+    if (!installed.length) html += '<div class="empty">Nothing installed yet — pick one below.</div>';
+    installed.forEach(function (m) {
+      html += rowHtml(m, !!loadedSet[m.package_id]);
+    });
+    html += "</div><hr>" + '<div class="section-title">Recommended for this Mac</div><div id="recs">';
+    if (!fams.length) html += '<div class="empty">Everything recommended is installed ✓</div>';
+    fams.forEach(function (g) {
+      var sizes = g.variants.map(function (v) { return fmtParams(v.params_b); }).join(" · ");
+      var open = !!state.expanded[g.family];
+      html += '<div class="row fam" data-fam="' + esc(g.family) + '">' +
+        '<div class="icon" style="background:hsl(' + hueFor(g.family) + ',55%,45%)">' +
+        esc(g.family.charAt(0).toUpperCase()) + "</div>" +
+        '<div class="main"><div class="name">' + esc(familyName(g.family)) +
+        ' <span style="color:var(--sub);font-weight:400">|</span> <span style="font-weight:400">' + esc(sizes) + "</span></div>" +
+        '<div class="sub">' + esc(ROLE_BLURB[g.role] || g.role) + "</div></div>" +
+        '<div class="chev">' + (open ? "▾" : "›") + "</div></div>";
+      if (open) {
+        html += '<div class="variants">';
+        g.variants.forEach(function (v) {
+          var alias = v.aliases && v.aliases[0] ? v.aliases[0] : v.id;
+          var ins = state.installing[v.package_id];
+          html += '<div class="variant"><div><div>' + esc(alias) + "</div>" +
+            '<div class="meta">' + esc(fmtParams(v.params_b)) + " · " + esc(fmtCtx(v.context_max)) +
+            " ctx · ~" + esc(Number(v.ram_gb_comfortable) || "?") + " GB</div></div>";
+          if (ins) html += '<span class="phase">' + esc(phaseText(ins.phase, ins.message)) + "</span>";
+          else html += '<button class="btn primary" data-install="' + esc(v.package_id) +
+            '" data-alias="' + esc(alias) + '">Install</button>';
+          html += "</div>";
+        });
+        html += "</div>";
+      }
+    });
+    html += "</div><hr>" +
+      '<div class="footer"><span>' + esc(h.version || "") + " · pantry</span>" +
+      '<span class="actions"><button class="btn" id="settings">Settings</button>' +
+      '<button class="btn" id="quit">Quit</button></span></div>';
+
+    el.innerHTML = html;
+    wire(el);
+  }
+
+  function offlineHtml() {
+    return '<div class="offline"><h2>pantry is offline</h2>' +
+      "<p>The daemon isn't responding at " + esc(P.host) + ":" + esc(P.port) + ".</p>" +
+      (P.embedded ? "" : '<button class="btn primary" id="startserve">Start pantry serve</button>') + "</div>";
+  }
+
+  function wire(el) {
+    function on(sel, ev, fn) {
+      var n = el.querySelector(sel);
+      if (n) n.addEventListener(ev, fn);
+    }
+    on("#webui", "click", function () { bridge("open", { url: BASE + "/" }); });
+    on("#copyurl", "click", function () {
+      var t = BASE + "/v1";
+      if (navigator.clipboard) navigator.clipboard.writeText(t).catch(function () {});
+      bridge("notify", { title: "Copied", body: t });
+    });
+    on("#modelslink", "click", function () { bridge("open", { url: BASE + "/dashboard" }); });
+    on("#settings", "click", function () { bridge("open", { url: BASE + "/dashboard" }); });
+    on("#quit", "click", function () { bridge("quit", {}); });
+    on("#startserve", "click", function () { bridge("serve-start", {}); });
+    el.querySelectorAll("#installed .row").forEach(function (row) {
+      row.addEventListener("click", function () {
+        var pid = row.getAttribute("data-pid");
+        var m = state.models.filter(function (x) { return x.package_id === pid; })[0];
+        if (m) toggleLoad(m);
+      });
+    });
+    el.querySelectorAll(".row.fam").forEach(function (row) {
+      row.addEventListener("click", function (e) {
+        if (e.target.closest("button")) return;
+        var f = row.getAttribute("data-fam");
+        state.expanded[f] = !state.expanded[f];
+        render();
+      });
+    });
+    el.querySelectorAll("[data-install]").forEach(function (btn) {
+      btn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        install(btn.getAttribute("data-install"), btn.getAttribute("data-alias"));
+      });
+    });
+  }
+
+  async function refresh() {
+    try {
+      var h = await api("/v1/health");
+      var mr = await api("/v1/models");
+      state.health = h;
+      state.models = (mr && mr.data) || [];
+      state.offline = false;
+    } catch (e) {
+      state.offline = true;
+    }
+    render();
+  }
+
+  function maybeBoot() {
+    if (state.booted || !window.PANTRY) return;
+    state.booted = true;
+    P = window.PANTRY;
+    BASE = "http://" + P.host + ":" + P.port;
+    refresh();
+    setInterval(refresh, 5000);
+  }
+
+  document.addEventListener("DOMContentLoaded", maybeBoot);
+  window.addEventListener("pantry:ready", maybeBoot);
+  setTimeout(maybeBoot, 1500);
+})();
+</script>
+</body>
+</html>

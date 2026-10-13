@@ -58,6 +58,7 @@ def list_model_entries(
             "params_b": p.params_b,
             "ram_gb_min": p.ram_gb_min,
             "ram_gb_comfortable": p.ram_gb_comfortable,
+            "context_max": p.context_max,
         }
         data.append(row)
         if include_package_ids and p.id != primary:
