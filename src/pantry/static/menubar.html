@@ -36,6 +36,7 @@
     -webkit-user-select: none;
     user-select: none;
     cursor: default;
+    overflow-x: hidden;
   }
   body { padding: 14px 14px 10px; width: 380px; }
   .header { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 2px; }
@@ -94,6 +95,9 @@
   .linkbtn { color: var(--accent); font-size: 12.5px; cursor: pointer; }
   .mem { display: flex; align-items: center; gap: 10px; padding: 7px 6px; border-radius: 8px; cursor: pointer; }
   .mem:hover { background: var(--hover); }
+  .mem .main { flex: 1; min-width: 0; }
+  .mem .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .mem .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .memdot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
   .memdot.ok { background: var(--ok); }
   .memdot.elevated { background: var(--warn); }
@@ -143,6 +147,14 @@
         console.log("[pantry-bridge]", JSON.stringify(msg));
       }
     } catch (e) { console.log("[pantry-bridge-fail]", e); }
+  }
+  var lastSentH = 0;
+  function reportSize() {
+    var h = document.body ? document.body.scrollHeight : 0;
+    if (h > 0 && Math.abs(h - lastSentH) > 2) {
+      lastSentH = h;
+      bridge("resize", { height: h });
+    }
   }
   function fmtCtx(n) {
     n = Number(n) || 0;
@@ -312,7 +324,7 @@
 
   function render() {
     var el = document.getElementById("app");
-    if (state.offline) { el.innerHTML = offlineHtml(); wire(el); return; }
+    if (state.offline) { el.innerHTML = offlineHtml(); wire(el); reportSize(); return; }
     var h = state.health || {};
     var models = state.models || [];
     var loadedSet = {};
@@ -397,6 +409,7 @@
 
     el.innerHTML = html;
     wire(el);
+    reportSize();
   }
 
   function offlineHtml() {
@@ -412,9 +425,7 @@
     }
     on("#webui", "click", function () { bridge("open", { url: BASE + "/" }); });
     on("#copyurl", "click", function () {
-      var t = BASE + "/v1";
-      if (navigator.clipboard) navigator.clipboard.writeText(t).catch(function () {});
-      bridge("notify", { title: "Copied", body: t });
+      bridge("copy", { text: BASE + "/v1" });
     });
     on("#modelslink", "click", function () { bridge("open", { url: BASE + "/dashboard" }); });
     on("#settings", "click", function () { bridge("open", { url: BASE + "/dashboard" }); });

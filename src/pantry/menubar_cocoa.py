@@ -26,6 +26,8 @@ from AppKit import (
     NSMakeSize,
     NSMaxYEdge,
     NSNotificationCenter,
+    NSPasteboard,
+    NSPasteboardTypeString,
     NSStatusBar,
     NSVariableStatusItemLength,
     NSView,
@@ -34,6 +36,7 @@ from AppKit import (
     NSViewWidthSizable,
     NSPopover,
     NSPopoverBehaviorApplicationDefined,
+    NSScreen,
 )
 from Foundation import NSObject, NSURL
 from WebKit import WKWebView, WKWebViewConfiguration
@@ -56,11 +59,18 @@ class _Bridge(NSObject):
             body = message.body()
         except Exception:  # noqa: BLE001
             return
-        if isinstance(body, dict):
-            try:
-                self._bar.handleBridgeMessage_(dict(body))
-            except Exception:  # noqa: BLE001
-                pass
+        if body is None:
+            return
+        try:
+            # body() returns an NSDictionary wrapper, not a Python dict —
+            # isinstance(body, dict) is False, so convert explicitly.
+            data = {k: body[k] for k in body.keys()}
+        except Exception:  # noqa: BLE001
+            return
+        try:
+            self._bar.handleBridgeMessage_(data)
+        except Exception:  # noqa: BLE001
+            pass
 
 
 class _NavDelegate(NSObject):
@@ -191,6 +201,16 @@ class PantryBar(NSObject):
             url = str(msg.get("url") or "")
             if url.startswith(("http://", "https://")):
                 subprocess.Popen(["open", url])
+        elif action == "copy":
+            text = str(msg.get("text") or "")
+            if text:
+                try:
+                    pb = NSPasteboard.generalPasteboard()
+                    pb.clearContents()
+                    pb.setString_forType_(text, NSPasteboardTypeString)
+                    self._notify_fn("Copied", text)
+                except Exception:  # noqa: BLE001
+                    pass
         elif action == "notify":
             try:
                 self._notify_fn(str(msg.get("title") or "pantry"), str(msg.get("body") or ""))
@@ -200,8 +220,34 @@ class PantryBar(NSObject):
             self._serveStart()
         elif action == "serve-stop":
             self._serveStop()
+        elif action == "resize":
+            self._resize_to_content(msg.get("height") or 0)
 
     # -- internals --------------------------------------------------------
+
+    def _resize_to_content(self, height) -> None:
+        """Grow/shrink the popover to fit the page, so it never scrolls."""
+        try:
+            h = int(float(height))
+        except (TypeError, ValueError):
+            return
+        if h <= 0:
+            return
+        max_h = 720
+        try:
+            screen = NSScreen.mainScreen()
+            if screen is not None:
+                max_h = int(screen.visibleFrame().size.height - 60)
+        except Exception:  # noqa: BLE001
+            pass
+        h = max(200, min(h, max_h))
+        try:
+            cur = self.popover.contentSize().height
+        except Exception:  # noqa: BLE001
+            cur = 0
+        if abs(h - cur) <= 2:
+            return
+        self.popover.setContentSize_(NSMakeSize(POPOVER_W, h))
 
     def _applyTitle_(self, title: str) -> None:
         try:
